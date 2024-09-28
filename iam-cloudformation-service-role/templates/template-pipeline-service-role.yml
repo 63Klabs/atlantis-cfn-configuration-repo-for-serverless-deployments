@@ -1,0 +1,238 @@
+
+## This file is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, 
+# either express or implied. See the License for the specific language governing permissions 
+# and limitations under the License.
+#
+# Atlantis SAM IAM Template Version 2
+# Chad Leigh Kluck
+# v2024.09.27 : template-pipeline-service-role.yml
+# 
+# README documentation goes through installation steps. 
+# https://github.com/chadkluck/serverless-deploy-pipeline-atlantis/README.md
+#
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "Prefix-based IAM Role and Policy for Atlantis CloudFormation Service Role to be assumed by Pipeline stacks."
+
+# =============================================================================
+# META DATA
+# -----------------------------------------------------------------------------
+# https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-cloudformation-interface.html
+# 
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - 
+        Label:
+          default: "Application Resource Naming"
+        Parameters:
+          - Prefix
+          - PrefixUpper
+          - S3BucketNameOrgPrefix
+          - RolePath
+      -
+        Label:
+          default: "External Resources and Alarm Notifications"
+        Parameters:
+          - PermissionsBoundaryARN
+
+# =============================================================================
+# PARAMETERS
+# -----------------------------------------------------------------------------
+# https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/parameters-section-structure.html
+#
+
+Parameters:
+
+  # ---------------------------------------------------------------------------
+  # Application Resource Naming
+
+  Prefix:
+    Type: String
+    Description: "Prefix pre-pended to all resources. This can be thought of as a Name Space used to identify ownership/access for teams, departments, etc. For example, resources named ws-* could belong to the web service team and could have IAM permissions to allow access to other ws-* resources. The Prefix must have a corresponding CloudFormation Service Role. Short, descriptive 2-6 character values work best. Due to resource naming length restrictions, length of Prefix + Project ID should not exceed 28 characters. Resources are named <Prefix>-<ProjectId>-<StageId>-<ResourceId>"
+    Default: "acme" 
+    AllowedPattern: "^[a-z][a-z0-9-]{0,6}[a-z0-9]$"
+    MinLength: 2
+    MaxLength: 8
+    ConstraintDescription: "2 to 8 characters. Lower case alphanumeric and dashes. Must start with a letter and end with a letter or number. Length of Prefix + Project ID should not exceed 28 characters."
+  PrefixUpper:
+    Type: String
+    Description: "Prefix for Service Role in all UPPER CASE."
+    Default: "ACME" 
+    AllowedPattern: "^[A-Z][A-Z0-9-]{0,6}[A-Z0-9]$"
+    MinLength: 2
+    MaxLength: 8
+    ConstraintDescription: "2 to 8 characters. UPPER case alphanumeric and dashes. Must start with a letter and end with a letter or number."
+  S3BucketNameOrgPrefix:
+    Type: String
+    Description: "By default, to enforce uniqueness, buckets include account and region in the bucket name. However, due to character limits, you can specify your own S3 prefix (like an org code). This will be used in addition to the Prefix entered above. Note that this length is shared with the recommended length of 20 characters for Resource Identifiers. So if you have a 10 character S3BucketNameOrgPrefix, you are limited to 10 characters for your bucket name identifier in your templates. Buckets are named <Prefix>-<Region>-<AccountId>-<ProjectId>-<StageId>-<ResourceId> or <S3OrgPrefix>-<Prefix>-<ProjectId>-<StageId>-<ResourceId>"
+    Default: ""
+    AllowedPattern: "^[a-z0-9][a-z0-9-]{0,18}[a-z0-9]$|^$"
+    ConstraintDescription: "May be empty or 2 to 20 characters (8 or less recommended). Lower case alphanumeric and dashes. Must start and end with a letter or number."
+  RolePath:
+    Type: String
+    Description: "Path to use for IAM Roles and Policies. You may wish to separate out your applications from users, or create seperate paths per prefix or application. Specific paths may required by permission boundaries. Ex: /ws-hello-world-test/ or /app_role/"
+    Default: "/"
+    AllowedPattern: "^\\/([a-zA-Z0-9-_]+[\\/])+$|^\\/$"
+    ConstraintDescription: "May only contain alphanumeric characters, forward slashes, underscores, and dashes. Must begin and end with a slash."
+
+  # ---------------------------------------------------------------------------
+  # External Resources and Alarm Notifications
+
+  PermissionsBoundaryARN:
+    Type: String
+    Description: "Permissions Boundary is a policy attached to a role to further restrict the permissions of the role. Your organization may or may not require boundaries. If left empty, no permissions boundary will be used."
+    Default: ""
+    AllowedPattern: "^$|^arn:aws:iam::\\d{12}:policy\\/[\\w+=,.@\\-\\/]*[\\w+=,.@\\-]+$"
+    ConstraintDescription: "Must be empty or a valid IAM Policy ARN in the format: arn:aws:iam::{account_id}:policy/{policy_name}"
+
+# =============================================================================
+# CONDITIONS
+# -----------------------------------------------------------------------------
+# https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/intrinsic-function-reference-conditions.html
+#
+
+Conditions:
+  UseS3BucketNameOrgPrefix: !Not [!Equals [!Ref S3BucketNameOrgPrefix, ""]]
+  HasPermissionsBoundaryARN: !Not [!Equals [!Ref PermissionsBoundaryARN, ""]]
+
+# =============================================================================
+# RESOURCES
+# -----------------------------------------------------------------------------
+# https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/resources-section-structure.html  
+#
+
+Resources:
+  
+  # ---------------------------------------------------------------------------
+  # -- Prefix-based IAM Service Roles and Policy --
+  # --
+  # When deploying a Pipeline Stack, it must be given a service role
+  # --
+  # Practice The Principle of Least Privilege 
+  # IAM policies should be scoped down to give only necessary actions on 
+  # resources specific to this prefix.
+  # --
+  
+  PrefixBasedCloudFormationServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      Path: !Ref RolePath
+      RoleName: !Sub "${PrefixUpper}-CloudFormation-Service-Role"
+      Description: !Sub "Service Role to Create and Manage an AWS CodePipeline for application projects under prefix ${Prefix}"
+      PermissionsBoundary: !If [HasPermissionsBoundaryARN, !Ref PermissionsBoundaryARN, !Ref 'AWS::NoValue' ]
+
+      AssumeRolePolicyDocument:
+        Statement:
+        - Sid: "EventTrustPolicy"
+          Effect: Allow
+          Action: sts:AssumeRole
+          Principal:
+            Service:
+            - cloudformation.amazonaws.com
+
+      Policies:
+      - PolicyName: !Sub "${PrefixUpper}-CloudFormation-Service-Role-Policy"
+        PolicyDocument:
+          Version: "2012-10-17"
+          Statement:
+
+          - Sid: ManageEventRulesByResourcePrefix
+            Effect: Allow
+            Action:
+            - events:PutTargets
+            - events:RemoveTargets
+            - events:PutRule
+            - events:DeleteRule
+            - events:DescribeRule
+            - events:TagResource
+				    - events:UntagResource
+            Resource:
+            - !Sub "arn:${AWS::Partition}:events:${AWS::Region}:${AWS::AccountId}:rule/${Prefix}-*"
+
+          - Sid: ManageCloudFormationStacksByResourcePrefix
+            Effect: Allow
+            Action:
+            - cloudformation:*Stack*
+            - cloudformation:CreateChangeSet
+            - cloudformation:ExecuteChangeSet
+            - cloudformation:DeleteChangeSet
+            - cloudformation:DescribeChangeSet
+            - cloudformation:GetTemplate
+            - cloudformation:GetTemplateSummary
+            Resource: !Sub "arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${Prefix}-*"
+
+          - Sid: ManageBucketsByResourcePrefix
+            Effect: Allow
+            Action:
+            - s3:*
+            Resource:
+            - !Join
+              - ""
+              - - !Sub "arn:${AWS::Partition}:s3:::"
+                - !If [UseS3BucketNameOrgPrefix, !Sub "${S3BucketNameOrgPrefix}-${Prefix}", !Sub "${Prefix}-${AWS::Region}-${AWS::AccountId}" ]
+                - !Sub "-*"
+            - !Join
+              - ""
+              - - !Sub "arn:${AWS::Partition}:s3:::"
+                - !If [UseS3BucketNameOrgPrefix, !Sub "${S3BucketNameOrgPrefix}-${Prefix}", !Sub "${Prefix}-${AWS::Region}-${AWS::AccountId}" ]
+                - !Sub "-*/*"
+
+          - Sid: ManageLogsByResourcePrefix
+            Effect: Allow
+            Action:
+            - logs:*
+            Resource: !Sub "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${Prefix}-*"
+
+          - Sid: ManageCodePipelineByResourcePrefix
+            Effect: Allow
+            Action:
+            - codepipeline:*
+            Resource: !Sub "arn:${AWS::Partition}:codepipeline:${AWS::Region}:${AWS::AccountId}:${Prefix}-*"
+
+          - Sid: ManageCodeBuildByResourcePrefix
+            Effect: Allow
+            Action:
+            - codebuild:*
+            Resource: !Sub "arn:${AWS::Partition}:codebuild:${AWS::Region}:${AWS::AccountId}:project/${Prefix}-*"
+
+          - Sid: PassAndDeleteWorkerRolesByResourcePrefix
+            Effect: Allow
+            Action:
+            - iam:PassRole
+            - iam:DeleteRole
+            Resource: !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role${RolePath}${Prefix}-Worker-*"
+
+          - Sid: IAMReadOnly
+            Effect: Allow
+            Action:
+            - iam:Get*
+            - iam:List*
+            Resource: 
+            - !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/*"
+            - !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:policy/*"
+
+          - Sid: ManageWorkerRolesByResourcePrefix
+            Effect: Allow
+            Action:
+            - iam:AttachRolePolicy
+            - iam:CreateRole
+            - iam:DeleteRolePolicy
+            - iam:DetachRolePolicy
+            - iam:PutRolePolicy
+            - iam:UntagRole
+            - iam:TagRole
+            - iam:UpdateRoleDescription
+            Resource: !Sub "arn:aws:iam::${AWS::AccountId}:role{RolePath}${Prefix}-Worker-*"
+            Condition: 
+              Fn::If:
+                - HasPermissionsBoundaryARN
+                - StringEquals:
+                    "iam:PermissionsBoundary": !Ref PermissionsBoundaryARN
+                - !Ref 'AWS::NoValue'
+
+          - Sid: InspectServiceRole
+            Effect: Allow
+            Action:
+            - iam:ListAttachedRolePolicies
+            Resource: !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role${RolePath}${PrefixUpper}-CloudFormation-Service-Role"
