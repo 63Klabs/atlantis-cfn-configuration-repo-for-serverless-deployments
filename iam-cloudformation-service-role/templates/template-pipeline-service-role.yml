@@ -35,6 +35,13 @@ Metadata:
           default: "External Resources and Alarm Notifications"
         Parameters:
           - PermissionsBoundaryARN
+      -
+        Label:
+          default: "Resources to Attach Managed Policy To"
+        Parameters:
+          - GroupNames
+          - UserNames
+          - RoleNames
 
 # =============================================================================
 # PARAMETERS
@@ -86,6 +93,28 @@ Parameters:
     AllowedPattern: "^$|^arn:aws:iam::\\d{12}:policy\\/[\\w+=,.@\\-\\/]*[\\w+=,.@\\-]+$"
     ConstraintDescription: "Must be empty or a valid IAM Policy ARN in the format: arn:aws:iam::{account_id}:policy/{policy_name}"
 
+  # ---------------------------------------------------------------------------
+  # Resources to Attach Managed Policy To
+
+  GroupNames:
+    Type: CommaDelimitedList
+    Description: "Optional. Friendly Name (not ARN) of an existing IAM Group to attach the managed policy to. If left empty, no group will be attached."
+    Default: ""
+    AllowedPattern: "^[\\w+=,_.@-]+$|^$" # [\w_+=,.@-]+
+    ConstraintDescription: "Must be empty or a comma delimited list of valid IAM Group names."
+  RoleNames:
+    Type: CommaDelimitedList
+    Description: "Optional. Friendly Name (not ARN) of an existing IAM Role to attach the managed policy to. If left empty, no role will be attached."
+    Default: ""
+    AllowedPattern: "^[\\w+=,_.@-]+$|^$" # [\w_+=,.@-]+
+    ConstraintDescription: "Must be empty or a comma delimited list of valid IAM Role names."
+  UserNames:
+    Type: CommaDelimitedList
+    Description: "Optional. Friendly Name (not ARN) of an existing IAM User to attach the managed policy to. If left empty, no user will be attached."
+    Default: ""
+    AllowedPattern: "^[\\w+=,_.@-]+$|^$" # [\w_+=,.@-]+
+    ConstraintDescription: "Must be empty or a comma delimited list of valid IAM User names."
+
 # =============================================================================
 # CONDITIONS
 # -----------------------------------------------------------------------------
@@ -95,6 +124,9 @@ Parameters:
 Conditions:
   UseS3BucketNameOrgPrefix: !Not [!Equals [!Ref S3BucketNameOrgPrefix, ""]]
   HasPermissionsBoundaryARN: !Not [!Equals [!Ref PermissionsBoundaryARN, ""]]
+  HasGroupNames: !Not [!Equals [!Join "", !Ref GroupNames, ""]]
+  HasRoleNames: !Not [!Equals [!Join "", !Ref RoleNames, ""]]
+  HasUserNames: !Not [!Equals [!Join "", !Ref UserNames, ""]]
 
 # =============================================================================
 # RESOURCES
@@ -236,3 +268,64 @@ Resources:
             Action:
             - iam:ListAttachedRolePolicies
             Resource: !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role${RolePath}${PrefixUpper}-CloudFormation-Service-Role"
+
+  # ---------------------------------------------------------------------------
+  # -- Prefix-based IAM Service Roles and Policy --
+  # --
+
+  PrefixBasedManagedPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      Description: !Sub "Managed Policy to Create and Manage an AWS CodePipeline for application projects under prefix ${Prefix}"
+      ManagedPolicyName: !Sub "${PrefixUpper}-CloudFormation-Service-ManagedPolicy"
+      Path: !Ref RolePath
+      Groups: !If [HasGroupNames, !Ref GroupNames, !Ref 'AWS::NoValue' ]
+      Roles: !If [HasRoleNames, !Ref RoleNames, !Ref 'AWS::NoValue' ]
+      Users: !If [HasUserNames, !Ref UserNames, !Ref 'AWS::NoValue' ]
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: "AllowUserToPassSpecificCloudFormationServiceRole"
+            Effect: "Allow"
+            Action:
+              - iam:GetRole
+              - iam:PassRole 
+            Resource: !Ref PrefixBasedCloudFormationServiceRole
+            Condition:
+              StringEquals:
+                "iam:PassedToService": "cloudformation.amazonaws.com"
+
+# =============================================================================
+# OUTPUTS
+# -----------------------------------------------------------------------------
+# https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/outputs-section-structure.html
+#
+# Place anything interesting that you would like to quickly refer to in 
+# your cloudformation OUTPUT section. Test URLs, direct links to resources, etc
+#
+
+Outputs:
+
+  PrefixBasedCloudFormationServiceRoleArn:
+    Description: "The ARN of the Prefix-based CloudFormation Service Role"
+    Value: !GetAtt PrefixBasedCloudFormationServiceRole.Arn
+    Export:
+      Name: !Sub "${PrefixUpper}-CloudFormation-Service-Role-Arn"
+
+  PrefixBasedCloudFormationServiceRoleName:
+    Description: "The Name of the Prefix-based CloudFormation Service Role"
+    Value: !Ref PrefixBasedCloudFormationServiceRole
+    Export:
+      Name: !Sub "${PrefixUpper}-CloudFormation-Service-Role-Name"
+
+  PrefixBasedManagedPolicyArn:
+    Description: "The ARN of the Prefix-based Managed Policy"
+    Value: !Ref PrefixBasedManagedPolicy
+    Export:
+      Name: !Sub "${PrefixUpper}-CloudFormation-Service-ManagedPolicy-Arn"
+
+  PrefixBasedManagedPolicyName:
+    Description: "The Name of the Prefix-based Managed Policy"
+    Value: !GetAtt PrefixBasedManagedPolicy.ManagedPolicyName
+    Export:
+      Name: !Sub "${PrefixUpper}-CloudFormation-Service-ManagedPolicy-Name"
