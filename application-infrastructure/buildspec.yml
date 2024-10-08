@@ -68,9 +68,9 @@ phases:
       # Go back to application-infrastructure directory
       - cd ..
 
-      # Generate Key in SSM for cache-proxy
-      - chmod a+x build-scripts/generate-put-keys.sh
-      - build-scripts/generate-put-keys.sh $PARAM_STORE_HIERARCHY "256" $PREFIX $PROJECT_ID $STAGE_ID #keylength needs to correspond with default (or override) specified for CryptSecureDataAlg in template.yml
+      # Generate Key in SSM for cache-data - Uncomment if using the @chadkluck/cache-data package in your application for caching
+      # - chmod a+x build-scripts/generate-put-keys.sh
+      # - build-scripts/generate-put-keys.sh $PARAM_STORE_HIERARCHY "256" $PREFIX $PROJECT_ID $STAGE_ID #keylength needs to correspond with default (or override) specified for CryptSecureDataAlg in template.yml
       
   build:
     commands:
