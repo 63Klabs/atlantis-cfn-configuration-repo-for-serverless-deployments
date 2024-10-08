@@ -367,6 +367,56 @@ Resources:
             Resource: 
               !Sub "arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter${ParameterStoreHierarchy}${DeployEnvironment}/${Prefix}-${ProjectId}-${StageId}/*"
 
+          # We have 4 permissions sets that will allow us to copy objects (such as static assets) over to S3.
+
+          - Sid: "AllowListBuckets"
+            Effect: Allow
+            Action:
+            - s3:ListBucket
+            Resource:
+            - !Sub "arn:${AWS::Partition}:s3:::*"
+
+          # General buckets for many application projects with paths devoted to applications
+          - Sid: CopyAssetsToS3DuringBuildByPath
+            Action:
+            - s3:PutObject
+            - s3:Get*
+            - s3:List*
+            - s3:DeleteObject
+            Effect: Allow
+            Resource:
+            - !Sub "arn:${AWS::Partition}:s3:::*/${Prefix}-${ProjectId}/${StageId}/*"
+            - !Sub "arn:${AWS::Partition}:s3:::*/${Prefix}-${ProjectId}-${StageId}/*"
+            - !Sub "arn:${AWS::Partition}:s3:::*/${Prefix}/${ProjectId}/${StageId}/*"
+
+          # A bucket devoted to the application project shared among all deployments of the application
+          - Sid: CopyAssetsToS3DuringBuildByBucketApplicationTag
+            Action:
+            - s3:PutObject
+            - s3:Get*
+            - s3:List*
+            - s3:DeleteObject
+            Effect: Allow
+            Resource: !Join
+            - ""
+            - - !Sub "arn:${AWS::Partition}:s3:::"
+              - !If [UseS3BucketNameOrgPrefix, !Sub "${S3BucketNameOrgPrefix}-", "" ]
+              - !Sub "${Prefix}-${ProjectId}-*/${StageId}/*"
+
+          # A bucket devoted to the specific application deployment
+          - Sid: CopyAssetsToS3DuringBuildByBucketApplicationDeploymentTag
+            Action:
+            - s3:PutObject
+            - s3:Get*
+            - s3:List*
+            - s3:DeleteObject
+            Effect: Allow
+            Resource: !Join
+            - ""
+            - - !Sub "arn:${AWS::Partition}:s3:::"
+              - !If [UseS3BucketNameOrgPrefix, !Sub "${S3BucketNameOrgPrefix}-", "" ]
+              - !Sub "${Prefix}-${ProjectId}-${StageId}-*/*"
+
   # -- CodeDeploy Service Role --
 
   CodeDeployServiceRole:
@@ -732,6 +782,8 @@ Resources:
           Value: !Ref 'DeployEnvironment'
         - Name: ALARM_NOTIFICATION_EMAIL
           Value: !Ref 'AlarmNotificationEmail'
+        - Name: NODE_ENV
+          Value: "production"
       Source:
         Type: CODEPIPELINE
         BuildSpec: application-infrastructure/buildspec.yml # Explicitly set just to note that there should only be one buildspec (not buildspec-dev.yml or buildspec-prod.yml) which if needed to process differently for an environment, that logic should be in the buildspec and SAM template. Otherwise management of 2 or more would be difficult. We have Deploy Stage and Deploy Environment variables so use them.
