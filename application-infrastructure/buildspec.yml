@@ -1,31 +1,39 @@
 version: 0.2
 
-# BUILD ENVIRONMENT VARIABLES are specified in the template-pipeline.yml template.
+# Many BUILD ENVIRONMENT VARIABLES are specified in the template-pipeline.yml template.
 # Search for 'EnvironmentVariables' under AWS::CodeBuild::Project in the template.
 #
-# AWS_PARTITION
-# AWS_REGION
-# AWS_ACCOUNT
-# S3_DEPLOY_BUCKET
-# PREFIX
-# PROJECT_ID
-# STAGE_ID
-# REPOSITORY
-# REPOSITORY_BRANCH
-# PARAM_STORE_HIERARCHY
-# DEPLOY_ENVIRONMENT
-# ALARM_NOTIFICATION_EMAIL
+# AWS_PARTITION, AWS_REGION, AWS_ACCOUNT, S3_DEPLOY_BUCKET, PREFIX, PROJECT_ID, STAGE_ID, REPOSITORY, REPOSITORY_BRANCH, PARAM_STORE_HIERARCHY
+# DEPLOY_ENVIRONMENT, ALARM_NOTIFICATION_EMAIL, NODE_ENV
 #
 # Check your project's CodeBuild Environment variables at:
 # CodePipeline > CodeBuild > Build details > Environment/Environment variables
 # to see a current list of build environment variables.
+# 
+# You can also run the command `printenv`
 #
-# The default template-pipeline.yml template allows access to ssm parameter store 
+# The default template-pipeline.yml template allows access to ssm parameter store and S3
 # during the execution of this buildspec.yml.
 #
-# Note that secure parameters should not be used during the build where they might be stored in 
-# build logs (such as CF template outputs). Secure parameters should only be used during execution 
-# and never stored in an environment variable or passed as a parameter to a template.
+# Note that secure parameters should only be used in the env/parameter-store or env/secrets-manager section.
+
+# You can include the following buildspec section to set environment variables.
+# https://docs.aws.amazon.com/codebuild/latest/userguide/build-spec-ref.html#build-spec.env.variables
+
+# env:
+#   shell: shell-tag
+#   variables:
+#     key: "value"
+#     key: "value"
+#   parameter-store:
+#     key: "value"
+#     key: "value"
+#   exported-variables:
+#     - variable
+#     - variable
+#   secrets-manager:
+#     key: secret-id:json-key:version-stage:version-id
+#   git-credential-helper: no | yes
 
 phases:
   install:
@@ -33,13 +41,37 @@ phases:
       nodejs: latest
     commands:
 
+      - ls -l -a
+
       # Upgrade AWS CLI to the latest version
       - pip install --upgrade awscli
 
+      - python --version
+
+      # Set npm caching (This 'offline' cache is still tar zipped, but it helps.) - https://blog.mechanicalrock.io/2019/02/03/monorepos-aws-codebuild.html
+      - npm config -g set prefer-offline true
+      - npm config -g set cache /root/.npm
+      - npm config get cache
+
   pre_build:
     commands:
-    - cd application-infrastructure
+      # Install dependencies needed for application
+      - ls -l -a
+      - cd application-infrastructure/app
+      - npm ci
 
+      # FAIL the build if npm audit has vulnerabilities it can't fix
+      # Perform a fix to move us forward, then check to make sure there were no unresolved high fixes
+      - npm audit fix --force
+      - npm audit --audit-level=high
+      
+      # Go back to application-infrastructure directory
+      - cd ..
+
+      # Generate Key in SSM for cache-proxy
+      - chmod a+x build-scripts/generate-put-keys.sh
+      - build-scripts/generate-put-keys.sh $PARAM_STORE_HIERARCHY "256" $PREFIX $PROJECT_ID $STAGE_ID #keylength needs to correspond with default (or override) specified for CryptSecureDataAlg in template.yml
+      
   build:
     commands:
 
@@ -51,7 +83,14 @@ phases:
 
       # You can add additional tags and parameters to template-configuration.json
 
+      # list files in the artifacts
+      - ls -l -a
+
 artifacts:
   files:
-    - application-infrastructure/template-export.yml
-    - application-infrastructure/template-configuration.json
+    - 'application-infrastructure/**/*'
+
+# add cache
+cache:
+  paths:
+    - '/root/.npm/**/*'
