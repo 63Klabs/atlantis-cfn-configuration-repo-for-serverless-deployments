@@ -55,6 +55,10 @@ phases:
 
   pre_build:
     commands:
+
+      # Display the current value of NODE_ENV
+      - echo "NODE_ENV is $NODE_ENV"
+      
       # Install dependencies needed for application
       - ls -l -a
       - cd application-infrastructure/app
