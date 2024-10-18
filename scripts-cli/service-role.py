@@ -46,7 +46,7 @@ defaults = {
 		"AwsAccountId": atlantis.prompts["AwsAccountId"]["default"],
 		"AwsRegion": atlantis.prompts["AwsRegion"]["default"],
 		"RolePath": atlantis.prompts["RolePath"]["default"],
-		"PermissionsBoundaryARN": atlantis.prompts["PermissionsBoundaryARN"]["default"],
+		"PermissionsBoundaryArn": atlantis.prompts["PermissionsBoundaryArn"]["default"],
 		"ServiceRoleARN": ""
 	}
 }
@@ -147,8 +147,8 @@ prompts["general"]["S3BucketNameOrgPrefix"]["default"] = defaults["general"]["S3
 prompts["general"]["RolePath"] = atlantis.prompts["RolePath"]
 prompts["general"]["RolePath"]["default"] = defaults["general"]["RolePath"]
 
-prompts["general"]["PermissionsBoundaryARN"] = atlantis.prompts["PermissionsBoundaryARN"]
-prompts["general"]["PermissionsBoundaryARN"]["default"] = defaults["general"]["PermissionsBoundaryARN"]
+prompts["general"]["PermissionsBoundaryArn"] = atlantis.prompts["PermissionsBoundaryArn"]
+prompts["general"]["PermissionsBoundaryArn"]["default"] = defaults["general"]["PermissionsBoundaryArn"]
 
 prompts["general"]["AwsAccountId"] = atlantis.prompts["AwsAccountId"]
 prompts["general"]["AwsAccountId"]["default"] = defaults["general"]["AwsAccountId"]
@@ -167,14 +167,14 @@ parameters["general"]["ServiceRoleARN"] = "arn:aws:iam::"+parameters["general"][
 permissions_boundary_conditional = ""
 permissions_boundary_cli = ""
 
-if parameters["general"]["PermissionsBoundaryARN"]:
+if parameters["general"]["PermissionsBoundaryArn"]:
 	permissions_boundary_conditional = """,
 			"Condition": {
 				"StringLike": {
 					"iam:PermissionsBoundary": "$PERMISSIONS_BOUNDARY_ARN$"
 				}
 			}"""
-	permissions_boundary_cli = " --permissions-boundary "+parameters["general"]["PermissionsBoundaryARN"]+" \\\n\t"
+	permissions_boundary_cli = " --permissions-boundary "+parameters["general"]["PermissionsBoundaryArn"]+" \\\n\t"
 
 # =============================================================================
 # Save files
@@ -253,7 +253,7 @@ with open(
 
 	# Replace permissions boundary placeholder which is complex:
 	contents = contents.replace(",\"Condition\": \"$PERMISSIONS_BOUNDARY_CONDITIONAL$\"", permissions_boundary_conditional)
-	contents = contents.replace("$PERMISSIONS_BOUNDARY_ARN$", parameters["general"]["PermissionsBoundaryARN"])
+	contents = contents.replace("$PERMISSIONS_BOUNDARY_ARN$", parameters["general"]["PermissionsBoundaryArn"])
 
 	# if s3_bucket_prefix is provided, replace the placeholder with the value from the command line followed by a hyphen, else replace with blank
 	if not parameters["general"]["S3BucketNameOrgPrefix"]:
@@ -329,8 +329,8 @@ with open(
 		create_role.append("--role-name "+parameters["general"]["Prefix"].upper()+"-CloudFormation-Service-Role")
 		create_role.append("--description 'Service Role for CloudFormation Service to create and manage pipelines under the "+parameters["general"]["Prefix"]+" prefix'")
 		create_role.append("--assume-role-policy-document file://$IAM_TRUST_POLICY$")
-		if parameters["general"]["PermissionsBoundaryARN"]:
-			create_role.append("--permissions-boundary "+parameters["general"]["PermissionsBoundaryARN"])
+		if parameters["general"]["PermissionsBoundaryArn"]:
+			create_role.append("--permissions-boundary "+parameters["general"]["PermissionsBoundaryArn"])
 		create_role.append(tags_cli)
 
 		stringCliRole = " \\\n\t".join(create_role)

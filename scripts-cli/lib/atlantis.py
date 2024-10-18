@@ -176,7 +176,7 @@ prompts = {
 		"default": ""
 	},
 
-	"PermissionsBoundaryARN": {
+	"PermissionsBoundaryArn": {
 		"name": "Permissions Boundary ARN",
 		"required": False,
 		"examples": "arn:aws:iam::123456789012:policy/xyz-org-boundary-policy",

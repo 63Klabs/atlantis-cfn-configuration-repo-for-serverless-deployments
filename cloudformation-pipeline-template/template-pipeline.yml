@@ -5,7 +5,7 @@
 #
 # Atlantis CI/CD CodePipeline CloudFormation Template Version 2
 # Chad Leigh Kluck
-# v2024.06.17 : template-pipeline.yml
+# v2024.10.18 : template-pipeline.yml
 # 
 # README documentation goes through installation steps. 
 # https://github.com/chadkluck/serverless-deploy-pipeline-atlantis/README.md
@@ -43,7 +43,7 @@ Metadata:
         Parameters:
           - ParameterStoreHierarchy
           - AlarmNotificationEmail
-          - PermissionsBoundaryARN
+          - PermissionsBoundaryArn
       -
         Label:
           default: "Code Repository"
@@ -152,7 +152,7 @@ Parameters:
     Description: "Email address to send notifications to when alarms are triggered. Be sure to check the inbox as you will need to confirm the subscription."
     AllowedPattern: "^[\\w\\-\\.]+@([\\w\\-]+\\.)+[\\w\\-]{2,4}$"
     ConstraintDescription: "A valid email address"
-  PermissionsBoundaryARN:
+  PermissionsBoundaryArn:
     Type: String
     Description: "Permissions Boundary is a policy attached to a role to further restrict the permissions of the role. Your organization may or may not require boundaries. If left empty, no permissions boundary will be used."
     Default: ""
@@ -186,7 +186,7 @@ Conditions:
   IsNotDevelopment: !Not [!Equals [!Ref DeployEnvironment, "DEV"]]
   # IsDevelopment: !Equals [!Ref DeployEnvironment, "DEV"] # currently unused - uncomment if you have a use for it
   UseS3BucketNameOrgPrefix: !Not [!Equals [!Ref S3BucketNameOrgPrefix, ""]]
-  HasPermissionsBoundaryARN: !Not [!Equals [!Ref PermissionsBoundaryARN, ""]]
+  HasPermissionsBoundaryArn: !Not [!Equals [!Ref PermissionsBoundaryArn, ""]]
   UseOwnS3DeployBucket: !Equals [!Ref DeployBucket, ""]
 
 # =============================================================================
@@ -216,7 +216,7 @@ Resources:
       Path: !Ref RolePath
       RoleName: !Sub "${Prefix}-Worker-${ProjectId}-${StageId}-SourceEventServiceRole"
       Description: "Service Role to allow Events to trigger AWS CodePipeline execution"
-      PermissionsBoundary: !If [HasPermissionsBoundaryARN, !Ref PermissionsBoundaryARN, !Ref 'AWS::NoValue' ]
+      PermissionsBoundary: !If [HasPermissionsBoundaryArn, !Ref PermissionsBoundaryArn, !Ref 'AWS::NoValue' ]
       AssumeRolePolicyDocument:
         Statement:
         - Sid: "EventTrustPolicy"
@@ -245,7 +245,7 @@ Resources:
       Path: !Ref RolePath
       RoleName: !Sub "${Prefix}-Worker-${ProjectId}-${StageId}-CodePipelineServiceRole"
       Description: "Service Role to access resources during execution of AWS CodePipeline to get, build, and deploy application infrastructure"
-      PermissionsBoundary: !If [HasPermissionsBoundaryARN, !Ref PermissionsBoundaryARN, !Ref 'AWS::NoValue' ]
+      PermissionsBoundary: !If [HasPermissionsBoundaryArn, !Ref PermissionsBoundaryArn, !Ref 'AWS::NoValue' ]
       AssumeRolePolicyDocument:
         Statement:
         - Sid: "CodePipelineTrustPolicy"
@@ -317,7 +317,7 @@ Resources:
       Path: !Ref RolePath
       RoleName: !Sub "${Prefix}-Worker-${ProjectId}-${StageId}-CodeBuildServiceRole"
       Description: "Service Role to access resources during the application infrastructure build phase of AWS CodePipeline"
-      PermissionsBoundary: !If [HasPermissionsBoundaryARN, !Ref PermissionsBoundaryARN, !Ref 'AWS::NoValue' ]
+      PermissionsBoundary: !If [HasPermissionsBoundaryArn, !Ref PermissionsBoundaryArn, !Ref 'AWS::NoValue' ]
       AssumeRolePolicyDocument:
         Statement:
         - Sid: "CodeBuildTrustPolicy"
@@ -425,7 +425,7 @@ Resources:
       Path: !Ref RolePath
       RoleName: !Sub "${Prefix}-Worker-${ProjectId}-${StageId}-CodeDeployServiceRole"
       Description: "Service Role passed to infrastructure to deploy a Lambda function"
-      PermissionsBoundary: !If [HasPermissionsBoundaryARN, !Ref PermissionsBoundaryARN, !Ref 'AWS::NoValue' ]
+      PermissionsBoundary: !If [HasPermissionsBoundaryArn, !Ref PermissionsBoundaryArn, !Ref 'AWS::NoValue' ]
       AssumeRolePolicyDocument:
         Statement:
         - Sid: "CodeDeployTrustPolicy"
@@ -450,7 +450,7 @@ Resources:
       Path: !Ref RolePath
       RoleName: !Sub "${Prefix}-Worker-${ProjectId}-${StageId}-CloudFormationSvcRole"
       Description: Creating service role in IAM for AWS CloudFormation
-      PermissionsBoundary: !If [HasPermissionsBoundaryARN, !Ref PermissionsBoundaryARN, !Ref 'AWS::NoValue' ]
+      PermissionsBoundary: !If [HasPermissionsBoundaryArn, !Ref PermissionsBoundaryArn, !Ref 'AWS::NoValue' ]
       AssumeRolePolicyDocument:
         Statement:
         - Sid: "CloudFormationTrustPolicy"
@@ -997,7 +997,7 @@ Resources:
               "ParameterStoreHierarchy": "${ParameterStoreHierarchy}${DeployEnvironment}/${Prefix}-${ProjectId}-${StageId}/",
               "DeployRole": "${CodeDeployServiceRole.Arn}",
               "AlarmNotificationEmail": "${AlarmNotificationEmail}",
-              "PermissionsBoundaryARN": "${PermissionsBoundaryARN}"
+              "PermissionsBoundaryArn": "${PermissionsBoundaryArn}"
             }'
             TemplateConfiguration: !Sub '${ProjectId}-${StageId}-BuildArtifact::application-infrastructure/template-configuration.json'
             TemplatePath: !Sub "${ProjectId}-${StageId}-BuildArtifact::application-infrastructure/template-export.yml"

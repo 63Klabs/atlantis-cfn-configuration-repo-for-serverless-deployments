@@ -48,7 +48,7 @@
             "UsePreviousValue": true
         },
         {
-            "ParameterKey": "PermissionsBoundaryARN",
+            "ParameterKey": "PermissionsBoundaryArn",
             "ParameterValue": "$PERMISSIONS_BOUNDARY_ARN$",
             "UsePreviousValue": true
         },

@@ -74,7 +74,7 @@ defaultsFromIam = [
         "mapToSection": "stack_parameters",
     },
     {
-        "key": "PermissionsBoundaryARN",
+        "key": "PermissionsBoundaryArn",
         "mapToSection": "stack_parameters",
     },
     {
@@ -121,7 +121,7 @@ defaults = {
         "DeployBucket": atlantis.prompts["DeployBucket"]["default"],
         "ParameterStoreHierarchy": atlantis.prompts["ParameterStoreHierarchy"]["default"],
         "AlarmNotificationEmail": "",
-        "PermissionsBoundaryARN": "",
+        "PermissionsBoundaryArn": "",
         "CodeCommitRepository": "",
         "CodeCommitBranch": atlantis.prompts["CodeCommitBranch"]["default"]
     }
@@ -318,8 +318,8 @@ prompts["stack_parameters"]["ParameterStoreHierarchy"]["default"] = defaults["st
 prompts["stack_parameters"]["AlarmNotificationEmail"] = atlantis.prompts["AlarmNotificationEmail"]
 prompts["stack_parameters"]["AlarmNotificationEmail"]["default"] = defaults["stack_parameters"]["AlarmNotificationEmail"]
 
-prompts["stack_parameters"]["PermissionsBoundaryARN"] = atlantis.prompts["PermissionsBoundaryARN"]
-prompts["stack_parameters"]["PermissionsBoundaryARN"]["default"] = defaults["stack_parameters"]["PermissionsBoundaryARN"]
+prompts["stack_parameters"]["PermissionsBoundaryArn"] = atlantis.prompts["PermissionsBoundaryArn"]
+prompts["stack_parameters"]["PermissionsBoundaryArn"]["default"] = defaults["stack_parameters"]["PermissionsBoundaryArn"]
 
 prompts["stack_parameters"]["CodeCommitRepository"] = atlantis.prompts["CodeCommitRepository"]
 prompts["stack_parameters"]["CodeCommitRepository"]["default"] = defaults["stack_parameters"]["CodeCommitRepository"]
@@ -472,7 +472,7 @@ def subPlaceholders(string):
     string = string.replace("$DEPLOY_BUCKET$", parameters["stack_parameters"]["DeployBucket"])
     string = string.replace("$PARAM_STORE_HIERARCHY$", parameters["stack_parameters"]["ParameterStoreHierarchy"])
     string = string.replace("$ALARM_NOTIFICATION_EMAIL$", parameters["stack_parameters"]["AlarmNotificationEmail"])
-    string = string.replace("$PERMISSIONS_BOUNDARY_ARN$", parameters["stack_parameters"]["PermissionsBoundaryARN"])
+    string = string.replace("$PERMISSIONS_BOUNDARY_ARN$", parameters["stack_parameters"]["PermissionsBoundaryArn"])
     string = string.replace("$REPOSITORY$", parameters["stack_parameters"]["CodeCommitRepository"])
     string = string.replace("$REPOSITORY_BRANCH$", parameters["stack_parameters"]["CodeCommitBranch"])   
 

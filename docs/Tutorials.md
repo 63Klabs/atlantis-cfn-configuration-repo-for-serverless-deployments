@@ -150,7 +150,7 @@ Conditions:
   CreateTestResources: !Equals [!Ref DeployEnvironment, "TEST"]
   CreateDevResources: !Equals [!Ref DeployEnvironment, "DEV"]
   UseS3BucketNameOrgPrefix: !Not [!Equals [!Ref S3BucketNameOrgPrefix, ""]]
-  HasPermissionsBoundaryARN: !Not [!Equals [!Ref PermissionsBoundaryARN, ""]]
+  HasPermissionsBoundaryArn: !Not [!Equals [!Ref PermissionsBoundaryArn, ""]]
   CreateAlarms: !Equals [!Ref DeployEnvironment, "PROD"]
 ```
 
@@ -219,7 +219,7 @@ The template-pipeline.yml for the pipeline stack limits what resources can be de
       Path: !Ref RolePath
       RoleName: !Sub "${Prefix}-Worker-${ProjectId}-${StageId}-CloudFormationSvcRole"
       Description: Creating service role in IAM for AWS CloudFormation
-      PermissionsBoundary: !If [HasPermissionsBoundaryARN, !Ref PermissionsBoundaryARN, !Ref 'AWS::NoValue' ]
+      PermissionsBoundary: !If [HasPermissionsBoundaryArn, !Ref PermissionsBoundaryArn, !Ref 'AWS::NoValue' ]
       AssumeRolePolicyDocument:
         Statement:
         - Sid: "CloudFormationTrustPolicy"

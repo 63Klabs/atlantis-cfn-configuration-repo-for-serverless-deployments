@@ -45,7 +45,7 @@ Metadata:
         Parameters:
           - ParameterStoreHierarchy
           - AlarmNotificationEmail
-          - PermissionsBoundaryARN
+          - PermissionsBoundaryArn
       -
         Label:
           default: "Lambda Function Settings"
@@ -148,7 +148,7 @@ Parameters:
     Description: "Email address to send notifications to when alarms are triggered. Be sure to check the inbox as you will need to confirm the subscription."
     AllowedPattern: "^[\\w\\-\\.]+@([\\w\\-]+\\.)+[\\w\\-]{2,4}$"
     ConstraintDescription: "A valid email address"
-  PermissionsBoundaryARN:
+  PermissionsBoundaryArn:
     Type: String
     Description: "Permissions Boundary is a policy attached to a role to further restrict the permissions of the role. Your organization may or may not require boundaries. If left empty, no permissions boundary will be used."
     Default: ""
@@ -209,7 +209,7 @@ Conditions:
   CreateTestResources: !Equals [!Ref DeployEnvironment, "TEST"]
   CreateDevResources: !Equals [!Ref DeployEnvironment, "DEV"]
   UseS3BucketNameOrgPrefix: !Not [!Equals [!Ref S3BucketNameOrgPrefix, ""]]
-  HasPermissionsBoundaryARN: !Not [!Equals [!Ref PermissionsBoundaryARN, ""]]
+  HasPermissionsBoundaryArn: !Not [!Equals [!Ref PermissionsBoundaryArn, ""]]
   CreateAlarms: !Equals [!Ref DeployEnvironment, "PROD"] 
 
 # =============================================================================
@@ -290,7 +290,7 @@ Resources:
       RoleName: !Sub "${Prefix}-${ProjectId}-${StageId}-LambdaExecRole"
       Description: "IAM Role that allows the Lambda permission to execute and access resources"
       Path: !Ref RolePath
-      PermissionsBoundary: !If [HasPermissionsBoundaryARN, !Ref PermissionsBoundaryARN, !Ref 'AWS::NoValue' ]
+      PermissionsBoundary: !If [HasPermissionsBoundaryArn, !Ref PermissionsBoundaryArn, !Ref 'AWS::NoValue' ]
       AssumeRolePolicyDocument:
         Statement:
         - Effect: Allow
