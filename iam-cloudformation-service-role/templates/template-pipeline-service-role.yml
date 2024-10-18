@@ -5,7 +5,7 @@
 #
 # Atlantis SAM IAM Template Version 2
 # Chad Leigh Kluck
-# v2024.09.27 : template-pipeline-service-role.yml
+# v2024.10.18 : template-pipeline-service-role.yml
 # 
 # README documentation goes through installation steps. 
 # https://github.com/chadkluck/serverless-deploy-pipeline-atlantis/README.md
