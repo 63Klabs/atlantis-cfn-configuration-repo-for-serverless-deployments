@@ -456,26 +456,34 @@ Resources:
               Compress: true
             - Ref: AWS::NoValue
 
-        CustomErrorResponses:
-          - !If 
-            - HasRouteForStaticOrigin
-            - - ErrorCode: 401
-                ResponsePagePath: /index.html
-                ResponseCode: 200
-                ErrorCachingMinTTL: 300
-              - ErrorCode: 403
-                ResponsePagePath: /index.html
-                ResponseCode: 200
-                ErrorCachingMinTTL: 300
-              - ErrorCode: 404
-                ResponsePagePath: /index.html
-                ResponseCode: 200
-                ErrorCachingMinTTL: 300
-              - ErrorCode: 500
-                ResponsePagePath: /index.html
-                ResponseCode: 200
-                ErrorCachingMinTTL: 300
-            - Ref: AWS::NoValue
+        CustomErrorResponses: 
+          - ErrorCode: 401
+            ResponsePagePath: /index.html
+            ResponseCode: 200
+            ErrorCachingMinTTL: 300
+          - ErrorCode: 403
+            ResponsePagePath: /index.html
+            ResponseCode: 200
+            ErrorCachingMinTTL: 300
+          - ErrorCode: 404
+            ResponsePagePath: /index.html
+            ResponseCode: 200
+            ErrorCachingMinTTL: 300
+          # !If 
+          # - HasStaticOrigin
+          # - - ErrorCode: 401
+          #     ResponsePagePath: /index.html
+          #     ResponseCode: 200
+          #     ErrorCachingMinTTL: 300
+          #   - ErrorCode: 403
+          #     ResponsePagePath: /index.html
+          #     ResponseCode: 200
+          #     ErrorCachingMinTTL: 300
+          #   - ErrorCode: 404
+          #     ResponsePagePath: /index.html
+          #     ResponseCode: 200
+          #     ErrorCachingMinTTL: 300
+          # - Ref: AWS::NoValue
 
         Aliases:
           !If
