@@ -1,0 +1,30 @@
+version = 0.1
+
+[default.deploy.parameters]
+s3_bucket = "cf-templates-somebucket-us-east-2"
+s3_prefix = "acme-sample-ws-network"
+region = "us-east-2"
+confirm_changeset = true
+capabilities = "CAPABILITY_IAM"
+image_repositories = []
+
+# =====================================================
+# Test Deployment Configuration
+
+[test.deploy.parameters]
+template_file = "./templates/template-network.yml"
+stack_name = "acme-sample-ws-test-network"
+s3_prefix = "acme-sample-ws-test-network"
+parameter_overrides = "StageId=\"test\" DeployEnvironment=\"TEST\" Prefix=\"acme\" ProjectId=\"sample-ws\" ApiGatewayId=\"\" S3OriginDomainName=\"\" DomainForCloudFront=\"\" CustomSubdomainCloudFront=\"\" DomainForApiGateway=\"\" CustomSubdomainApiGateway=\"\" PathStatic=\"\" PathApi=\"\" AcmCertificateArnForCloudFront=\"\""
+tags = "Application=\"Sample-WS\" Name=\"Sample Web Service\" Project=\"sample-ws\" Owner=\"\" Creator=\"\" CostCenter=\"\" Department=\"ACME\" Environment=\"TEST\" CodeCommitRepository=\"serverless-deploy-pipeline-atlantis\" DeployedUsing=\"sam\" \"atlantis:Prefix\"=\"acme\" \"atlantis:Application\"=\"acme-sample-ws\" "
+
+# =====================================================
+# Prod Deployment Configuration
+
+[prod.deploy.parameters]
+template_file = "./templates/template-network.yml"
+stack_name = "ead-submit-posters-prod-network"
+s3_prefix = "ead-submit-posters-prod-network"
+parameter_overrides = "StageId=\"prod\" DeployEnvironment=\"TEST\" Prefix=\"acme\" ProjectId=\"sample-ws\" ApiGatewayId=\"\" S3OriginDomainName=\"\" DomainForCloudFront=\"\" CustomSubdomainCloudFront=\"\" DomainForApiGateway=\"\" CustomSubdomainApiGateway=\"\" PathStatic=\"\" PathApi=\"\" AcmCertificateArnForCloudFront=\"\""
+tags = "Application=\"Sample-WS\" Name=\"Sample Web Service\" Project=\"sample-ws\" Owner=\"\" Creator=\"\" CostCenter=\"\" Department=\"ACME\" Environment=\"PROD\" CodeCommitRepository=\"serverless-deploy-pipeline-atlantis\" DeployedUsing=\"sam\" \"atlantis:Prefix\"=\"acme\" \"atlantis:Application\"=\"acme-sample-ws\" "
+
