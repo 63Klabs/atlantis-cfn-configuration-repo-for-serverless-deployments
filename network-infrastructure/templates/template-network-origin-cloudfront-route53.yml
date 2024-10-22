@@ -7,7 +7,8 @@ Description: Apply custom sub-domains via Route53 to static content in an S3 buc
   it can use CloudFront or direct routing from Route53. Requires existing 
   S3 bucket with access policy and/or existing API Gateway. 
 
-# Atlantis Network Infrastructure Template: S3/APIGW behind CloudFront and Route53
+# Atlantis Network Infrastructure Template
+# template-network-origin-cloudfront-route53.yml
 # v0.0.12/2024-10-22
 
 # =============================================================================

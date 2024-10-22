@@ -5,15 +5,15 @@ version = 0.1
 
 [default.deploy.parameters]
 s3_bucket = "cf-templates-somebucket-us-east-2"
-s3_prefix = "acme-sample-storage"
+s3_prefix = "acme-sample-static-site-storage"
 template_file = "./templates/template-storage-s3-oac-for-cloudfront.yml"
 region = "us-east-2"
 confirm_changeset = true
 capabilities = "CAPABILITY_NAMED_IAM"
 
-stack_name = "acme-sample-storage"
-parameter_overrides = "Prefix=\"acme\" ProjectId=\"sample\" S3BucketNameOrgPrefix=\"acme\" AlarmNotificationEmail=\"\""
-tags = "Application=\"Sample\" atlantis:Application=\"acme-sample\" atlantis:Prefix=\"acme\" CostCenter=\"\" Creator=\"\" Department=\"ACME\" Environment=\"PROD\" Owner=\"\" CodeCommitRepository=\"serverless-deploy-pipeline-atlantis\" DeployedUsing=\"sam\" "
+stack_name = "acme-sample-static-site-storage"
+parameter_overrides = "Prefix=\"acme\" ProjectId=\"sample-static-site\" S3BucketNameOrgPrefix=\"acme\" AlarmNotificationEmail=\"\""
+tags = "\"atlantis:Application\"=\"acme-sample-static-site\" \"atlantis:Prefix\"=\"acme\" CostCenter=\"\" Creator=\"\" Department=\"ACME\" Environment=\"PROD\" Owner=\"\" CodeCommitRepository=\"serverless-deploy-pipeline-atlantis\" DeployedUsing=\"sam\" "
 image_repositories = []
 
 # =====================================================
