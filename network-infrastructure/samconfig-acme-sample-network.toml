@@ -11,6 +11,10 @@ image_repositories = []
 # =====================================================
 # Test Deployment Configuration
 
+# ```bash
+# sam deploy --profile default --config-env test --config-file samconfig-acme-magic-ws-network.toml
+# ```
+
 [test.deploy.parameters]
 template_file = "./templates/template-network-origin-cloudfront-route53.yml"
 stack_name = "acme-sample-ws-test-network"

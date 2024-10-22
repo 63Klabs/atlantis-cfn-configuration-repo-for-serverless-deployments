@@ -488,7 +488,7 @@ Resources:
         ViewerCertificate:
           CloudFrontDefaultCertificate: !If [ CreateDnsRecordForCloudFront, !Ref AWS::NoValue, true]
           AcmCertificateArn: !If [ CreateDnsRecordForCloudFront, !Ref AcmCertificateArnForCloudFront, !Ref AWS::NoValue ] 
-          SslSupportMethod: sni-only
+          SslSupportMethod: !If [ CreateDnsRecordForCloudFront, 'sni-only', !Ref AWS::NoValue ]
       Tags:
         # Required Tags for permissions since the distribution arn is randomly generated
         - Key: atlantis:Application

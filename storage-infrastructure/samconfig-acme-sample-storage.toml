@@ -1,5 +1,9 @@
 version = 0.1
 
+# ```bash
+# sam deploy --profile default --config-file samconfig-acme-sample-storage.toml
+# ```
+
 # =====================================================
 # Default Deploy Configuration
 

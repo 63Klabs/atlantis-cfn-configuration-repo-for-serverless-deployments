@@ -1,6 +1,7 @@
 # Ignore the git and zip files we use
 .*
 *.zip
+x_samconfig*.toml
 
 # Ignore program and OS files
 .vscode
