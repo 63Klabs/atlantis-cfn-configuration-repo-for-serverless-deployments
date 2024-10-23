@@ -1,15 +1,17 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
-Description: Apply custom sub-domains via Route53 to static content in an S3 bucket 
-  and/or  an API Gateway. Static and API can reside on same sub-domains with routing 
-  paths or separate sub-domains. For static content, uses a CloudFront distribution 
-  with an S3 origin secured with origin access control (OAC). For API Gateway
-  it can use CloudFront or direct routing from Route53. Requires existing 
-  S3 bucket with access policy and/or existing API Gateway. 
+Description: CloudFront Distribution w/ optional Route53 for Static Content (S3 OAC) and/or API Gateway - Deployed using SAM
+
+# Apply custom sub-domains via Route53 to static content in an S3 bucket 
+# and/or  an API Gateway. Static and API can reside on same sub-domains with routing 
+# paths or separate sub-domains. For static content, uses a CloudFront distribution 
+# with an S3 origin secured with origin access control (OAC). For API Gateway
+# it can use CloudFront or direct routing from Route53. Requires existing 
+# S3 bucket with access policy and/or existing API Gateway. 
 
 # Atlantis Network Infrastructure Template
 # template-network-origin-cloudfront-route53.yml
-# v0.0.12/2024-10-22
+# v0.0.12/2024-10-22-
 
 # =============================================================================
 # META DATA
@@ -462,29 +464,17 @@ Resources:
             - Ref: AWS::NoValue
 
         CustomErrorResponses: 
-          - ErrorCode: 403
-            ResponsePagePath: /index.html
-            ResponseCode: 200
-            ErrorCachingMinTTL: 300
-          - ErrorCode: 404
-            ResponsePagePath: /index.html
-            ResponseCode: 200
-            ErrorCachingMinTTL: 300
-          # !If 
-          # - HasStaticOrigin
-          # - - ErrorCode: 401
-          #     ResponsePagePath: /index.html
-          #     ResponseCode: 200
-          #     ErrorCachingMinTTL: 300
-          #   - ErrorCode: 403
-          #     ResponsePagePath: /index.html
-          #     ResponseCode: 200
-          #     ErrorCachingMinTTL: 300
-          #   - ErrorCode: 404
-          #     ResponsePagePath: /index.html
-          #     ResponseCode: 200
-          #     ErrorCachingMinTTL: 300
-          # - Ref: AWS::NoValue
+          !If 
+          - HasStaticOrigin
+          - - ErrorCode: 403
+              ResponsePagePath: /index.html
+              ResponseCode: 200
+              ErrorCachingMinTTL: 300
+            - ErrorCode: 404
+              ResponsePagePath: /index.html
+              ResponseCode: 200
+              ErrorCachingMinTTL: 300
+          - Ref: AWS::NoValue
 
         Aliases:
           !If
