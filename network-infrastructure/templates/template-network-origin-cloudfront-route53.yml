@@ -400,6 +400,11 @@ Resources:
         PriceClass: !If [ IsProduction, !Ref CloudFrontPriceClass, "PriceClass_100" ]
         DefaultRootObject: index.html
 
+        # Logging:
+        #   IncludeCookies: 'false'
+        #   Bucket: amzn-s3-demo-logging-bucket.s3.amazonaws.com
+        #   Prefix: myprefix
+
         Origins:
           - !If
             - HasStaticOrigin
@@ -457,10 +462,6 @@ Resources:
             - Ref: AWS::NoValue
 
         CustomErrorResponses: 
-          - ErrorCode: 401
-            ResponsePagePath: /index.html
-            ResponseCode: 200
-            ErrorCachingMinTTL: 300
           - ErrorCode: 403
             ResponsePagePath: /index.html
             ResponseCode: 200
