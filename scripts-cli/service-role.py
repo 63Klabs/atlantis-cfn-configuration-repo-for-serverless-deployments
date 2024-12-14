@@ -20,7 +20,7 @@ cwd = os.getcwd()
 print("")
 tools.printCharStr("=", 80, bookend="|")
 tools.printCharStr(" ", 80, bookend="|", text="Service Role AWS CLI Generator for Atlantis CI/CD")
-tools.printCharStr(" ", 80, bookend="|", text="v2024.10.18 : service-role.py")
+tools.printCharStr(" ", 80, bookend="|", text="v2024.12.14 : service-role.py")
 tools.printCharStr("-", 80, bookend="|")
 tools.printCharStr(" ", 80, bookend="|", text="Chad Leigh Kluck")
 tools.printCharStr(" ", 80, bookend="|", text="https://github.com/chadkluck/serverless-deploy-pipeline-atlantis")
@@ -43,8 +43,6 @@ defaults = {
 	"general": {
 		"Prefix": argPrefix,
 		"S3BucketNameOrgPrefix": atlantis.prompts["S3BucketNameOrgPrefix"]["default"],
-		"AwsAccountId": atlantis.prompts["AwsAccountId"]["default"],
-		"AwsRegion": atlantis.prompts["AwsRegion"]["default"],
 		"RolePath": atlantis.prompts["RolePath"]["default"],
 		"PermissionsBoundaryArn": atlantis.prompts["PermissionsBoundaryArn"]["default"],
 		"ServiceRoleARN": ""

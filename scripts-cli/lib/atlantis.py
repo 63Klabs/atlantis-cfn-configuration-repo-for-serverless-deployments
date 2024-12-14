@@ -23,20 +23,28 @@ hello = "Hello, World"
 
 dirs = {
     "settings": {},
-    "cli": {}
+    "cli": {},
+	"toml": {}
 }
 
 dirSettings = "./settings/"
 
 dirs["settings"]["Iam"] = dirSettings+"iam/"
-dirs["settings"]["Cfn"] = dirSettings+"cfn/"
-dirs["cfnPipeline"] = "../cloudformation-pipeline-template/"
-dirs["iamServiceRole"] = "../iam-cloudformation-service-role/"
+dirs["settings"]["Cfn"] = dirSettings+"pipeline/" # REMOVE
+dirs["settings"]["Pipeline"] = dirSettings+"pipeline/"
+dirs["settings"]["Storage"] = dirSettings+"storage/"
+dirs["settings"]["Network"] = dirSettings+"network/"
 
-dirCli = "./cli/"
+dirs["iamServiceRole"] = "../iam-service-role-infrastructure/"
+dirs["cfnPipeline"] = "../pipeline-infrastructure/"  # REMOVE
+dirs["pipeline"] = "../pipeline-infrastructure/"
+dirs["storage"] = "../storage-infrastructure/"
+dirs["network"] = "../network-infrastructure/"
 
-dirs["cli"]["Iam"] = dirs["iamServiceRole"]+"roles/"
-dirs["cli"]["Cfn"] = dirs["cfnPipeline"]+"pipelines/"
+dirCli = "./cli/" # REMOVE
+
+dirs["cli"]["Iam"] = dirs["iamServiceRole"]+"roles/" # REMOVE
+dirs["cli"]["Cfn"] = dirs["cfnPipeline"]+"pipelines/" #REMOVE
 
 files = {
     "cfnPipelineTemplate": {},
