@@ -19,7 +19,7 @@ cwd = os.getcwd()
 
 print("")
 tools.printCharStr("=", 80, bookend="|")
-tools.printCharStr(" ", 80, bookend="|", text="Service Role AWS CLI Generator for Atlantis CI/CD")
+tools.printCharStr(" ", 80, bookend="|", text="Service Role AWS SAM Config Generator for Atlantis CI/CD")
 tools.printCharStr(" ", 80, bookend="|", text="v2024.12.14 : service-role.py")
 tools.printCharStr("-", 80, bookend="|")
 tools.printCharStr(" ", 80, bookend="|", text="Chad Leigh Kluck")
@@ -27,11 +27,11 @@ tools.printCharStr(" ", 80, bookend="|", text="https://github.com/chadkluck/serv
 tools.printCharStr("=", 80, bookend="|")
 print("")
 
-argPrefix = "atlantis"
+argPrefix = "acme"
 argAcceptDefaults = False
 scriptName = sys.argv[0]
 
-# Check to make sure there are at least three arguments. If there are not 3 arguments then display message and exit. If there are 3 arguments set Prefix, ProjectId, and Stage
+# Check to make sure there is at least one argument else display message and exit.
 if len(sys.argv) > 1:
     argPrefix = sys.argv[1]
 else:
@@ -45,7 +45,8 @@ defaults = {
 		"S3BucketNameOrgPrefix": atlantis.prompts["S3BucketNameOrgPrefix"]["default"],
 		"RolePath": atlantis.prompts["RolePath"]["default"],
 		"PermissionsBoundaryArn": atlantis.prompts["PermissionsBoundaryArn"]["default"],
-		"ServiceRoleARN": ""
+        "AwsRegion": atlantis.prompts["AwsRegion"]["default"],
+        "DeployBucket": atlantis.prompts["DeployBucket"]["default"]
 	}
 }
 
@@ -56,7 +57,7 @@ print("[ Loading .default files... ]")
 # Create a file location array - this is the hierarchy of files we will gather defaults from. The most recent file appended (lower on list) will overwrite previous values
 fileLoc = []
 fileLoc.append(atlantis.dirs["settings"]["Iam"]+"defaults.json")
-fileLoc.append(atlantis.dirs["settings"]["Iam"]+"defaults-"+argPrefix+".json")
+fileLoc.append(atlantis.dirs["settings"]["Iam"]+"defaults-"+argPrefix.lower()+".json")
 
 # iam defaults don't have keysections
 for i in range(len(fileLoc)):
@@ -69,13 +70,14 @@ for i in range(len(fileLoc)):
 	else:
 		print(" - Did not find "+fileLoc[i])
 
+
 # Read in Custom Stack Tags
         
 print("\n[ Loading tags files... ]")
 
 tagFileLoc = []
 tagFileLoc.append(atlantis.dirs["settings"]["Iam"]+"tags.json")
-tagFileLoc.append(atlantis.dirs["settings"]["Iam"]+"tags-"+argPrefix+".json")
+tagFileLoc.append(atlantis.dirs["settings"]["Iam"]+"tags-"+argPrefix.lower()+".json")
 
 # If tags.json exists, read it in
 customSvcRoleTags = []
@@ -148,31 +150,13 @@ prompts["general"]["RolePath"]["default"] = defaults["general"]["RolePath"]
 prompts["general"]["PermissionsBoundaryArn"] = atlantis.prompts["PermissionsBoundaryArn"]
 prompts["general"]["PermissionsBoundaryArn"]["default"] = defaults["general"]["PermissionsBoundaryArn"]
 
-prompts["general"]["AwsAccountId"] = atlantis.prompts["AwsAccountId"]
-prompts["general"]["AwsAccountId"]["default"] = defaults["general"]["AwsAccountId"]
-
 prompts["general"]["AwsRegion"] = atlantis.prompts["AwsRegion"]
 prompts["general"]["AwsRegion"]["default"] = defaults["general"]["AwsRegion"]
 
+prompts["general"]["DeployBucket"] = atlantis.prompts["DeployBucket"]
+prompts["general"]["DeployBucket"]["default"] = defaults["general"]["DeployBucket"]
+
 atlantis.getUserInput(prompts, parameters, promptSections)
-
-# =============================================================================
-# Set Values
-# =============================================================================
-
-parameters["general"]["ServiceRoleARN"] = "arn:aws:iam::"+parameters["general"]["AwsAccountId"]+":role"+parameters["general"]["RolePath"]+parameters["general"]["Prefix"].upper()+"-CloudFormation-Service-Role"
-
-permissions_boundary_conditional = ""
-permissions_boundary_cli = ""
-
-if parameters["general"]["PermissionsBoundaryArn"]:
-	permissions_boundary_conditional = """,
-			"Condition": {
-				"StringLike": {
-					"iam:PermissionsBoundary": "$PERMISSIONS_BOUNDARY_ARN$"
-				}
-			}"""
-	permissions_boundary_cli = " --permissions-boundary "+parameters["general"]["PermissionsBoundaryArn"]+" \\\n\t"
 
 # =============================================================================
 # Save files
@@ -194,9 +178,7 @@ iamInputsFiles = [
 # to do this we will list the data to remove in reverse order
 removals = [
     {
-        "general": [
-            "Prefix", "ServiceRoleARN"
-        ]
+        "general": ["Prefix"]
     }
 ]
 
@@ -232,121 +214,113 @@ for i in range(numFiles):
 tools.printCharStr("-", 80)
 
 # Get the path to the generated directory
-cli_output_dir = atlantis.dirs["cli"]["Iam"]+parameters["general"]["Prefix"]+"/"
+cli_output_dir = atlantis.dirs["iamServiceRole"]
 if not os.path.isdir(cli_output_dir):
 	os.makedirs(cli_output_dir)
-        
-# Open the sample-ATLANTIS-CloudFormationServicePolicy.json file
-with open(
-	os.path.join(cwd, atlantis.files["iamServicePolicy"]["path"]), "r"
-) as f:
-	# Read the contents of the file
-	contents = f.read()
-	# Replace the placeholders with the values from the command line
-	contents = contents.replace("$PREFIX$", parameters["general"]["Prefix"])
-	contents = contents.replace("$PREFIX_UPPER$", parameters["general"]["Prefix"].upper())
-	contents = contents.replace("$ROLE_PATH$", parameters["general"]["RolePath"])
-	contents = contents.replace("$AWS_ACCOUNT$", parameters["general"]["AwsAccountId"])
-	contents = contents.replace("$AWS_REGION$", parameters["general"]["AwsRegion"])
 
-	# Replace permissions boundary placeholder which is complex:
-	contents = contents.replace(",\"Condition\": \"$PERMISSIONS_BOUNDARY_CONDITIONAL$\"", permissions_boundary_conditional)
-	contents = contents.replace("$PERMISSIONS_BOUNDARY_ARN$", parameters["general"]["PermissionsBoundaryArn"])
+globalDeployParameters = {
+	"template_file": "./templates/template-service-role.yml",
+	"s3_bucket": parameters["general"]["DeployBucket"],
+    "region": parameters["general"]["AwsRegion"],
+	"confirm_changeset": "true",
+	"capabilities": "CAPABILITY_IAM",
+	"image_repositories": "[]"
+}
 
-	# if s3_bucket_prefix is provided, replace the placeholder with the value from the command line followed by a hyphen, else replace with blank
-	if not parameters["general"]["S3BucketNameOrgPrefix"]:
-		contents = contents.replace("$S3_ORG_PREFIX$", "")
-	else:
-		contents = contents.replace("$S3_ORG_PREFIX$", parameters["general"]["S3BucketNameOrgPrefix"] + "-")
+customSvcRoleParams = {
+	"stack_name" : parameters["general"]["Prefix"].upper()+"-service-role",
+	"s3_prefix": parameters["general"]["Prefix"].upper()+"-service-role",
+	"parameter_overrides": "",
+	"tags": ""
+}
 
-	# Write the updated contents to a new file in the generated directory
-	new_file_name = parameters["general"]["Prefix"].upper()+"-CloudFormationServicePolicy.json"
-	with open(os.path.join(cli_output_dir, new_file_name), "w") as g:
-		g.write(contents)
-		g.close()
-		f.close()
+param_overrides_toml = ""
+for key, value in parameters["general"].items():
+	param_overrides_toml += f"\\\"{key}\\\"=\\\"{value}\\\" "
 
-		# Print a message indicating that the file has been copied
-		print("File copied and updated successfully!")
-		print(os.path.join(cli_output_dir, new_file_name))
+param_overrides_toml = param_overrides_toml.rstrip()
 
-		# Prepend {"Key": "Atlantis", "Value": "iam"} and {"Key": "atlantis:Prefix", "Value": prefix} to tags list
-		customSvcRoleTags.insert(0, {"Key": "Atlantis", "Value": "iam"})
-		customSvcRoleTags.insert(1, {"Key": "atlantis:Prefix", "Value": parameters["general"]["Prefix"]})
+# Prepend {"Key": "Atlantis", "Value": "iam"} and {"Key": "atlantis:Prefix", "Value": prefix} to tags list
+customSvcRoleTags.insert(0, {"Key": "Atlantis", "Value": "iam"})
+customSvcRoleTags.insert(1, {"Key": "atlantis:Prefix", "Value": parameters["general"]["Prefix"]})
 
-		tags_cli = "--tags "
-		for tag in customSvcRoleTags:
-			tags_cli += "'{\"Key\": \""+tag["Key"]+"\", \"Value\": \""+tag["Value"]+"\"}' "
+tags_toml = ""
+for tag in customSvcRoleTags:
+    key = tag["Key"]
+    value = tag["Value"]
+    tags_toml += f"\\\"{key}\\\"=\\\"{value}\\\" "
 
-		tags_cli = tags_cli.rstrip()
+tags_toml = tags_toml.rstrip()
 
-		print("")
-		tools.printCharStr("=", 80, bookend="!", text="CREATE ROLE INSTRUCTIONS")
-		tools.printCharStr(" ", 80, bookend="!", text="Execute the following AWS CLI commands in order to create the role.")
-		tools.printCharStr(" ", 80, bookend="!", text="A copy of the commands have been saved to inputs/ for later use.")
-		tools.printCharStr("-", 80, bookend="!")
-		tools.printCharStr(" ", 80, bookend="!", text="Make sure you are logged into AWS CLI with a user role holding permissions")
-		tools.printCharStr(" ", 80, bookend="!", text="to create the service role!")
-		tools.printCharStr("-", 80, bookend="!")
-		tools.printCharStr(" ", 80, bookend="!", text="Alternately, you can create the role manually via the AWS Web Console using")
-		tools.printCharStr(" ", 80, bookend="!", text="the CloudFormationServicePolicy found in cli/iam/")
-		tools.printCharStr("=", 80, bookend="!")
-		print("")
-            
-		win_cmd = []
-		msgForWinCLI_1 = "# NOTE FOR BASH ON WINDOWS USERS: When using Bash on Windows you may need to execute the following export command first if you receive the following error:"
-		msgForWinCLI_2 = "# ValidationError when calling the CreateRole operation: The specified value for path is invalid."
-		win_cmd.append(tools.breakLines(msgForWinCLI_1, tools.indent(4, '#')))
-		win_cmd.append(tools.breakLines(msgForWinCLI_2, tools.indent(4, '#')))
-		win_cmd.append("")
-		win_cmd.append("export MSYS_NO_PATHCONV=1")
-            
-		stringWinCmd = "\n".join(win_cmd)
-    
-		# detect if user is on windows and print a message to export MSYS_NO_PATHCONV variable
-		if os.name == "nt":
-			print(stringWinCmd)
+customSvcRoleParams["parameter_overrides"] = param_overrides_toml
+customSvcRoleParams["tags"] = tags_toml
 
-		ROOT_CLI_DIR_IAM = cli_output_dir
-		IAM_TRUST_POLICY = "../../"+atlantis.files["iamTrustPolicy"]["name"]
-		IAM_SERVICE_POLICY = new_file_name
-        
-		# Print a message indicating the aws iam cli commands to create the role and policy and attach it to the role
+toml_filename = "samconfig-"+parameters['general']['Prefix'].upper()+"-service-role.toml"
+sam_deploy_command = f"sam deploy --profile default --config-file {toml_filename}"
 
-		create_role_comment = []
-		create_role_comment.append("# -----------------------------------------------------------------------------")
-		create_role_comment.append("# Run iam create-role command from the /iam-cloudformation-service-role/roles/"+parameters["general"]["Prefix"]+" directory (or adjust path as needed)")
-		create_role_comment.append("")
-		create_role_comment.append("cd "+ROOT_CLI_DIR_IAM)
+# Read in ./lib/templates/samconfig.toml.txt
+# Read the template file
+template_path = "./lib/templates/samconfig.toml.txt"
+with open(template_path, "r") as f:
+    toml_template = f.read()
 
-		stringCliRoleComment = "\n".join(create_role_comment)
-        
-		# Generate the CLI command for create-role
-		create_role = []
-		create_role.append("aws iam create-role --path "+parameters["general"]["RolePath"])
-		create_role.append("--role-name "+parameters["general"]["Prefix"].upper()+"-CloudFormation-Service-Role")
-		create_role.append("--description 'Service Role for CloudFormation Service to create and manage pipelines under the "+parameters["general"]["Prefix"]+" prefix'")
-		create_role.append("--assume-role-policy-document file://$IAM_TRUST_POLICY$")
-		if parameters["general"]["PermissionsBoundaryArn"]:
-			create_role.append("--permissions-boundary "+parameters["general"]["PermissionsBoundaryArn"])
-		create_role.append(tags_cli)
+# Create a dictionary of replacements
+replacements = {
+    "$TEMPLATE_FILE$": globalDeployParameters["template_file"],
+    "$S3_BUCKET_FOR_DEPLOY_ARTIFACTS$": globalDeployParameters["s3_bucket"],
+    "$AWS_REGION$": globalDeployParameters["region"],
+    "$CAPABILITIES$": globalDeployParameters["capabilities"],
+	"$CONFIRM_CHANGESET$": globalDeployParameters["confirm_changeset"],
+	"$IMAGE_REPOSITORIES$": globalDeployParameters["image_repositories"],
+    "$SCRIPT_NAME$": scriptName,
+    "$SCRIPT_ARGS$": argPrefix
+}
 
-		stringCliRole = " \\\n\t".join(create_role)
-            
-		put_policy = []
-		put_policy.append("aws iam put-role-policy --role-name "+parameters["general"]["Prefix"].upper()+"-CloudFormation-Service-Role")
-		put_policy.append("--policy-name "+parameters["general"]["Prefix"].upper()+"-CloudFormationServicePolicy")
-		put_policy.append("--policy-document file://$IAM_SERVICE_POLICY$")
-		
-		stringCliPolicy = " \\\n\t".join(put_policy)
-        
-		cliCommands = stringCliRoleComment + "\n\n" + stringCliRole + "\n\n" + stringCliPolicy + "\n"
-		cliCommands = cliCommands.replace("$IAM_TRUST_POLICY$", IAM_TRUST_POLICY)
-		cliCommands = cliCommands.replace("$IAM_SERVICE_POLICY$", IAM_SERVICE_POLICY)
-            
-		# save cliCommands to cli-<Prefix>.txt
-		cliCommandsFilename = cli_output_dir+"cli-"+parameters["general"]["Prefix"]+".txt"
-		myFile = open(cliCommandsFilename, "w")
-		n = myFile.write(stringWinCmd+"\n\n"+cliCommands)
+# Perform the replacements
+toml_content = toml_template
+for placeholder, value in replacements.items():
+    toml_content = toml_content.replace(placeholder, str(value))
 
-		print(cliCommands)
+# Add a [default.deploy.parameters] section to the content
+toml_content += "\n\n[default.deploy.parameters]\n"
+
+# Add a comment with the sam command to deploy
+toml_content += "# =====================================================\n"
+toml_content += "# Default Deployment Configuration\n"
+toml_content += "# Deploy command:\n"
+toml_content += f"# {sam_deploy_command} \n\n"
+
+# Add the customSvcRoleParams to the content
+for key, value in customSvcRoleParams.items():
+    toml_content += f"{key} = \"{value}\"\n"
+
+# Write the processed TOML file
+output_toml_path = f"{cli_output_dir}samconfig-{parameters['general']['Prefix'].upper()}-service-role.toml"
+with open(output_toml_path, "w") as f:
+    f.write(toml_content)
+
+print("")
+tools.printCharStr("=", 80, bookend="!", text="CREATE ROLE INFRASTRUCTURE STACK")
+tools.printCharStr(" ", 80, bookend="!", text="Make sure you are logged into AWS CLI with a user role holding permissions")
+tools.printCharStr(" ", 80, bookend="!", text="to create the service role!")
+tools.printCharStr("-", 80, bookend="!")
+tools.printCharStr(" ", 80, bookend="!", text="Ensure the --profile flag is correct")
+tools.printCharStr("-", 80, bookend="!")
+tools.printCharStr(" ", 80, bookend="!", text="To update the role just re-run this script and then execute 'sam deploy'")
+tools.printCharStr("=", 80, bookend="!")
+print("")
+
+# Print a message indicating the aws iam cli commands to create the role and policy and attach it to the role
+
+deploy_command = []
+deploy_command.append("# -----------------------------------------------------------------------------")
+deploy_command.append(f"# 1. Navigate to the directory {cli_output_dir}")
+deploy_command.append("# 2. Execute the 'sam deploy' command listed below.")
+deploy_command.append("#    (It has been saved as a comment in the toml file for later reference)")
+deploy_command.append("")
+deploy_command.append(f"cd {cli_output_dir}")
+deploy_command.append(f"{sam_deploy_command}")
+
+deployCmd = "\n".join(deploy_command)
+
+print(deployCmd)

@@ -1,0 +1,126 @@
+{
+    "StackName": "$PREFIX$-$PROJECT_ID$-$STAGE_ID$-pipeline",
+    "TemplateURL": "https://$PIPELINE_TEMPLATE_BUCKETNAME$.s3.amazonaws.com$PIPELINE_TEMPLATE_BUCKETKEY$$PIPELINE_TEMPLATE_FILENAME$",
+    "Parameters": [
+        {
+            "ParameterKey": "Prefix",
+            "ParameterValue": "$PREFIX$",
+            "UsePreviousValue": true
+        },
+        {
+            "ParameterKey": "ProjectId",
+            "ParameterValue": "$PROJECT_ID$",
+            "UsePreviousValue": true
+        },
+        {
+            "ParameterKey": "StageId",
+            "ParameterValue": "$STAGE_ID$",
+            "UsePreviousValue": true
+        },
+        {
+            "ParameterKey": "S3BucketNameOrgPrefix",
+            "ParameterValue": "$S3_ORG_PREFIX$",
+            "UsePreviousValue": true
+        },
+        {
+            "ParameterKey": "RolePath",
+            "ParameterValue": "$ROLE_PATH$",
+            "UsePreviousValue": true
+        },
+        {
+            "ParameterKey": "DeployEnvironment",
+            "ParameterValue": "$DEPLOY_ENVIRONMENT$",
+            "UsePreviousValue": true
+        },
+        {
+            "ParameterKey": "DeployBucket",
+            "ParameterValue": "$DEPLOY_BUCKET$",
+            "UsePreviousValue": true
+        },
+        {
+            "ParameterKey": "ParameterStoreHierarchy",
+            "ParameterValue": "$PARAM_STORE_HIERARCHY$",
+            "UsePreviousValue": true
+        },
+        {
+            "ParameterKey": "AlarmNotificationEmail",
+            "ParameterValue": "$ALARM_NOTIFICATION_EMAIL$",
+            "UsePreviousValue": true
+        },
+        {
+            "ParameterKey": "PermissionsBoundaryArn",
+            "ParameterValue": "$PERMISSIONS_BOUNDARY_ARN$",
+            "UsePreviousValue": true
+        },
+        {
+            "ParameterKey": "CodeCommitRepository",
+            "ParameterValue": "$REPOSITORY$",
+            "UsePreviousValue": true
+        },
+        {
+            "ParameterKey": "CodeCommitBranch",
+            "ParameterValue": "$REPOSITORY_BRANCH$",
+            "UsePreviousValue": true
+        }
+    ],
+    "Capabilities": [
+        "CAPABILITY_NAMED_IAM"
+    ],
+    "RoleARN": "$SERVICE_ROLE_ARN$",
+    "OnFailure": "ROLLBACK",
+    "Tags": [
+        {
+            "Key": "Name",
+            "Value": "$NAME$"
+        },
+        {
+            "Key": "Provisioner",
+            "Value": "CloudFormation"
+        },
+        {   
+            "Key": "Atlantis",
+            "Value": "deploy-pipeline"
+        },
+        {
+            "Key": "atlantis:PipelineTemplate",
+            "Value": "Atlantis.v2.0.0"
+        },
+        {
+            "Key": "atlantis:Prefix",
+            "Value": "$PREFIX$"
+        },
+        {
+            "Key": "atlantis:Application",
+            "Value": "$PREFIX$-$PROJECT_ID$"
+        },
+        {
+            "Key": "atlantis:ApplicationDeploymentId",
+            "Value": "$PREFIX$-$PROJECT_ID$-$STAGE_ID$"
+        },
+        {
+            "Key": "CodeCommitRepository",
+            "Value": "$REPOSITORY$"
+        },
+        {
+            "Key": "CodeCommitBranch",
+            "Value": "$REPOSITORY$:$REPOSITORY_BRANCH$"
+        },
+        {
+            "Key": "CodeCommitRepositoryArn",
+            "Value": "arn:aws:codecommit:$AWS_REGION$:$AWS_ACCOUNT$:$REPOSITORY$"
+        },
+        {
+            "Key": "Environment",
+            "Value": "$DEPLOY_ENVIRONMENT$"
+        },
+        {
+            "Key": "Stage",
+            "Value": "$STAGE_ID$"
+        },
+        {
+            "Key": "AlarmNotificationEmail",
+            "Value": "$ALARM_NOTIFICATION_EMAIL$"
+        }
+    ],
+    "EnableTerminationProtection": true
+}

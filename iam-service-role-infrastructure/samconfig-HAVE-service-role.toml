@@ -1,0 +1,23 @@
+version = 0.1
+
+# For changes and to re-generate this file re-run the script from the scripts directory
+# Using the script ensures proper parameter overrides and tags
+
+[global.deploy.parameters]
+s3_bucket = "cf-acme"
+region = "$REGION$"
+confirm_changeset = true
+capabilities = "CAPABILITY_IAM"
+image_repositories = []
+
+
+[default.deploy.parameters]
+# =====================================================
+# Default Deployment Configuration
+# Deploy command:
+# sam deploy --profile default --config-file samconfig-HAVE-service-role.toml 
+
+stack_name = "HAVE-service-role"
+s3_prefix = "HAVE-service-role"
+parameter_overrides = "\"Prefix\"=\"have\" \"S3BucketNameOrgPrefix\"=\"asdf\" \"RolePath\"=\"/asdf/\" \"PermissionsBoundaryArn\"=\"\" \"AwsRegion\"=\"us-east-2\" \"DeployBucket\"=\"cf-acme\""
+tags = "\"Atlantis\"=\"iam\" \"atlantis:Prefix\"=\"have\""

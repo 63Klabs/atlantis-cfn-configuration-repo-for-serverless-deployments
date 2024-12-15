@@ -23,65 +23,38 @@ hello = "Hello, World"
 
 dirs = {
     "settings": {},
-    "cli": {},
 	"toml": {}
 }
 
 dirSettings = "./settings/"
 
 dirs["settings"]["Iam"] = dirSettings+"iam/"
-dirs["settings"]["Cfn"] = dirSettings+"pipeline/" # REMOVE
 dirs["settings"]["Pipeline"] = dirSettings+"pipeline/"
 dirs["settings"]["Storage"] = dirSettings+"storage/"
 dirs["settings"]["Network"] = dirSettings+"network/"
 
 dirs["iamServiceRole"] = "../iam-service-role-infrastructure/"
-dirs["cfnPipeline"] = "../pipeline-infrastructure/"  # REMOVE
 dirs["pipeline"] = "../pipeline-infrastructure/"
 dirs["storage"] = "../storage-infrastructure/"
 dirs["network"] = "../network-infrastructure/"
 
-dirCli = "./cli/" # REMOVE
-
-dirs["cli"]["Iam"] = dirs["iamServiceRole"]+"roles/" # REMOVE
-dirs["cli"]["Cfn"] = dirs["cfnPipeline"]+"pipelines/" #REMOVE
-
 files = {
-    "cfnPipelineTemplate": {},
-    "cfnPipelineTemplateInput": {},
-    "iamTrustPolicy": {},
-    "iamServicePolicy": {},
+    "pipelineTemplate": {},
+    "pipelineTemplateInput": {},
 	"docsPipelineParamReadme": {}
 }
 
-files["cfnPipelineTemplate"]["name"] = "template-pipeline.yml"
-files["cfnPipelineTemplate"]["path"] = dirs["cfnPipeline"]+files["cfnPipelineTemplate"]["name"]
-
-files["cfnPipelineTemplateInput"]["name"] = "sample-input-create-stack.json"
-files["cfnPipelineTemplateInput"]["path"] = dirs["cfnPipeline"]+files["cfnPipelineTemplateInput"]["name"]
-
-files["iamTrustPolicy"]["name"] = "Trust-Policy-for-Service-Role.json"
-files["iamTrustPolicy"]["path"] = dirs["cli"]["Iam"]+files["iamTrustPolicy"]["name"]
-
-
-
-files["iamServicePolicy"]["name"] = "SAMPLE-CloudFormationServicePolicy.json"
-files["iamServicePolicy"]["path"] = dirs["iamServiceRole"]+files["iamServicePolicy"]["name"]
-
 dirs["docs"] = "../docs/"
+
+files["pipelineTemplate"]["name"] = "template-pipeline.yml"
+files["pipelineTemplate"]["path"] = dirs["pipeline"]+files["pipelineTemplate"]["name"]
 
 files["docsPipelineParamReadme"]["name"] = "Pipeline-Parameters-Reference.md"
 files["docsPipelineParamReadme"]["path"] = dirs["docs"]+files["docsPipelineParamReadme"]["name"]
 
 dirsAndFiles = [
     {
-        "dir": dirs["cfnPipeline"],
-        "files": [
-			files["cfnPipelineTemplateInput"]["name"]
-		]
-    },
-    {
-        "dir": dirs["settings"]["Cfn"],
+        "dir": dirs["settings"]["Pipeline"],
         "files": [
             "sample.tags.json",
             "sample.params.json"
@@ -91,13 +64,6 @@ dirsAndFiles = [
         "dir": dirs["settings"]["Iam"],
         "files": [
             "sample.tags.json"
-        ]
-    },
-    {
-        "dir": dirs["iamServiceRole"],
-        "files": [
-            files["iamTrustPolicy"]["name"],
-            files["iamServicePolicy"]["name"]
         ]
     },
     {
@@ -285,7 +251,7 @@ prompts = {
 
 # Read in CloudFormation template which is a YAML file
 # parse the YAML file and update the prompts dictionary with the values from Parameters
-with open(files["cfnPipelineTemplate"]["path"], "r") as f:
+with open(files["pipelineTemplate"]["path"], "r") as f:
 	dataTemplate = yaml.load(f, Loader=yaml.BaseLoader)
 	f.close()
 
