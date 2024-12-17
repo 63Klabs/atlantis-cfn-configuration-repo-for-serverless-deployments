@@ -294,7 +294,7 @@ with open(template_path, "r") as f:
 replacements = {
     "$TEMPLATE_FILE$": toml_globalDeployParameters["template_file"],
     "$S3_BUCKET_FOR_DEPLOY_ARTIFACTS$": toml_globalDeployParameters["s3_bucket"],
-    "$AWS_REGION$": toml_globalDeployParameters["region"],
+    "$REGION$": toml_globalDeployParameters["region"],
     "$CAPABILITIES$": toml_globalDeployParameters["capabilities"],
 	"$CONFIRM_CHANGESET$": toml_globalDeployParameters["confirm_changeset"],
 	"$IMAGE_REPOSITORIES$": toml_globalDeployParameters["image_repositories"],
