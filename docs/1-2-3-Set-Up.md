@@ -14,7 +14,7 @@ In these examples we will use the Prefix `acme`.
 
 There needs to be one service role created per Prefix.
 
-From the `scripts-cli/` directory run `python service-role.py acme` replacing `acme` with your prefix and following on-screen prompts.
+From the `scripts/` directory run `python service-role.py acme` replacing `acme` with your prefix and following on-screen prompts.
 
 Follow instructions displayed after script has run. A copy of the CLI commands will be stored in `iam-cloudformation-service-role/`.
 
@@ -28,7 +28,7 @@ Your repository is now primed for the next step.
 
 #### Step 3: Create the Pipeline
 
-From the `scripts-cli/` directory, run `python pipeline.py acme hello-world test` replacing `acme` and `hello-world` with appropriate values (your Prefix and Project Id). Leave test as is.
+From the `scripts/` directory, run `python pipeline.py acme hello-world test` replacing `acme` and `hello-world` with appropriate values (your Prefix and Project Id). Leave test as is.
 
 Follow on-screen prompts.
 
@@ -44,7 +44,7 @@ Follow the same on-screen and CLI steps as you did for your test pipeline.
 
 There are various [tutorials](./Tutorials.md) that will help walk you through your first deployment and get you familiar with your options. If you are new to AWS CodePipeline and SAM, then the tutorials are a great resource in helping you learn about the process.
 
-Additional documentation is found in the /docs/ directory as well as /scripts-cli/ and /application-infrastructure/
+Additional documentation is found in the /docs/ directory as well as /scripts/ and /application-infrastructure/
 
 - [User Role Set-Up](./User-Role-Set-Up.md)
 - [1-2-3 Set-Up](./1-2-3-Set-Up.md)
@@ -52,6 +52,6 @@ Additional documentation is found in the /docs/ directory as well as /scripts-cl
 - [Set-Up via Terraform or CDK](./Set-Up-via-Terraform-or-CDK.md)
 - [Pipeline Parameters Reference](./Pipeline-Parameters-Reference.md)
 - [Tutorials](./Tutorials.md)
-- [Scripts and CLI](../scripts-cli/README-CLI.md)
+- [Scripts and CLI](../scripts/README-CLI.md)
 - [Updating the Pipeline Stack](./Updating-Pipeline-Stack.md)
 - [Deleting and Clean-Up](./Deleting-and-Clean-Up.md)

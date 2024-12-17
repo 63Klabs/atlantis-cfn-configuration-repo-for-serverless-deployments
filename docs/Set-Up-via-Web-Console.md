@@ -27,7 +27,7 @@ The service role and pipeline can be created using the Web Console which may be 
 Before we can attach a policy to the role we need to create the policy!
 
 1. In the AWS Web Console go to IAM > Policies and "Create policy"
-2. Click on the JSON button and paste in the json contents of `scripts-cli/cli/iam/ACME-CloudFormationServicePolicy.json` (the file you generated)
+2. Click on the JSON button and paste in the json contents of `scripts/cli/iam/ACME-CloudFormationServicePolicy.json` (the file you generated)
 3. Go on to "Next".
 4. Give it the name `ACME-CloudFormation-Service-Role` (replacing `ACME` with your chosen prefix in UPPER CASE) and a description such as `Created by [you] to create CloudFormation stacks for deployment pipelines`.
 5. Add at least 2 tags. Note the casing and `:` in the tag keys. More on tags later.

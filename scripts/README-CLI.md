@@ -75,13 +75,13 @@ After values are given for each of the prompts, CLI commands and an input file (
 
 ## .gitignore
 
-To prevent uploading settings to your repository, all generated files (CLI prompts, input files, tags, defaults, etc) are automatically excluded from commits by the `.gitignore` file found in the /scripts-cli/, /cloudformation-pipeline-template/pipelines/, and /iam-cloudformation-service-role/roles/ directories.
+To prevent uploading settings to your repository, all generated files (CLI prompts, input files, tags, defaults, etc) are automatically excluded from commits by the `.gitignore` file found in the /scripts/, /cloudformation-pipeline-template/pipelines/, and /iam-cloudformation-service-role/roles/ directories.
 
 However, there is no reason you can't store these files in a repository. Simply delete or comment the lines in those (and only those) 3 .gitignore files.
 
 ## Saved Defaults
 
-In the /scripts-cli/settings/cfn/ and /scripts-cli/settings/iam/ directories you will find `.defaults.json` files containing default values. While you can modify these files directly, you may wish to re-run the script instead.
+In the /scripts/settings/cfn/ and /scripts/settings/iam/ directories you will find `.defaults.json` files containing default values. While you can modify these files directly, you may wish to re-run the script instead.
 
 Default values for both tags and parameters are loaded in a hierarchical order, each set of values over-writing the previous. For example, an `AwsAccountId` value of `123456789012` in .defaults.json would be over-written by a value of `987654321098` found in `.defaults-acme.json`.
 
@@ -118,7 +118,7 @@ Tag values are loaded in a similar fashion.
 
 ## Custom Tags
 
-In the /scripts-cli/settings/cfn/ and /scripts-cli/settings/iam/ directories you will find `sample.tags.json` files for tags. You can copy these files, remove the `sample.`, and modify them to define your own. 
+In the /scripts/settings/cfn/ and /scripts/settings/iam/ directories you will find `sample.tags.json` files for tags. You can copy these files, remove the `sample.`, and modify them to define your own. 
 
 The scripts do not prompt for tags, so if you wish to tag your service role and pipeline resources you will need to add `.tags.json` files. Use the samples provided.
 
@@ -145,7 +145,7 @@ Note that unlike `.defaults.json`, the pipeline-stack script does not read in ta
 
 ## Custom Parameters
 
-The /scripts-cli/settings/cfn/ directory has `sample.params.json` for custom CloudFormation parameters for CodePipeline stacks. However, these custom parameters are only for customized Pipeline templates as the only accepted parameters for Atlantis out of the box are already available via prompts. Also note that any custom parameters added will not be prompted for. So, unless you add your own custom parameters to the CloudFormation template for the pipeline, you do not need to worry about `params.json`. (This does not affect your application CloudFormation template.)
+The /scripts/settings/cfn/ directory has `sample.params.json` for custom CloudFormation parameters for CodePipeline stacks. However, these custom parameters are only for customized Pipeline templates as the only accepted parameters for Atlantis out of the box are already available via prompts. Also note that any custom parameters added will not be prompted for. So, unless you add your own custom parameters to the CloudFormation template for the pipeline, you do not need to worry about `params.json`. (This does not affect your application CloudFormation template.)
 
 ```json
 {
@@ -187,7 +187,7 @@ Pipeline Infrastructure Repository:
         - roles/
         - Trust-Policy-for-Service-Role.json
         - ...
-    - scripts-cli/
+    - scripts/
        - settings/
        - pipeline.py
        - service-role.py
@@ -216,7 +216,7 @@ aws cloudformation create-change-set \
     --change-set-type UPDATE \
     --no-use-previous-template \
     --include-nested-stacks \
-    --cli-input-json file://../scripts-cli/cli/cfn/input-update-stack-acme-hello-world-test.json
+    --cli-input-json file://../scripts/cli/cfn/input-update-stack-acme-hello-world-test.json
 
 aws cloudformation execute-change-set \
     --stack-name acme-hello-world-test \

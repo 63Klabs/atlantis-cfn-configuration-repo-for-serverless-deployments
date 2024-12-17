@@ -48,7 +48,7 @@ If you are replacing the entire contents of the template file then you can do th
 
 ## Option 4: Update using the AWS CLI
 
-This option is outlined in [README: Use AWS CLI](../scripts-cli/README-CLI.md).
+This option is outlined in [README: Use AWS CLI](../scripts/README-CLI.md).
 
 It may be beneficial to use this option as you can maintain input files that define your stack using parameters and tags. This is helpful as it avoids manual entry, is re-producible, self-documents, and maintains the concept of infrastructure as code.
 

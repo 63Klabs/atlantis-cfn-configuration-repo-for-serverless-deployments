@@ -314,7 +314,7 @@ In the next tutorial you will learn how to update the pipeline stack using a new
 
 ## Tutorial 3: Update a Pipeline Stack
 
-> This part of the tutorial has not yet been written. However, you can refer to Updating Pipeline Stacks in the [CLI README](../scripts-cli/README-CLI.md).
+> This part of the tutorial has not yet been written. However, you can refer to Updating Pipeline Stacks in the [CLI README](../scripts/README-CLI.md).
 
 ## Deleting stacks
 
