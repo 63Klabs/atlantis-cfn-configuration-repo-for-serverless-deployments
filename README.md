@@ -51,7 +51,7 @@ DevOps Repository:
 |- scripts-cli/
 |   |- lib/
 |   |- settings/
-|   |- pipeline-stack.py
+|   |- pipeline.py
 |   |- service-role.py
 ```
 
@@ -71,7 +71,7 @@ After running `scripts-cli/service-role.py`, the generated input.json and copy-p
 
 This contains `template-pipeline.yml`, the CloudFormation template that defines CodePipeline and associated resources. 
 
-After running `scripts-cli/pipeline-stack.py`, the generated `create-stack` input.json and copy-paste AWS CLI commands will be stored in this directory.
+After running `scripts-cli/pipeline.py`, the generated `create-stack` input.json and copy-paste AWS CLI commands will be stored in this directory.
 
 ## Usage
 
@@ -79,7 +79,7 @@ After running `scripts-cli/pipeline-stack.py`, the generated `create-stack` inpu
 
 Review the necessary parameters in [Pipeline Parameters Reference](./docs/Pipeline-Parameters-Reference.md).
 
-When you run the `service-role.py` and `pipeline-stack.py` scripts, prompts will help guide you in choosing the parameters that meet your organizational needs.
+When you run the `service-role.py` and `pipeline.py` scripts, prompts will help guide you in choosing the parameters that meet your organizational needs.
 
 Before you start you will need to think through and establish a `PREFIX`. It is recommended that for your first time through use the given prefix `acme`. Once you have completed your first run-though of the steps you will have a better understanding of how you can group permissions using different prefixes for your applications. Each prefix and service role can be assigned to different departments, teams, or application groups in your organization. A prefix is 2 to 8 characters (`acme`, `finc`, `ws`, `ops`, `dev-ops`, `sec`), all lower-case.
 
@@ -113,7 +113,7 @@ Your repository is now primed for the next step.
 
 #### Step 3: Create the Pipeline
 
-From the `scripts-cli/` directory, run `python pipeline-stack.py acme hello-world test` replacing `acme` and `hello-world` with appropriate values (your Prefix and Project Id). Leave test as is.
+From the `scripts-cli/` directory, run `python pipeline.py acme hello-world test` replacing `acme` and `hello-world` with appropriate values (your Prefix and Project Id). Leave test as is.
 
 Follow on-screen prompts.
 
@@ -121,7 +121,7 @@ Follow instructions displayed after script has run. A copy of the CLI commands w
 
 Once you have a successful deploy, create your Production pipeline:
 
-`python pipeline-stack.py acme hello-world prod`
+`python pipeline.py acme hello-world prod`
 
 Follow the same on-screen and CLI steps as you did for your test pipeline.
 

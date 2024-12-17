@@ -28,7 +28,7 @@ Your repository is now primed for the next step.
 
 #### Step 3: Create the Pipeline
 
-From the `scripts-cli/` directory, run `python pipeline-stack.py acme hello-world test` replacing `acme` and `hello-world` with appropriate values (your Prefix and Project Id). Leave test as is.
+From the `scripts-cli/` directory, run `python pipeline.py acme hello-world test` replacing `acme` and `hello-world` with appropriate values (your Prefix and Project Id). Leave test as is.
 
 Follow on-screen prompts.
 
@@ -36,7 +36,7 @@ Follow instructions displayed after script has run. A copy of the CLI commands w
 
 Once you have a successful deploy, create your Production pipeline:
 
-`python pipeline-stack.py acme hello-world prod`
+`python pipeline.py acme hello-world prod`
 
 Follow the same on-screen and CLI steps as you did for your test pipeline.
 

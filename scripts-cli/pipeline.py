@@ -21,7 +21,7 @@ cwd = os.getcwd()
 print("")
 tools.printCharStr("=", 80, bookend="|")
 tools.printCharStr(" ", 80, bookend="|", text="Pipeline CF Stack AWS CLI Generator for Atlantis CI/CD")
-tools.printCharStr(" ", 80, bookend="|", text="v2024.10.18 : pipeline-stack.py")
+tools.printCharStr(" ", 80, bookend="|", text="v2024.10.18 : pipeline.py")
 tools.printCharStr("-", 80, bookend="|")
 tools.printCharStr(" ", 80, bookend="|", text="Chad Leigh Kluck")
 tools.printCharStr(" ", 80, bookend="|", text="https://github.com/chadkluck/serverless-deploy-pipeline-atlantis")
@@ -151,10 +151,10 @@ print("[ Loading .default files... ]")
 fileLoc = []
 fileLoc.append(atlantis.dirs["settings"]["Iam"]+"defaults.json")
 fileLoc.append(atlantis.dirs["settings"]["Iam"]+"defaults-"+argPrefix+".json")
-fileLoc.append(atlantis.dirs["settings"]["Cfn"]+"defaults.json")
-fileLoc.append(atlantis.dirs["settings"]["Cfn"]+"defaults-"+argPrefix+".json")
-fileLoc.append(atlantis.dirs["settings"]["Cfn"]+"defaults-"+argPrefix+"-"+argProjectId+".json")
-fileLoc.append(atlantis.dirs["settings"]["Cfn"]+"defaults-"+argPrefix+"-"+argProjectId+"-"+argStageId+".json")
+fileLoc.append(atlantis.dirs["settings"]["Pipeline"]+"defaults.json")
+fileLoc.append(atlantis.dirs["settings"]["Pipeline"]+"defaults-"+argPrefix+".json")
+fileLoc.append(atlantis.dirs["settings"]["Pipeline"]+"defaults-"+argPrefix+"-"+argProjectId+".json")
+fileLoc.append(atlantis.dirs["settings"]["Pipeline"]+"defaults-"+argPrefix+"-"+argProjectId+"-"+argStageId+".json")
 
 # iam defaults don't have keysections
 
@@ -182,10 +182,10 @@ for i in range(len(fileLoc)):
 print("\n[ Loading params files... ]")
 
 customStackParamsFileLoc = []
-customStackParamsFileLoc.append(atlantis.dirs["settings"]["Cfn"]+"params.json")
-customStackParamsFileLoc.append(atlantis.dirs["settings"]["Cfn"]+"params-"+argPrefix+".json")
-customStackParamsFileLoc.append(atlantis.dirs["settings"]["Cfn"]+"params-"+argPrefix+"-"+argProjectId+".json")
-customStackParamsFileLoc.append(atlantis.dirs["settings"]["Cfn"]+"params-"+argPrefix+"-"+argProjectId+"-"+argStageId+".json")
+customStackParamsFileLoc.append(atlantis.dirs["settings"]["Pipeline"]+"params.json")
+customStackParamsFileLoc.append(atlantis.dirs["settings"]["Pipeline"]+"params-"+argPrefix+".json")
+customStackParamsFileLoc.append(atlantis.dirs["settings"]["Pipeline"]+"params-"+argPrefix+"-"+argProjectId+".json")
+customStackParamsFileLoc.append(atlantis.dirs["settings"]["Pipeline"]+"params-"+argPrefix+"-"+argProjectId+"-"+argStageId+".json")
 
 # If params.json exists, read it in
 customStackParams = {}
@@ -208,10 +208,10 @@ for i in range(len(customStackParamsFileLoc)):
 print("\n[ Loading tags files... ]")
 
 tagFileLoc = []
-tagFileLoc.append(atlantis.dirs["settings"]["Cfn"]+"tags.json")
-tagFileLoc.append(atlantis.dirs["settings"]["Cfn"]+"tags-"+argPrefix+".json")
-tagFileLoc.append(atlantis.dirs["settings"]["Cfn"]+"tags-"+argPrefix+"-"+argProjectId+".json")
-tagFileLoc.append(atlantis.dirs["settings"]["Cfn"]+"tags-"+argPrefix+"-"+argProjectId+"-"+argStageId+".json")
+tagFileLoc.append(atlantis.dirs["settings"]["Pipeline"]+"tags.json")
+tagFileLoc.append(atlantis.dirs["settings"]["Pipeline"]+"tags-"+argPrefix+".json")
+tagFileLoc.append(atlantis.dirs["settings"]["Pipeline"]+"tags-"+argPrefix+"-"+argProjectId+".json")
+tagFileLoc.append(atlantis.dirs["settings"]["Pipeline"]+"tags-"+argPrefix+"-"+argProjectId+"-"+argStageId+".json")
 
 # If tags.json exists, read it in
 customStackTags = []
@@ -350,10 +350,10 @@ tf = {
 
 # we list the files in reverse as we work up the normal read-in chain
 cliInputsFiles = [
-    atlantis.dirs["settings"]["Cfn"]+"defaults-"+tf["Prefix"]+"-"+tf["ProjectId"]+"-"+tf["StageId"]+".json",
-    atlantis.dirs["settings"]["Cfn"]+"defaults-"+tf["Prefix"]+"-"+tf["ProjectId"]+".json",
-    atlantis.dirs["settings"]["Cfn"]+"defaults-"+tf["Prefix"]+".json",
-    atlantis.dirs["settings"]["Cfn"]+"defaults.json"
+    atlantis.dirs["settings"]["Pipeline"]+"defaults-"+tf["Prefix"]+"-"+tf["ProjectId"]+"-"+tf["StageId"]+".json",
+    atlantis.dirs["settings"]["Pipeline"]+"defaults-"+tf["Prefix"]+"-"+tf["ProjectId"]+".json",
+    atlantis.dirs["settings"]["Pipeline"]+"defaults-"+tf["Prefix"]+".json",
+    atlantis.dirs["settings"]["Pipeline"]+"defaults.json"
 ]
 
 # we will progressively remove data as we save up the chain of files
@@ -412,7 +412,7 @@ for i in range(numFiles):
 # =============================================================================
         
 # Get the path to the generated directory
-cli_output_dir = atlantis.dirs["cli"]["Cfn"]+parameters["stack_parameters"]["Prefix"]+"/"+parameters["stack_parameters"]["ProjectId"]+"/"
+cli_output_dir = atlantis.dirs["cli"]["Pipeline"]+parameters["stack_parameters"]["Prefix"]+"/"+parameters["stack_parameters"]["ProjectId"]+"/"
 if not os.path.isdir(cli_output_dir):
 	os.makedirs(cli_output_dir)
 
@@ -601,7 +601,7 @@ aws cloudformation describe-stacks --stack-name $PREFIX$-$PROJECT_ID$-$STAGE_ID$
 
 # -----------------------------------------------------------------------------
 # UPDATE STACK
-# Update stack using change-set: After updating tags, parameters, and re-running pipeline-stack.py, issue the following commands to update.
+# Update stack using change-set: After updating tags, parameters, and re-running pipeline.py, issue the following commands to update.
 # Be sure to modify values as needed (such as whether to 'no-use-previous-template' or 'include-nested-stacks')
 # https://awscli.amazonaws.com/v2/documentation/api/latest/reference/cloudformation/create-change-set.html
 

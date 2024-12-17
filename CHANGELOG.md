@@ -21,7 +21,7 @@ Templates and Scripts Updated:
 
 - v2024.10.18 : template-pipeline.yml
 - v2024.10.18 : template-pipeline-service-role.yml
-- v2024.10.18 : pipeline-stack.py
+- v2024.10.18 : pipeline.py
 - v2024.10.18 : service-role.py
 - v2024.10.18 : lib/atlantis.py
 - v2024.06.17 : lib/templates/sample-input-create-stack.json
@@ -39,7 +39,7 @@ Includes a fix to CloudFormationServicePolicy (IAM) by adding "iam:UpdateRoleDes
 Templates and Scripts Updated:
 
 - v2024.06.17 : template-pipeline.yml
-- v2024.06.17 : pipeline-stack.py
+- v2024.06.17 : pipeline.py
 - v2024.06.17 : lib/atlantis.py
 - v2024.06.17 : lib/templates/sample-input-create-stack.json
 
@@ -55,7 +55,7 @@ File versions included:
 
 - v2024.02.29 : template-pipeline.yml
 - v2024.02.29 : service-role.py
-- v2024.02.29 : pipeline-stack.py
+- v2024.02.29 : pipeline.py
 - v2024.02.29 : lib/atlantis.py
 - v2024.02.29 : lib/tools.py
 

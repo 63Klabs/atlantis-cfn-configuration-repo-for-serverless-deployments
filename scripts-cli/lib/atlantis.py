@@ -47,7 +47,7 @@ files = {
 dirs["docs"] = "../docs/"
 
 files["pipelineTemplate"]["name"] = "template-pipeline.yml"
-files["pipelineTemplate"]["path"] = dirs["pipeline"]+files["pipelineTemplate"]["name"]
+files["pipelineTemplate"]["path"] = dirs["pipeline"]+"templates/"+files["pipelineTemplate"]["name"]
 
 files["docsPipelineParamReadme"]["name"] = "Pipeline-Parameters-Reference.md"
 files["docsPipelineParamReadme"]["path"] = dirs["docs"]+files["docsPipelineParamReadme"]["name"]
@@ -171,7 +171,7 @@ prompts = {
 		"default": ""
 	},
 
-	# Application specific - pipeline-stack.py
+	# Application specific - pipeline.py
 
 	"application-Name": {
 		"name": "Application Name",
@@ -193,7 +193,7 @@ prompts = {
 		"default": ""
 	},
 
-	# Template specific - pipeline-stack.py
+	# Template specific - pipeline.py
 
 	"pipeline_template_location-BucketName": {
 		"name": "S3 Bucket Name for Pipeline Template",

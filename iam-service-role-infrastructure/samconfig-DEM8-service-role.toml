@@ -23,5 +23,5 @@ image_repositories = []
 
 stack_name = "DEM8-service-role"
 s3_prefix = "DEM8-service-role"
-parameter_overrides = "\"Prefix\"=\"dem8\" \"S3BucketNameOrgPrefix\"=\"\" \"RolePath\"=\"/\" \"PermissionsBoundaryArn\"=\"\" \"AwsRegion\"=\"us-east-1\" \"DeployBucket\"=\"asdf\""
-tags = "\"Atlantis\"=\"iam\" \"atlantis:Prefix\"=\"dem8\""
+parameter_overrides = "\"FavoriteColor\"=\"Red\" \"Craft\"=\"FishingPole\" \"Prefix\"=\"dem8\" \"S3BucketNameOrgPrefix\"=\"\" \"RolePath\"=\"/\" \"PermissionsBoundaryArn\"=\"\" \"AwsRegion\"=\"us-east-1\" \"DeployBucket\"=\"asdf\""
+tags = "\"Atlantis\"=\"iam\" \"atlantis:Prefix\"=\"dem8\" \"Department\"=\"Web Services\" \"Creator\"=\"John Doe\""

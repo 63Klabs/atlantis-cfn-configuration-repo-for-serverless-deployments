@@ -1,6 +1,8 @@
 # Comment out these lines if you want to save your generated files in a repository
-settings/cfn/*
 settings/iam/*
+settings/storage/*
+settings/pipeline/*
+settings/network/*
 
 !sample-*
 !sample.*

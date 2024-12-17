@@ -41,7 +41,7 @@ After values are given for each of the prompts, CLI commands and a policy file (
 
 Execute the script and provide the Prefix, Project ID, and Stage ID as arguments for the pipeline you wish to create.
 
-`python pipeline-stack.py <prefix> <project_id> <stage_id>`
+`python pipeline.py <prefix> <project_id> <stage_id>`
 
 This script will check for any settings previously entered for the service-role script such as Role Path, S3 Bucket Name Organization Prefix, and Permissions Boundary ARN and present them as defaults.
 
@@ -189,7 +189,7 @@ Pipeline Infrastructure Repository:
         - ...
     - scripts-cli/
        - settings/
-       - pipeline-stack.py
+       - pipeline.py
        - service-role.py
        - ...
     - README.md
@@ -203,7 +203,7 @@ The commands used to update the stack are similar to the following:
 ```
 # -----------------------------------------------------------------------------
 # UPDATE STACK
-# Update stack using change-set: After updating tags, parameters, and re-running pipeline-stack.py, issue the following commands to update.
+# Update stack using change-set: After updating tags, parameters, and re-running pipeline.py, issue the following commands to update.
 # Be sure to modify values as needed (such as whether to 'no-use-previous-template' or 'include-nested-stacks')
 # https://awscli.amazonaws.com/v2/documentation/api/latest/reference/cloudformation/create-change-set.html
 

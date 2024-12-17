@@ -70,6 +70,29 @@ for i in range(len(fileLoc)):
 	else:
 		print(" - Did not find "+fileLoc[i])
 
+# Read in Custom Parameters
+        
+print("\n[ Loading params files... ]")
+
+customStackParamsFileLoc = []
+customStackParamsFileLoc.append(atlantis.dirs["settings"]["Iam"]+"params.json")
+customStackParamsFileLoc.append(atlantis.dirs["settings"]["Iam"]+"params-"+argPrefix+".json")
+
+# If params.json exists, read it in
+customStackParams = {}
+
+for i in range(len(customStackParamsFileLoc)):
+    if os.path.isfile(customStackParamsFileLoc[i]):
+        with open(customStackParamsFileLoc[i], "r") as f:
+            customData = json.load(f)
+            for key in customData.keys():
+                customStackParams[key] = customData[key]
+            print(" + Found "+customStackParamsFileLoc[i])
+    else:
+        print(" - Did not find "+customStackParamsFileLoc[i])
+
+# print the defaults
+# print(customStackParams)
 
 # Read in Custom Stack Tags
         
@@ -218,7 +241,7 @@ cli_output_dir = atlantis.dirs["iamServiceRole"]
 if not os.path.isdir(cli_output_dir):
 	os.makedirs(cli_output_dir)
 
-globalDeployParameters = {
+toml_globalDeployParameters = {
 	"template_file": "./templates/template-service-role.yml",
 	"s3_bucket": parameters["general"]["DeployBucket"],
     "region": parameters["general"]["AwsRegion"],
@@ -227,15 +250,18 @@ globalDeployParameters = {
 	"image_repositories": "[]"
 }
 
-customSvcRoleParams = {
+toml_defaultDeployParams = {
 	"stack_name" : parameters["general"]["Prefix"].upper()+"-service-role",
 	"s3_prefix": parameters["general"]["Prefix"].upper()+"-service-role",
 	"parameter_overrides": "",
 	"tags": ""
 }
 
+# Append parameters["general"] to customStackParams
+customStackParams.update(parameters["general"])
+
 param_overrides_toml = ""
-for key, value in parameters["general"].items():
+for key, value in customStackParams.items():
 	param_overrides_toml += f"\\\"{key}\\\"=\\\"{value}\\\" "
 
 param_overrides_toml = param_overrides_toml.rstrip()
@@ -252,8 +278,8 @@ for tag in customSvcRoleTags:
 
 tags_toml = tags_toml.rstrip()
 
-customSvcRoleParams["parameter_overrides"] = param_overrides_toml
-customSvcRoleParams["tags"] = tags_toml
+toml_defaultDeployParams["parameter_overrides"] = param_overrides_toml
+toml_defaultDeployParams["tags"] = tags_toml
 
 toml_filename = "samconfig-"+parameters['general']['Prefix'].upper()+"-service-role.toml"
 sam_deploy_command = f"sam deploy --profile default --config-file {toml_filename}"
@@ -266,12 +292,12 @@ with open(template_path, "r") as f:
 
 # Create a dictionary of replacements
 replacements = {
-    "$TEMPLATE_FILE$": globalDeployParameters["template_file"],
-    "$S3_BUCKET_FOR_DEPLOY_ARTIFACTS$": globalDeployParameters["s3_bucket"],
-    "$AWS_REGION$": globalDeployParameters["region"],
-    "$CAPABILITIES$": globalDeployParameters["capabilities"],
-	"$CONFIRM_CHANGESET$": globalDeployParameters["confirm_changeset"],
-	"$IMAGE_REPOSITORIES$": globalDeployParameters["image_repositories"],
+    "$TEMPLATE_FILE$": toml_globalDeployParameters["template_file"],
+    "$S3_BUCKET_FOR_DEPLOY_ARTIFACTS$": toml_globalDeployParameters["s3_bucket"],
+    "$AWS_REGION$": toml_globalDeployParameters["region"],
+    "$CAPABILITIES$": toml_globalDeployParameters["capabilities"],
+	"$CONFIRM_CHANGESET$": toml_globalDeployParameters["confirm_changeset"],
+	"$IMAGE_REPOSITORIES$": toml_globalDeployParameters["image_repositories"],
     "$SCRIPT_NAME$": scriptName,
     "$SCRIPT_ARGS$": argPrefix
 }
@@ -290,8 +316,8 @@ toml_content += "# Default Deployment Configuration\n"
 toml_content += "# Deploy command:\n"
 toml_content += f"# {sam_deploy_command} \n\n"
 
-# Add the customSvcRoleParams to the content
-for key, value in customSvcRoleParams.items():
+# Add the toml_defaultDeployParams to the content
+for key, value in toml_defaultDeployParams.items():
     toml_content += f"{key} = \"{value}\"\n"
 
 # Write the processed TOML file
