@@ -244,6 +244,16 @@ prompts = {
 		"examples": "us-east-1, us-west-1, us-west-2, eu-west-1, ap-southeast-1",
 		"default": "us-east-1"
 	}
+
+		"ConfirmChangeset": {
+		"name": "Confirm Changeset",
+		"required": True,
+		"regex": "^(true|false)$",
+		"help": "When deploying a changeset, does the user have the chance to review and confirm the changes?",
+		"description": "When a user runs the sam deploy command, a changeset is generated with all changes listed. If set to true, the user is given the option to confirm executing the changeset.",
+		"examples": "true, false",
+		"default": "true"
+	}
 }
 
 # =============================================================================

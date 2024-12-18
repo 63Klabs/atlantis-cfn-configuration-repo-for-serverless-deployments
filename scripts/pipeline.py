@@ -20,8 +20,8 @@ cwd = os.getcwd()
 
 print("")
 tools.printCharStr("=", 80, bookend="|")
-tools.printCharStr(" ", 80, bookend="|", text="Pipeline CF Stack AWS CLI Generator for Atlantis CI/CD")
-tools.printCharStr(" ", 80, bookend="|", text="v2024.10.18 : pipeline.py")
+tools.printCharStr(" ", 80, bookend="|", text="Pipeline Stack AWS SAM TOML Generator for Atlantis CI/CD")
+tools.printCharStr(" ", 80, bookend="|", text="v2024.12.30 : pipeline.py")
 tools.printCharStr("-", 80, bookend="|")
 tools.printCharStr(" ", 80, bookend="|", text="Chad Leigh Kluck")
 tools.printCharStr(" ", 80, bookend="|", text="https://github.com/chadkluck/serverless-deploy-pipeline-atlantis")
@@ -33,7 +33,7 @@ constraint = {
     "maxLenStage": 6
 }
 
-argPrefix = "atlantis"
+argPrefix = "acme"
 argProjectId = "myproject"
 argStageId = "test"
 argAcceptDefaults = False
@@ -60,54 +60,54 @@ if len(argPrefix+argProjectId+argStageId) > constraint["maxLenStage"] + constrai
     print("Because some resources have a maximum length of 63 and require additional descriptors in their name, Prefix + ProjectId + Stage is restricted to "+str(constraint["maxLenStage"] + constraint["maxLenPrefixProjId"])+" characters.\n\n")
     sys.exit()
 
-defaultsFromIam = [
-    {
-        "key": "Prefix",
-        "mapToSection": "stack_parameters",
-    },
-    {
-        "key": "S3BucketNameOrgPrefix",
-        "mapToSection": "stack_parameters",
-    },
-    {
-        "key": "RolePath",
-        "mapToSection": "stack_parameters",
-    },
-    {
-        "key": "PermissionsBoundaryArn",
-        "mapToSection": "stack_parameters",
-    },
-    {
-        "key": "AwsAccountId",
-        "mapToSection": "application",
-    },
-    {
-        "key": "AwsRegion",
-        "mapToSection": "application",
-    },
-    {
-        "key": "ServiceRoleARN",
-        "mapToSection": "application",
-    }
-]
+# defaultsFromIam = [
+#     {
+#         "key": "Prefix",
+#         "mapToSection": "stack_parameters",
+#     },
+#     {
+#         "key": "S3BucketNameOrgPrefix",
+#         "mapToSection": "stack_parameters",
+#     },
+#     {
+#         "key": "RolePath",
+#         "mapToSection": "stack_parameters",
+#     },
+#     {
+#         "key": "PermissionsBoundaryArn",
+#         "mapToSection": "stack_parameters",
+#     },
+#     {
+#         "key": "AwsAccountId",
+#         "mapToSection": "application",
+#     },
+#     {
+#         "key": "AwsRegion",
+#         "mapToSection": "application",
+#     },
+#     {
+#         "key": "ServiceRoleARN",
+#         "mapToSection": "application",
+#     }
+# ]
 
-defaultsFromIamArray = []
-defaultsFromIamIndex = {}
-# put each key from defaultsFromIam into an array
-for item in defaultsFromIam:
-    defaultsFromIamArray.append(item["key"])
-    defaultsFromIamIndex[item["key"]] = item["mapToSection"]
+# defaultsFromIamArray = []
+# defaultsFromIamIndex = {}
+# # put each key from defaultsFromIam into an array
+# for item in defaultsFromIam:
+#     defaultsFromIamArray.append(item["key"])
+#     defaultsFromIamIndex[item["key"]] = item["mapToSection"]
 
 # Default values - Set any of these defaults to your own in the defaults file
 defaults = {
-    "pipeline_template_location": {
-        "BucketName": "63klabs",
-        "BucketKey": "/atlantis/v2/",
-        "FileName": atlantis.files["cfnPipelineTemplate"]["name"]
-    },
+    # "template_location": {
+    #     "BucketName": "63klabs",
+    #     "BucketKey": "/atlantis/v2/",
+    #     "FileName": atlantis.files["cfnPipelineTemplate"]["name"]
+    # },
     "application": {
-        "AwsAccountId": "XXXXXXXXXXXX",
-        "AwsRegion": "us-east-1",
+        # "AwsAccountId": "XXXXXXXXXXXX",
+        # "AwsRegion": "us-east-1",
         "ServiceRoleARN": "",
         "Name": argPrefix+"-"+argProjectId
     },
@@ -124,7 +124,13 @@ defaults = {
         "PermissionsBoundaryArn": "",
         "CodeCommitRepository": "",
         "CodeCommitBranch": atlantis.prompts["CodeCommitBranch"]["default"]
-    }
+    },
+    "global": {
+        "TemplateFile": "./templates/template-service-role.yml", # relative to generated toml file
+        "AwsRegion": atlantis.prompts["AwsRegion"]["default"],
+        "DeployBucket": atlantis.prompts["DeployBucket"]["default"],
+        "ConfirmChangeset": atlantis.prompts["ConfirmChangeset"]["default"]
+	}
 }
 
 # if stage begins with dev then set DeployEnvironment to DEV, test to TEST, and prod, beta, stage to PROD
@@ -156,17 +162,16 @@ fileLoc.append(atlantis.dirs["settings"]["Pipeline"]+"defaults-"+argPrefix+".jso
 fileLoc.append(atlantis.dirs["settings"]["Pipeline"]+"defaults-"+argPrefix+"-"+argProjectId+".json")
 fileLoc.append(atlantis.dirs["settings"]["Pipeline"]+"defaults-"+argPrefix+"-"+argProjectId+"-"+argStageId+".json")
 
-# iam defaults don't have keysections
-
 for i in range(len(fileLoc)):
     if os.path.isfile(fileLoc[i]):
         with open(fileLoc[i], "r") as f:
             temp = json.load(f)
             for sectionKey in temp.keys():
                 # if keySection is a string and in defaultFromIamIndex then map (it came from IAM)
-                if type(temp[sectionKey]) is str and sectionKey in defaultsFromIamIndex:
-                    defaults[defaultsFromIamIndex[sectionKey]][sectionKey] = temp[sectionKey]
-                elif type(temp[sectionKey]) is dict:
+                # if type(temp[sectionKey]) is str and sectionKey in defaultsFromIamIndex:
+                #     defaults[defaultsFromIamIndex[sectionKey]][sectionKey] = temp[sectionKey]
+                # elif type(temp[sectionKey]) is dict:
+                if type(temp[sectionKey]) is dict:
                     # otherwise loop through
                     for key in temp[sectionKey].keys():
                         defaults[sectionKey][key] = temp[sectionKey][key]
@@ -261,10 +266,9 @@ print("")
 
 promptSections = [
     {
-        "key": "pipeline_template_location",
-        "name": "Pipeline Template Location"
+        "key": "global",
+        "name": "Global"
     },
-
     {
         "key": "stack_parameters",
         "name": "Stack Parameters"
@@ -281,15 +285,26 @@ for item in promptSections:
     prompts[item["key"]] = {}
     parameters[item["key"]] = {}
 
-prompts["pipeline_template_location"]["BucketName"] = atlantis.prompts["pipeline_template_location-BucketName"]
-prompts["pipeline_template_location"]["BucketName"]["default"] = defaults["pipeline_template_location"]["BucketName"]
+# prompts["template_location"]["BucketName"] = atlantis.prompts["template_location-BucketName"]
+# prompts["template_location"]["BucketName"]["default"] = defaults["template_location"]["BucketName"]
 
-prompts["pipeline_template_location"]["BucketKey"] = atlantis.prompts["pipeline_template_location-BucketKey"]
-prompts["pipeline_template_location"]["BucketKey"]["default"] = defaults["pipeline_template_location"]["BucketKey"]
+# prompts["template_location"]["BucketKey"] = atlantis.prompts["template_location-BucketKey"]
+# prompts["template_location"]["BucketKey"]["default"] = defaults["template_location"]["BucketKey"]
 
-prompts["pipeline_template_location"]["FileName"] = atlantis.prompts["pipeline_template_location-FileName"]
-prompts["pipeline_template_location"]["FileName"]["default"] = defaults["pipeline_template_location"]["FileName"]
+# prompts["template_location"]["FileName"] = atlantis.prompts["template_location-FileName"]
+# prompts["template_location"]["FileName"]["default"] = defaults["template_location"]["FileName"]
 
+prompts["global"]["TemplateFile"] = atlantis.prompts["TemplateFile"]
+prompts["global"]["TemplateFile"]["default"] = defaults["global"]["TemplateFile"]
+
+prompts["global"]["AwsRegion"] = atlantis.prompts["AwsRegion"]
+prompts["global"]["AwsRegion"]["default"] = defaults["global"]["AwsRegion"]
+
+prompts["global"]["DeployBucket"] = atlantis.prompts["DeployBucket"]
+prompts["global"]["DeployBucket"]["default"] = defaults["global"]["DeployBucket"]
+
+prompts["global"]["ConfirmChangeset"] = atlantis.prompts["ConfirmChangeset"]
+prompts["global"]["ConfirmChangeset"]["default"] = defaults["global"]["ConfirmChangeset"]
 
 prompts["stack_parameters"]["Prefix"] = atlantis.prompts["Prefix"]
 prompts["stack_parameters"]["Prefix"]["default"] = defaults["stack_parameters"]["Prefix"]
@@ -453,9 +468,9 @@ def deleteEmptyValues(data, listtype, valuekey):
     return data
 
 def subPlaceholders(string):
-    string = string.replace("$PIPELINE_TEMPLATE_BUCKETNAME$", parameters["pipeline_template_location"]["BucketName"])
-    string = string.replace("$PIPELINE_TEMPLATE_BUCKETKEY$", parameters["pipeline_template_location"]["BucketKey"])
-    string = string.replace("$PIPELINE_TEMPLATE_FILENAME$", parameters["pipeline_template_location"]["FileName"])
+    string = string.replace("$PIPELINE_TEMPLATE_BUCKETNAME$", parameters["template_location"]["BucketName"])
+    string = string.replace("$PIPELINE_TEMPLATE_BUCKETKEY$", parameters["template_location"]["BucketKey"])
+    string = string.replace("$PIPELINE_TEMPLATE_FILENAME$", parameters["template_location"]["FileName"])
 
     string = string.replace("$AWS_ACCOUNT$", defaults["application"]["AwsAccountId"]) # not used in sample-input-create-stack
     string = string.replace("$AWS_REGION$", defaults["application"]["AwsRegion"]) # not used in sample-input-create-stack
@@ -582,7 +597,7 @@ aws s3 cp ../cloudformation-pipeline-template/$PIPELINE_TEMPLATE_FILENAME$ s3://
 
 """
 stringS3 = ""
-if parameters["pipeline_template_location"]["BucketName"] != "63klabs":
+if parameters["template_location"]["BucketName"] != "63klabs":
     stringS3 = stringS3Text
 
 stringCFN = """

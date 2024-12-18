@@ -19,8 +19,8 @@ cwd = os.getcwd()
 
 print("")
 tools.printCharStr("=", 80, bookend="|")
-tools.printCharStr(" ", 80, bookend="|", text="Service Role AWS SAM Config Generator for Atlantis CI/CD")
-tools.printCharStr(" ", 80, bookend="|", text="v2024.12.14 : service-role.py")
+tools.printCharStr(" ", 80, bookend="|", text="Service Role Stack AWS SAM TOML Generator for Atlantis CI/CD")
+tools.printCharStr(" ", 80, bookend="|", text="v2024.12.30 : service-role.py")
 tools.printCharStr("-", 80, bookend="|")
 tools.printCharStr(" ", 80, bookend="|", text="Chad Leigh Kluck")
 tools.printCharStr(" ", 80, bookend="|", text="https://github.com/chadkluck/serverless-deploy-pipeline-atlantis")
@@ -40,13 +40,17 @@ else:
 
 # Default values - Set any of these defaults to your own in the defaults file
 defaults = {
-	"general": {
+	"stack_parameters": {
 		"Prefix": argPrefix,
 		"S3BucketNameOrgPrefix": atlantis.prompts["S3BucketNameOrgPrefix"]["default"],
 		"RolePath": atlantis.prompts["RolePath"]["default"],
-		"PermissionsBoundaryArn": atlantis.prompts["PermissionsBoundaryArn"]["default"],
+		"PermissionsBoundaryArn": atlantis.prompts["PermissionsBoundaryArn"]["default"]
+    },
+    "global": {
+        "TemplateFile": "./templates/template-service-role.yml", # relative to generated toml file
         "AwsRegion": atlantis.prompts["AwsRegion"]["default"],
-        "DeployBucket": atlantis.prompts["DeployBucket"]["default"]
+        "DeployBucket": atlantis.prompts["DeployBucket"]["default"],
+        "ConfirmChangeset": atlantis.prompts["ConfirmChangeset"]["default"]
 	}
 }
 
@@ -60,15 +64,32 @@ fileLoc.append(atlantis.dirs["settings"]["Iam"]+"defaults.json")
 fileLoc.append(atlantis.dirs["settings"]["Iam"]+"defaults-"+argPrefix.lower()+".json")
 
 # iam defaults don't have keysections
+# for i in range(len(fileLoc)):
+# 	if os.path.isfile(fileLoc[i]):
+# 		with open(fileLoc[i], "r") as f:
+# 			temp = json.load(f)
+# 			for key in temp.keys():
+# 				defaults["stack_parameters"][key] = temp[key]
+# 		print(" + Found "+fileLoc[i])
+# 	else:
+# 		print(" - Did not find "+fileLoc[i])
+
 for i in range(len(fileLoc)):
-	if os.path.isfile(fileLoc[i]):
-		with open(fileLoc[i], "r") as f:
-			temp = json.load(f)
-			for key in temp.keys():
-				defaults["general"][key] = temp[key]
-		print(" + Found "+fileLoc[i])
-	else:
-		print(" - Did not find "+fileLoc[i])
+    if os.path.isfile(fileLoc[i]):
+        with open(fileLoc[i], "r") as f:
+            temp = json.load(f)
+            for sectionKey in temp.keys():
+                # if keySection is a string and in defaultFromIamIndex then map (it came from IAM)
+                # if type(temp[sectionKey]) is str and sectionKey in defaultsFromIamIndex:
+                #     defaults[defaultsFromIamIndex[sectionKey]][sectionKey] = temp[sectionKey]
+                # elif type(temp[sectionKey]) is dict:
+                if type(temp[sectionKey]) is dict:
+                    # otherwise loop through
+                    for key in temp[sectionKey].keys():
+                        defaults[sectionKey][key] = temp[sectionKey][key]
+            print(" + Found "+fileLoc[i])
+    else:
+        print(" - Did not find "+fileLoc[i])
 
 # Read in Custom Parameters
         
@@ -150,8 +171,12 @@ print("")
 
 promptSections = [
     {
-        "key": "general",
-        "name": "General Information"
+        "key": "stack_parameters",
+        "name": "Stack Parameters"
+    },
+    {
+        "key": "global",
+        "name": "Global Deploy Parameters"
     }
 ]
 
@@ -161,23 +186,26 @@ for item in promptSections:
     prompts[item["key"]] = {}
     parameters[item["key"]] = {}
 
-prompts["general"]["Prefix"] = atlantis.prompts["Prefix"]
-prompts["general"]["Prefix"]["default"] = defaults["general"]["Prefix"]
+prompts["stack_parameters"]["Prefix"] = atlantis.prompts["Prefix"]
+prompts["stack_parameters"]["Prefix"]["default"] = defaults["stack_parameters"]["Prefix"]
 
-prompts["general"]["S3BucketNameOrgPrefix"] = atlantis.prompts["S3BucketNameOrgPrefix"]
-prompts["general"]["S3BucketNameOrgPrefix"]["default"] = defaults["general"]["S3BucketNameOrgPrefix"]
+prompts["stack_parameters"]["S3BucketNameOrgPrefix"] = atlantis.prompts["S3BucketNameOrgPrefix"]
+prompts["stack_parameters"]["S3BucketNameOrgPrefix"]["default"] = defaults["stack_parameters"]["S3BucketNameOrgPrefix"]
 
-prompts["general"]["RolePath"] = atlantis.prompts["RolePath"]
-prompts["general"]["RolePath"]["default"] = defaults["general"]["RolePath"]
+prompts["stack_parameters"]["RolePath"] = atlantis.prompts["RolePath"]
+prompts["stack_parameters"]["RolePath"]["default"] = defaults["stack_parameters"]["RolePath"]
 
-prompts["general"]["PermissionsBoundaryArn"] = atlantis.prompts["PermissionsBoundaryArn"]
-prompts["general"]["PermissionsBoundaryArn"]["default"] = defaults["general"]["PermissionsBoundaryArn"]
+prompts["stack_parameters"]["PermissionsBoundaryArn"] = atlantis.prompts["PermissionsBoundaryArn"]
+prompts["stack_parameters"]["PermissionsBoundaryArn"]["default"] = defaults["stack_parameters"]["PermissionsBoundaryArn"]
 
-prompts["general"]["AwsRegion"] = atlantis.prompts["AwsRegion"]
-prompts["general"]["AwsRegion"]["default"] = defaults["general"]["AwsRegion"]
+prompts["global"]["AwsRegion"] = atlantis.prompts["AwsRegion"]
+prompts["global"]["AwsRegion"]["default"] = defaults["global"]["AwsRegion"]
 
-prompts["general"]["DeployBucket"] = atlantis.prompts["DeployBucket"]
-prompts["general"]["DeployBucket"]["default"] = defaults["general"]["DeployBucket"]
+prompts["global"]["DeployBucket"] = atlantis.prompts["DeployBucket"]
+prompts["global"]["DeployBucket"]["default"] = defaults["global"]["DeployBucket"]
+
+prompts["global"]["ConfirmChangeset"] = atlantis.prompts["ConfirmChangeset"]
+prompts["global"]["ConfirmChangeset"]["default"] = defaults["global"]["ConfirmChangeset"]
 
 atlantis.getUserInput(prompts, parameters, promptSections)
 
@@ -188,7 +216,7 @@ atlantis.getUserInput(prompts, parameters, promptSections)
 print("[ Saving .default files... ]")
 
 tf = {
-    "Prefix": parameters["general"]["Prefix"],
+    "Prefix": parameters["stack_parameters"]["Prefix"],
 }
 
 # we list the files in reverse as we work up the normal read-in chain
@@ -201,12 +229,12 @@ iamInputsFiles = [
 # to do this we will list the data to remove in reverse order
 removals = [
     {
-        "general": ["Prefix"]
+        "stack_parameters": ["Prefix"]
     }
 ]
 
 data = []
-data.append(json.dumps(parameters["general"], indent=4))
+data.append(json.dumps(parameters["stack_parameters"], indent=4))
 limitedParam = json.dumps(parameters)
 
 # loop through the removals array and remove the keys from the limitedParam array before appending to data
@@ -216,7 +244,7 @@ for removal in removals:
         for item in removal[key]:
             d[key].pop(item)
     limitedParam = json.dumps(d, indent=4)
-    data.append(json.dumps(d["general"], indent=4))
+    data.append(json.dumps(d["stack_parameters"], indent=4))
 
 # go through each index of the cliInputFiles array and write out the corresponding data element and add the corresponding element at index in data
 numFiles = len(iamInputsFiles)
@@ -238,27 +266,14 @@ tools.printCharStr("-", 80)
 
 # Get the path to the generated directory
 cli_output_dir = atlantis.dirs["iamServiceRole"]
-if not os.path.isdir(cli_output_dir):
-	os.makedirs(cli_output_dir)
-
-toml_globalDeployParameters = {
-	"template_file": "./templates/template-service-role.yml",
-	"s3_bucket": parameters["general"]["DeployBucket"],
-    "region": parameters["general"]["AwsRegion"],
-	"confirm_changeset": "true",
-	"capabilities": "CAPABILITY_IAM",
-	"image_repositories": "[]"
+suffix = "service-role"
+scriptInfo = {
+    "scriptName": scriptName,
+    "args": argPrefix
 }
 
-toml_defaultDeployParams = {
-	"stack_name" : parameters["general"]["Prefix"].upper()+"-service-role",
-	"s3_prefix": parameters["general"]["Prefix"].upper()+"-service-role",
-	"parameter_overrides": "",
-	"tags": ""
-}
-
-# Append parameters["general"] to customStackParams
-customStackParams.update(parameters["general"])
+# Append parameters["stack_parameters"] to customStackParams
+customStackParams.update(parameters["stack_parameters"])
 
 param_overrides_toml = ""
 for key, value in customStackParams.items():
@@ -268,7 +283,7 @@ param_overrides_toml = param_overrides_toml.rstrip()
 
 # Prepend {"Key": "Atlantis", "Value": "iam"} and {"Key": "atlantis:Prefix", "Value": prefix} to tags list
 customSvcRoleTags.insert(0, {"Key": "Atlantis", "Value": "iam"})
-customSvcRoleTags.insert(1, {"Key": "atlantis:Prefix", "Value": parameters["general"]["Prefix"]})
+customSvcRoleTags.insert(1, {"Key": "atlantis:Prefix", "Value": parameters["stack_parameters"]["Prefix"]})
 
 tags_toml = ""
 for tag in customSvcRoleTags:
@@ -281,14 +296,7 @@ tags_toml = tags_toml.rstrip()
 toml_defaultDeployParams["parameter_overrides"] = param_overrides_toml
 toml_defaultDeployParams["tags"] = tags_toml
 
-toml_filename = "samconfig-"+parameters['general']['Prefix'].upper()+"-service-role.toml"
-sam_deploy_command = f"sam deploy --profile default --config-file {toml_filename}"
 
-# Read in ./lib/templates/samconfig.toml.txt
-# Read the template file
-template_path = "./lib/templates/samconfig.toml.txt"
-with open(template_path, "r") as f:
-    toml_template = f.read()
 
 # Create a dictionary of replacements
 replacements = {
@@ -298,32 +306,62 @@ replacements = {
     "$CAPABILITIES$": toml_globalDeployParameters["capabilities"],
 	"$CONFIRM_CHANGESET$": toml_globalDeployParameters["confirm_changeset"],
 	"$IMAGE_REPOSITORIES$": toml_globalDeployParameters["image_repositories"],
-    "$SCRIPT_NAME$": scriptName,
-    "$SCRIPT_ARGS$": argPrefix
+    "$SCRIPT_NAME$": toml_scriptInfo["scriptName"],
+    "$SCRIPT_ARGS$": toml_scriptInfo["args"]
 }
 
-# Perform the replacements
-toml_content = toml_template
-for placeholder, value in replacements.items():
-    toml_content = toml_content.replace(placeholder, str(value))
+def generateTomlFile(replacements, deploy_environments, output_dir, suffix, ):
 
-# Add a [default.deploy.parameters] section to the content
-toml_content += "\n\n[default.deploy.parameters]\n"
+    if not os.path.isdir(output_dir):
+        os.makedirs(output_dir)
 
-# Add a comment with the sam command to deploy
-toml_content += "# =====================================================\n"
-toml_content += "# Default Deployment Configuration\n"
-toml_content += "# Deploy command:\n"
-toml_content += f"# {sam_deploy_command} \n\n"
+    # Read in ./lib/templates/samconfig.toml.txt
+    # Read the template file
+    template_path = "./lib/templates/samconfig.toml.txt"
+    with open(template_path, "r") as f:
+        toml_template = f.read()
 
-# Add the toml_defaultDeployParams to the content
-for key, value in toml_defaultDeployParams.items():
-    toml_content += f"{key} = \"{value}\"\n"
+    toml_filename = "samconfig-"+parameters['stack_parameters']['Prefix'].upper()+"-service-role.toml"
+    sam_deploy_command = f"sam deploy --profile default --config-file {toml_filename}"
 
-# Write the processed TOML file
-output_toml_path = f"{cli_output_dir}samconfig-{parameters['general']['Prefix'].upper()}-service-role.toml"
-with open(output_toml_path, "w") as f:
-    f.write(toml_content)
+    toml_globalDeployParameters = {
+        "template_file": parameters["global"]["TemplateFile"],
+        "s3_bucket": parameters["global"]["DeployBucket"],
+        "region": parameters["global"]["AwsRegion"],
+        "confirm_changeset": parameters["global"]["ConfirmChangeset"],
+        "capabilities": "CAPABILITY_IAM",
+        "image_repositories": "[]"
+    }
+
+    toml_defaultDeployParams = {
+        "stack_name" : parameters["stack_parameters"]["Prefix"].upper()+"-service-role",
+        "s3_prefix": parameters["stack_parameters"]["Prefix"].upper()+"-service-role",
+        "parameter_overrides": "",
+        "tags": ""
+    }
+
+    # Perform the replacements
+    toml_content = toml_template
+    for placeholder, value in replacements.items():
+        toml_content = toml_content.replace(placeholder, str(value))
+
+    # Add a [default.deploy.parameters] section to the content
+    toml_content += "\n\n[default.deploy.parameters]\n"
+
+    # Add a comment with the sam command to deploy
+    toml_content += "# =====================================================\n"
+    toml_content += "# Default Deployment Configuration\n"
+    toml_content += "# Deploy command:\n"
+    toml_content += f"# {sam_deploy_command} \n\n"
+
+    # Add the toml_defaultDeployParams to the content
+    for key, value in toml_defaultDeployParams.items():
+        toml_content += f"{key} = \"{value}\"\n"
+
+    # Write the processed TOML file
+    output_toml_path = f"{cli_output_dir}samconfig-{parameters['stack_parameters']['Prefix'].upper()}-service-role.toml"
+    with open(output_toml_path, "w") as f:
+        f.write(toml_content)
 
 print("")
 tools.printCharStr("=", 80, bookend="!", text="CREATE ROLE INFRASTRUCTURE STACK")
