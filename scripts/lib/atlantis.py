@@ -382,3 +382,100 @@ def getUserInput(prompts, parameters, promptSections):
 			parameters[sectionKey][key] = pInput
 
 	tools.printCharStr("-", 80, newlines=True)	
+
+
+def generateTomlFile(deploy_globals, deploy_environments, script_info ):
+
+	# take script_info["script_name"] and remove .py from the end
+	infraType = script_info["script_name"].split(".")[0]
+	output_dir = f"../{infraType}-infrastructure"
+	Prefix = script_info["args"].split(" ")[0]
+	ProjectId = ""
+	if len(script_info["args"].split(" ")) > 1:
+		ProjectId = script_info["args"].split(" ")[1]
+	ProjectIdentifier = Prefix
+	if ProjectId != "":
+		ProjectIdentifier = Prefix + "-" + ProjectId
+
+    toml_filename = f"samconfig-{ProjectIdentifier}-{infraType}.toml"
+
+    if not os.path.isdir(output_dir):
+        os.makedirs(output_dir)
+
+    # Read in ./lib/templates/samconfig.toml.txt
+    # Read the template file
+    template_path = "./lib/templates/samconfig.toml.txt"
+    with open(template_path, "r") as f:
+        toml_template = f.read()
+
+    # Create a dictionary of replacements
+    replacements = {
+        "$TEMPLATE_FILE$": deploy_globals["template_file"],
+        "$S3_BUCKET_FOR_DEPLOY_ARTIFACTS$": deploy_globals["s3_bucket"],
+        "$REGION$": deploy_globals["region"],
+        "$CAPABILITIES$": deploy_globals["capabilities"],
+        "$CONFIRM_CHANGESET$": deploy_globals["confirm_changeset"],
+        "$IMAGE_REPOSITORIES$": deploy_globals["image_repositories"],
+        "$SCRIPT_NAME$": toml_scriptInfo["scriptName"],
+        "$SCRIPT_ARGS$": toml_scriptInfo["args"]
+    }
+
+    # Perform the replacements
+    toml_content = toml_template
+    for placeholder, value in replacements.items():
+        toml_content = toml_content.replace(placeholder, str(value))
+
+	# Add the individual deployment sections
+	for dkey, dvalue in deploy_environments:
+
+		sam_deploy_command = f"sam deploy --config-env {dkey} --config-file {toml_filename} --profile default"
+
+		param_overrides_toml = ""
+		for pkey, pvalue in parameters["stack_parameters"].items():
+			param_overrides_toml += f"\\\"{pkey}\\\"=\\\"{pvalue}\\\" "
+
+		param_overrides_toml = param_overrides_toml.rstrip()
+
+		tags_toml = ""
+		for tag in customSvcRoleTags:
+			tkey = tag["Key"]
+			tvalue = tag["Value"]
+			tags_toml += f"\\\"{tkey}\\\"=\\\"{tvalue}\\\" "
+
+		tags_toml = tags_toml.rstrip()
+
+		toml_defaultDeployParams["parameter_overrides"] = param_overrides_toml
+		toml_defaultDeployParams["tags"] = tags_toml
+
+		stack_identifier = ProjectIdentifier
+		if dkey != "default":
+			stack_identifier += dkey
+
+		stack_name = {stack_identifier}+"-"+infraType
+
+		toml_defaultDeployParams = {
+			"stack_name" : stack_name,
+			"s3_prefix": stack_name,
+			"parameter_overrides": "",
+			"tags": ""
+		}
+
+		# Add a [*.deploy.parameters] section to the content
+		toml_content += f"\n\n[{dkey}.deploy.parameters]\n"
+
+		# Add a comment with the sam command to deploy
+		toml_content += "# =====================================================\n"
+		toml_content += f"# {dkey} Deployment Configuration\n"
+		toml_content += "# Deploy command:\n"
+		toml_content += f"# {sam_deploy_command} \n\n"
+
+		# Add the toml_defaultDeployParams to the content
+		for pkey, pvalue in toml_defaultDeployParams.items():
+			toml_content += f"{pkey} = \"{pvalue}\"\n"
+
+		toml_content += "\n"
+
+    # Write the processed TOML file
+    output_toml_path = f"{output_dir}samconfig-{ProjectIdentifier}-{infraType}.toml"
+    with open(output_toml_path, "w") as f:
+        f.write(toml_content)

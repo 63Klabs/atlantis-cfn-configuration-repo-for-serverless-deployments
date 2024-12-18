@@ -264,104 +264,31 @@ for i in range(numFiles):
 
 tools.printCharStr("-", 80)
 
-# Get the path to the generated directory
-cli_output_dir = atlantis.dirs["iamServiceRole"]
-suffix = "service-role"
-scriptInfo = {
-    "scriptName": scriptName,
+script_info = {
+    "script_name": scriptName,
     "args": argPrefix
 }
 
-# Append parameters["stack_parameters"] to customStackParams
-customStackParams.update(parameters["stack_parameters"])
-
-param_overrides_toml = ""
-for key, value in customStackParams.items():
-	param_overrides_toml += f"\\\"{key}\\\"=\\\"{value}\\\" "
-
-param_overrides_toml = param_overrides_toml.rstrip()
+# Append customStackParams to parameters["stack_parameters"]
+parameters["stack_parameters"].update(customStackParams)
 
 # Prepend {"Key": "Atlantis", "Value": "iam"} and {"Key": "atlantis:Prefix", "Value": prefix} to tags list
 customSvcRoleTags.insert(0, {"Key": "Atlantis", "Value": "iam"})
 customSvcRoleTags.insert(1, {"Key": "atlantis:Prefix", "Value": parameters["stack_parameters"]["Prefix"]})
 
-tags_toml = ""
-for tag in customSvcRoleTags:
-    key = tag["Key"]
-    value = tag["Value"]
-    tags_toml += f"\\\"{key}\\\"=\\\"{value}\\\" "
-
-tags_toml = tags_toml.rstrip()
-
-toml_defaultDeployParams["parameter_overrides"] = param_overrides_toml
-toml_defaultDeployParams["tags"] = tags_toml
-
-
-
-# Create a dictionary of replacements
-replacements = {
-    "$TEMPLATE_FILE$": toml_globalDeployParameters["template_file"],
-    "$S3_BUCKET_FOR_DEPLOY_ARTIFACTS$": toml_globalDeployParameters["s3_bucket"],
-    "$REGION$": toml_globalDeployParameters["region"],
-    "$CAPABILITIES$": toml_globalDeployParameters["capabilities"],
-	"$CONFIRM_CHANGESET$": toml_globalDeployParameters["confirm_changeset"],
-	"$IMAGE_REPOSITORIES$": toml_globalDeployParameters["image_repositories"],
-    "$SCRIPT_NAME$": toml_scriptInfo["scriptName"],
-    "$SCRIPT_ARGS$": toml_scriptInfo["args"]
+deploy_environments["default"] = {
+    "parameter_overrides": parameters["stack_parameters"],
+    "tags": customSvcRoleTags
 }
 
-def generateTomlFile(replacements, deploy_environments, output_dir, suffix, ):
+deploy_globals = parameters["globals"]
 
-    if not os.path.isdir(output_dir):
-        os.makedirs(output_dir)
+deploy_globals["capabilities"] = "CAPABILITY_IAM"
+deploy_globals["image_repositories"] = "[]"
 
-    # Read in ./lib/templates/samconfig.toml.txt
-    # Read the template file
-    template_path = "./lib/templates/samconfig.toml.txt"
-    with open(template_path, "r") as f:
-        toml_template = f.read()
+# TODO: Read in all deployment environment files, order dictionary by default, test*/t*, beta*/b*, stage*/s*, prod*/p*,
 
-    toml_filename = "samconfig-"+parameters['stack_parameters']['Prefix'].upper()+"-service-role.toml"
-    sam_deploy_command = f"sam deploy --profile default --config-file {toml_filename}"
-
-    toml_globalDeployParameters = {
-        "template_file": parameters["global"]["TemplateFile"],
-        "s3_bucket": parameters["global"]["DeployBucket"],
-        "region": parameters["global"]["AwsRegion"],
-        "confirm_changeset": parameters["global"]["ConfirmChangeset"],
-        "capabilities": "CAPABILITY_IAM",
-        "image_repositories": "[]"
-    }
-
-    toml_defaultDeployParams = {
-        "stack_name" : parameters["stack_parameters"]["Prefix"].upper()+"-service-role",
-        "s3_prefix": parameters["stack_parameters"]["Prefix"].upper()+"-service-role",
-        "parameter_overrides": "",
-        "tags": ""
-    }
-
-    # Perform the replacements
-    toml_content = toml_template
-    for placeholder, value in replacements.items():
-        toml_content = toml_content.replace(placeholder, str(value))
-
-    # Add a [default.deploy.parameters] section to the content
-    toml_content += "\n\n[default.deploy.parameters]\n"
-
-    # Add a comment with the sam command to deploy
-    toml_content += "# =====================================================\n"
-    toml_content += "# Default Deployment Configuration\n"
-    toml_content += "# Deploy command:\n"
-    toml_content += f"# {sam_deploy_command} \n\n"
-
-    # Add the toml_defaultDeployParams to the content
-    for key, value in toml_defaultDeployParams.items():
-        toml_content += f"{key} = \"{value}\"\n"
-
-    # Write the processed TOML file
-    output_toml_path = f"{cli_output_dir}samconfig-{parameters['stack_parameters']['Prefix'].upper()}-service-role.toml"
-    with open(output_toml_path, "w") as f:
-        f.write(toml_content)
+atlantis.generateTomlFile(deploy_globals, deploy_environments, script_info )
 
 print("")
 tools.printCharStr("=", 80, bookend="!", text="CREATE ROLE INFRASTRUCTURE STACK")
