@@ -9,6 +9,7 @@ version = 0.1
 
 [global.deploy.parameters]
 s3_bucket = "$S3_BUCKET_FOR_DEPLOY_ARTIFACTS$"
+template_file = "$TEMPLATE_FILE$"
 region = "$REGION$"
 confirm_changeset = $CONFIRM_CHANGESET$
 capabilities = "$CAPABILITIES$"

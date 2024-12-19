@@ -1,0 +1,12 @@
+{
+    "stack_parameters": {
+        "S3BucketNameOrgPrefix": "asd",
+        "RolePath": "/asdf/",
+        "PermissionsBoundaryArn": ""
+    },
+    "globals": {
+        "AwsRegion": "us-east-1",
+        "DeployBucket": "cf-asdf",
+        "ConfirmChangeset": "true"
+    }
+}

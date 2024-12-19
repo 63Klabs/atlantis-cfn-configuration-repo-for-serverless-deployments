@@ -46,7 +46,7 @@ defaults = {
 		"RolePath": atlantis.prompts["RolePath"]["default"],
 		"PermissionsBoundaryArn": atlantis.prompts["PermissionsBoundaryArn"]["default"]
     },
-    "global": {
+    "globals": {
         "TemplateFile": "./templates/template-service-role.yml", # relative to generated toml file
         "AwsRegion": atlantis.prompts["AwsRegion"]["default"],
         "DeployBucket": atlantis.prompts["DeployBucket"]["default"],
@@ -54,14 +54,16 @@ defaults = {
 	}
 }
 
+deployEnv = "default"
+
 # Read in defaults
     
 print("[ Loading .default files... ]")
 
 # Create a file location array - this is the hierarchy of files we will gather defaults from. The most recent file appended (lower on list) will overwrite previous values
 fileLoc = []
-fileLoc.append(atlantis.dirs["settings"]["Iam"]+"defaults.json")
-fileLoc.append(atlantis.dirs["settings"]["Iam"]+"defaults-"+argPrefix.lower()+".json")
+fileLoc.append(atlantis.dirs["settings"]+"service-role/defaults.json")
+fileLoc.append(atlantis.dirs["settings"]+"service-role/defaults-"+argPrefix.lower()+".json")
 
 # iam defaults don't have keysections
 # for i in range(len(fileLoc)):
@@ -96,8 +98,8 @@ for i in range(len(fileLoc)):
 print("\n[ Loading params files... ]")
 
 customStackParamsFileLoc = []
-customStackParamsFileLoc.append(atlantis.dirs["settings"]["Iam"]+"params.json")
-customStackParamsFileLoc.append(atlantis.dirs["settings"]["Iam"]+"params-"+argPrefix+".json")
+customStackParamsFileLoc.append(atlantis.dirs["settings"]+"service-role/params.json")
+customStackParamsFileLoc.append(atlantis.dirs["settings"]+"service-role/params-"+argPrefix+".json")
 
 # If params.json exists, read it in
 customStackParams = {}
@@ -120,8 +122,8 @@ for i in range(len(customStackParamsFileLoc)):
 print("\n[ Loading tags files... ]")
 
 tagFileLoc = []
-tagFileLoc.append(atlantis.dirs["settings"]["Iam"]+"tags.json")
-tagFileLoc.append(atlantis.dirs["settings"]["Iam"]+"tags-"+argPrefix.lower()+".json")
+tagFileLoc.append(atlantis.dirs["settings"]+"service-role/tags.json")
+tagFileLoc.append(atlantis.dirs["settings"]+"service-role/tags-"+argPrefix.lower()+".json")
 
 # If tags.json exists, read it in
 customSvcRoleTags = []
@@ -175,7 +177,7 @@ promptSections = [
         "name": "Stack Parameters"
     },
     {
-        "key": "global",
+        "key": "globals",
         "name": "Global Deploy Parameters"
     }
 ]
@@ -198,14 +200,14 @@ prompts["stack_parameters"]["RolePath"]["default"] = defaults["stack_parameters"
 prompts["stack_parameters"]["PermissionsBoundaryArn"] = atlantis.prompts["PermissionsBoundaryArn"]
 prompts["stack_parameters"]["PermissionsBoundaryArn"]["default"] = defaults["stack_parameters"]["PermissionsBoundaryArn"]
 
-prompts["global"]["AwsRegion"] = atlantis.prompts["AwsRegion"]
-prompts["global"]["AwsRegion"]["default"] = defaults["global"]["AwsRegion"]
+prompts["globals"]["AwsRegion"] = atlantis.prompts["AwsRegion"]
+prompts["globals"]["AwsRegion"]["default"] = defaults["globals"]["AwsRegion"]
 
-prompts["global"]["DeployBucket"] = atlantis.prompts["DeployBucket"]
-prompts["global"]["DeployBucket"]["default"] = defaults["global"]["DeployBucket"]
+prompts["globals"]["DeployBucket"] = atlantis.prompts["DeployBucket"]
+prompts["globals"]["DeployBucket"]["default"] = defaults["globals"]["DeployBucket"]
 
-prompts["global"]["ConfirmChangeset"] = atlantis.prompts["ConfirmChangeset"]
-prompts["global"]["ConfirmChangeset"]["default"] = defaults["global"]["ConfirmChangeset"]
+prompts["globals"]["ConfirmChangeset"] = atlantis.prompts["ConfirmChangeset"]
+prompts["globals"]["ConfirmChangeset"]["default"] = defaults["globals"]["ConfirmChangeset"]
 
 atlantis.getUserInput(prompts, parameters, promptSections)
 
@@ -213,16 +215,16 @@ atlantis.getUserInput(prompts, parameters, promptSections)
 # Save files
 # =============================================================================
 
-print("[ Saving .default files... ]")
+print("[ Saving default json files... ]")
 
 tf = {
     "Prefix": parameters["stack_parameters"]["Prefix"],
 }
 
 # we list the files in reverse as we work up the normal read-in chain
-iamInputsFiles = [
-    atlantis.dirs["settings"]["Iam"]+"defaults-"+tf["Prefix"]+".json",
-    atlantis.dirs["settings"]["Iam"]+"defaults.json"
+settingsFiles = [
+    atlantis.dirs["settings"]+"service-role/defaults-"+tf["Prefix"]+".json",
+    atlantis.dirs["settings"]+"service-role/defaults.json"
 ]
 
 # we will progressively remove data as we save up the chain of files
@@ -233,30 +235,7 @@ removals = [
     }
 ]
 
-data = []
-data.append(json.dumps(parameters["stack_parameters"], indent=4))
-limitedParam = json.dumps(parameters)
-
-# loop through the removals array and remove the keys from the limitedParam array before appending to data
-for removal in removals:
-    d = json.loads(limitedParam)
-    for key in removal.keys():
-        for item in removal[key]:
-            d[key].pop(item)
-    limitedParam = json.dumps(d, indent=4)
-    data.append(json.dumps(d["stack_parameters"], indent=4))
-
-# go through each index of the cliInputFiles array and write out the corresponding data element and add the corresponding element at index in data
-numFiles = len(iamInputsFiles)
-
-for i in range(numFiles):
-    file = iamInputsFiles[i]
-    d = data[i]
-    # create or overwrite file with d
-    print(" * Saving "+file+"...")
-    with open(file, "w") as f:
-        f.write(d)
-        f.close()
+atlantis.saveSettingsFiles(settingsFiles, parameters, removals)
 
 # =============================================================================
 # Generate
@@ -269,6 +248,8 @@ script_info = {
     "args": argPrefix
 }
 
+deploy_environments = {}
+
 # Append customStackParams to parameters["stack_parameters"]
 parameters["stack_parameters"].update(customStackParams)
 
@@ -276,19 +257,23 @@ parameters["stack_parameters"].update(customStackParams)
 customSvcRoleTags.insert(0, {"Key": "Atlantis", "Value": "iam"})
 customSvcRoleTags.insert(1, {"Key": "atlantis:Prefix", "Value": parameters["stack_parameters"]["Prefix"]})
 
-deploy_environments["default"] = {
-    "parameter_overrides": parameters["stack_parameters"],
+deploy_environments[deployEnv] = {
+    "stack_parameters": parameters["stack_parameters"],
     "tags": customSvcRoleTags
 }
 
 deploy_globals = parameters["globals"]
 
-deploy_globals["capabilities"] = "CAPABILITY_IAM"
-deploy_globals["image_repositories"] = "[]"
+deploy_globals["TemplateFile"] = "template-service-role.yml"
+deploy_globals["Capabilities"] = "CAPABILITY_IAM"
+deploy_globals["ImageRepositories"] = "[]"
 
 # TODO: Read in all deployment environment files, order dictionary by default, test*/t*, beta*/b*, stage*/s*, prod*/p*,
 
-atlantis.generateTomlFile(deploy_globals, deploy_environments, script_info )
+sam_deploy_info = atlantis.generateTomlFile(deploy_globals, deploy_environments, script_info )
+
+output_dir = sam_deploy_info["output_dir"]
+sam_deploy_commands = sam_deploy_info["sam_deploy_commands"][deployEnv]
 
 print("")
 tools.printCharStr("=", 80, bookend="!", text="CREATE ROLE INFRASTRUCTURE STACK")
@@ -305,12 +290,12 @@ print("")
 
 deploy_command = []
 deploy_command.append("# -----------------------------------------------------------------------------")
-deploy_command.append(f"# 1. Navigate to the directory {cli_output_dir}")
+deploy_command.append(f"# 1. Navigate to the directory {output_dir}")
 deploy_command.append("# 2. Execute the 'sam deploy' command listed below.")
 deploy_command.append("#    (It has been saved as a comment in the toml file for later reference)")
 deploy_command.append("")
-deploy_command.append(f"cd {cli_output_dir}")
-deploy_command.append(f"{sam_deploy_command}")
+deploy_command.append(f"cd {output_dir}")
+deploy_command.append(f"{sam_deploy_commands}")
 
 deployCmd = "\n".join(deploy_command)
 

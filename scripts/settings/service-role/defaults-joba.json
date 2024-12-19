@@ -1,0 +1,13 @@
+{
+    "stack_parameters": {
+        "Prefix": "joba",
+        "S3BucketNameOrgPrefix": "joba",
+        "RolePath": "/joba/",
+        "PermissionsBoundaryArn": ""
+    },
+    "globals": {
+        "AwsRegion": "us-east-2",
+        "DeployBucket": "cf-joba",
+        "ConfirmChangeset": "true"
+    }
+}

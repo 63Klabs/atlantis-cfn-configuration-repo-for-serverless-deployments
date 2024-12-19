@@ -1,4 +1,0 @@
-# Comment out the following line if you want to save your generated files in a repository
-roles/*
-
-!.gitignore

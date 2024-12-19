@@ -7,6 +7,7 @@
 # v2024.06.17 : lib/atlantis.py
 
 import os
+import json
 import shutil
 import re
 import sys
@@ -22,46 +23,50 @@ hello = "Hello, World"
 # Copy over sample files
 
 dirs = {
-    "settings": {},
-	"toml": {}
+    "settings": "",
+    "toml": {}
 }
 
-dirSettings = "./settings/"
-
-dirs["settings"]["Iam"] = dirSettings+"iam/"
-dirs["settings"]["Pipeline"] = dirSettings+"pipeline/"
-dirs["settings"]["Storage"] = dirSettings+"storage/"
-dirs["settings"]["Network"] = dirSettings+"network/"
-
-dirs["iamServiceRole"] = "../iam-service-role-infrastructure/"
-dirs["pipeline"] = "../pipeline-infrastructure/"
-dirs["storage"] = "../storage-infrastructure/"
-dirs["network"] = "../network-infrastructure/"
+dirs["settings"] = "./settings/"
 
 files = {
     "pipelineTemplate": {},
     "pipelineTemplateInput": {},
-	"docsPipelineParamReadme": {}
+    "docsPipelineParamReadme": {}
 }
 
 dirs["docs"] = "../docs/"
 
 files["pipelineTemplate"]["name"] = "template-pipeline.yml"
-files["pipelineTemplate"]["path"] = dirs["pipeline"]+"templates/"+files["pipelineTemplate"]["name"]
+files["pipelineTemplate"]["path"] = "../pipeline-infrastructure/templates/"+files["pipelineTemplate"]["name"]
 
 files["docsPipelineParamReadme"]["name"] = "Pipeline-Parameters-Reference.md"
 files["docsPipelineParamReadme"]["path"] = dirs["docs"]+files["docsPipelineParamReadme"]["name"]
 
 dirsAndFiles = [
     {
-        "dir": dirs["settings"]["Pipeline"],
+        "dir": f"{dirs["settings"]}network/",
         "files": [
             "sample.tags.json",
             "sample.params.json"
         ],
     },
     {
-        "dir": dirs["settings"]["Iam"],
+        "dir": f"{dirs["settings"]}storage/",
+        "files": [
+            "sample.tags.json",
+            "sample.params.json"
+        ],
+    },
+    {
+        "dir": f"{dirs["settings"]}pipeline/",
+        "files": [
+            "sample.tags.json",
+            "sample.params.json"
+        ],
+    },
+    {
+        "dir": f"{dirs["settings"]}service-role/",
         "files": [
             "sample.tags.json"
         ]
@@ -88,172 +93,172 @@ for dirAndFile in dirsAndFiles:
 
 # =============================================================================
 # Define prompts and their defaults
-			
+            
 prompts = {
-	"Prefix": {
-		"name": "Prefix",
-		"required": True,
-		"examples": "acme, finc, ws",
-	},
+    "Prefix": {
+        "name": "Prefix",
+        "required": True,
+        "examples": "acme, finc, ws",
+    },
 
-	"ProjectId": {
-		"name": "Project Id",
-		"required": True,
-		"examples": "hello-world, finance-api, finance-audit, sales-api",
-	},
+    "ProjectId": {
+        "name": "Project Id",
+        "required": True,
+        "examples": "hello-world, finance-api, finance-audit, sales-api",
+    },
 
-	"StageId": {
-		"name": "Stage Id",
-		"required": True,
-		"examples": "test, stage, beta, t-joe, prod, t95"
-	},
+    "StageId": {
+        "name": "Stage Id",
+        "required": True,
+        "examples": "test, stage, beta, t-joe, prod, t95"
+    },
 
-	"S3BucketNameOrgPrefix": {
-		"name": "S3 Bucket Name Org Prefix",
-		"required": False,
-		"examples": "xyzcompany, acme, b2b-solutions-inc",
-		"default": ""
-	},
+    "S3BucketNameOrgPrefix": {
+        "name": "S3 Bucket Name Org Prefix",
+        "required": False,
+        "examples": "xyzcompany, acme, b2b-solutions-inc",
+        "default": ""
+    },
 
-	"RolePath": {
-		"name": "Role Path",
-		"required": True,
-		"examples": "/, /acme-admin/, /acme-admin/dev/, /service-roles/, /application_roles/dev-ops/",
-		"default": "/"
-	},
+    "RolePath": {
+        "name": "Role Path",
+        "required": True,
+        "examples": "/, /acme-admin/, /acme-admin/dev/, /service-roles/, /application_roles/dev-ops/",
+        "default": "/"
+    },
 
-	"DeployEnvironment": {
-		"name": "Deploy Environment",
-		"required": True,
-		"regex": "^(DEV|TEST|PROD)$",
-		"examples": "DEV, TEST, PROD",
-		"default": "TEST"
-	},
+    "DeployEnvironment": {
+        "name": "Deploy Environment",
+        "required": True,
+        "regex": "^(DEV|TEST|PROD)$",
+        "examples": "DEV, TEST, PROD",
+        "default": "TEST"
+    },
 
-	"DeployBucket": {
-		"name": "Deploy Bucket",
-		"required": False,
-		"examples": "cf-templates-hw8lsa-us-east-1",
-		"default": ""
-	},
+    "DeployBucket": {
+        "name": "Deploy Bucket",
+        "required": False,
+        "examples": "cf-templates-hw8lsa-us-east-1",
+        "default": ""
+    },
 
-	"ParameterStoreHierarchy": {
-		"name": "Parameter Store Hierarchy",
-		"required": True,
-		"examples": "/, /Finance/, /Finance/ops/, /Finance/ops/dev/",
-	},
+    "ParameterStoreHierarchy": {
+        "name": "Parameter Store Hierarchy",
+        "required": True,
+        "examples": "/, /Finance/, /Finance/ops/, /Finance/ops/dev/",
+    },
 
-	"AlarmNotificationEmail": {
-		"name": "Alarm Notification Email",
-		"required": True,
-		"examples": "user@example.com, finance@example.com, xyzcompany@example.com",
-		"default": ""
-	},
+    "AlarmNotificationEmail": {
+        "name": "Alarm Notification Email",
+        "required": True,
+        "examples": "user@example.com, finance@example.com, xyzcompany@example.com",
+        "default": ""
+    },
 
-	"PermissionsBoundaryArn": {
-		"name": "Permissions Boundary ARN",
-		"required": False,
-		"examples": "arn:aws:iam::123456789012:policy/xyz-org-boundary-policy",
-		"default": ""
-	},
+    "PermissionsBoundaryArn": {
+        "name": "Permissions Boundary ARN",
+        "required": False,
+        "examples": "arn:aws:iam::123456789012:policy/xyz-org-boundary-policy",
+        "default": ""
+    },
 
-	"CodeCommitRepository": {
-		"name": "CodeCommit Repository",
-		"required": True,
-		"examples": "acme-financial-application, acme-financial-api, acme",
-		"default": ""
-	},
+    "CodeCommitRepository": {
+        "name": "CodeCommit Repository",
+        "required": True,
+        "examples": "acme-financial-application, acme-financial-api, acme",
+        "default": ""
+    },
 
-	"CodeCommitBranch": {
-		"name": "CodeCommit Branch",
-		"required": True,
-		"examples": "main, dev, beta, feature/acme-ui",
-		"default": ""
-	},
+    "CodeCommitBranch": {
+        "name": "CodeCommit Branch",
+        "required": True,
+        "examples": "main, dev, beta, feature/acme-ui",
+        "default": ""
+    },
 
-	# Application specific - pipeline.py
+    # Application specific - pipeline.py
 
-	"application-Name": {
-		"name": "Application Name",
-		"required": True,
-		"regex": "^[a-zA-Z0-9][a-zA-Z0-9_\\-\\/\\s]{0,62}[a-zA-Z0-9]$",
-		"help": "2 to 64 characters. Alphanumeric, dashes, underscores, and spaces. Must start and end with a letter or number.",
-		"description": "A descriptive name to identify the main application irregardless of the stage or branch. This is only used in the Tag Name and not visible anywhere else.",
-		"examples": "Financial Transaction Processing, Financial Transaction Audit, acme-finance-app",
-		"default": ""
-	},
+    "application-Name": {
+        "name": "Application Name",
+        "required": True,
+        "regex": "^[a-zA-Z0-9][a-zA-Z0-9_\\-\\/\\s]{0,62}[a-zA-Z0-9]$",
+        "help": "2 to 64 characters. Alphanumeric, dashes, underscores, and spaces. Must start and end with a letter or number.",
+        "description": "A descriptive name to identify the main application irregardless of the stage or branch. This is only used in the Tag Name and not visible anywhere else.",
+        "examples": "Financial Transaction Processing, Financial Transaction Audit, acme-finance-app",
+        "default": ""
+    },
 
-	"ServiceRoleARN": {
-		"name": "Service Role ARN",
-		"required": True,
-		"regex": "^$|^arn:aws:iam::[0-9]{12}:role\\/[a-zA-Z0-9\\/_-]+$",
-		"help": "Service Role ARN must be in the format: arn:aws:iam::{account_id}:role/{policy_name}",
-		"description": "The Service Role gives CloudFormation permission to create, delete, and manage stacks on your behalf.",
-		"examples": "arn:aws:iam::123456789012:role/ACME-CloudFormation-Service-Role",
-		"default": ""
-	},
+    "ServiceRoleARN": {
+        "name": "Service Role ARN",
+        "required": True,
+        "regex": "^$|^arn:aws:iam::[0-9]{12}:role\\/[a-zA-Z0-9\\/_-]+$",
+        "help": "Service Role ARN must be in the format: arn:aws:iam::{account_id}:role/{policy_name}",
+        "description": "The Service Role gives CloudFormation permission to create, delete, and manage stacks on your behalf.",
+        "examples": "arn:aws:iam::123456789012:role/ACME-CloudFormation-Service-Role",
+        "default": ""
+    },
 
-	# Template specific - pipeline.py
+    # Template specific - pipeline.py
 
-	"pipeline_template_location-BucketName": {
-		"name": "S3 Bucket Name for Pipeline Template",
-		"required": True,
-		"regex": "^[a-z0-9][a-z0-9-]*[a-z0-9]$|^$",
-		"help": "S3 bucket name must be lowercase, start with a letter, and contain only letters, numbers, and dashes",
-		"description": "Where is the pipeline template stored?",
-		"examples": "63klabs, mybucket",
-		"default": "63klabs"
-	},
+    "pipeline_template_location-BucketName": {
+        "name": "S3 Bucket Name for Pipeline Template",
+        "required": True,
+        "regex": "^[a-z0-9][a-z0-9-]*[a-z0-9]$|^$",
+        "help": "S3 bucket name must be lowercase, start with a letter, and contain only letters, numbers, and dashes",
+        "description": "Where is the pipeline template stored?",
+        "examples": "63klabs, mybucket",
+        "default": "63klabs"
+    },
 
-	"pipeline_template_location-BucketKey": {
-		"name": "S3 Bucket Key for Pipeline Template",
-		"required": True,
-		"regex": "^\\/[a-zA-Z0-9\\/_-]+\\/$|^\\/$",
-		"help": "S3 bucket key must be lowercase, start and end with a slash and contain only letters, numbers, dashes and underscores",
-		"description": "Where is the pipeline template stored?",
-		"examples": "/atlantis/v2/, /atlantis/v3/",
-		"default": "/atlantis/v2/"
-	},
+    "pipeline_template_location-BucketKey": {
+        "name": "S3 Bucket Key for Pipeline Template",
+        "required": True,
+        "regex": "^\\/[a-zA-Z0-9\\/_-]+\\/$|^\\/$",
+        "help": "S3 bucket key must be lowercase, start and end with a slash and contain only letters, numbers, dashes and underscores",
+        "description": "Where is the pipeline template stored?",
+        "examples": "/atlantis/v2/, /atlantis/v3/",
+        "default": "/atlantis/v2/"
+    },
 
-	"pipeline_template_location-FileName": {
-		"name": "Pipeline Template File Name",
-		"required": True,
-		"regex": "^[a-zA-Z0-9][a-zA-Z0-9-_]*[a-zA-Z0-9]\\.(yml|yaml|json)$",
-		"help": "File name must be lowercase, start with a letter, and contain only letters, numbers, and dashes",
-		"description": "What is the pipeline template file name?",
-		"examples": "template-pipeline.yml, template-pipeline.yaml",
-		"default": "template-pipeline.yml"
-	},
+    "pipeline_template_location-FileName": {
+        "name": "Pipeline Template File Name",
+        "required": True,
+        "regex": "^[a-zA-Z0-9][a-zA-Z0-9-_]*[a-zA-Z0-9]\\.(yml|yaml|json)$",
+        "help": "File name must be lowercase, start with a letter, and contain only letters, numbers, and dashes",
+        "description": "What is the pipeline template file name?",
+        "examples": "template-pipeline.yml, template-pipeline.yaml",
+        "default": "template-pipeline.yml"
+    },
 
-	"AwsAccountId": {
+    "AwsAccountId": {
         "name": "AWS Account ID",
         "required": True,
-		"regex": "^[0-9]{12}$",
-		"help": "AWS Account ID must be 12 digits",
-		"description": "AWS Account ID is a 12 digit number that identifies the AWS account.",
-		"examples": "123456789012, 123456789013, 123456789014",
+        "regex": "^[0-9]{12}$",
+        "help": "AWS Account ID must be 12 digits",
+        "description": "AWS Account ID is a 12 digit number that identifies the AWS account.",
+        "examples": "123456789012, 123456789013, 123456789014",
         "default": ""
     },
     
-	"AwsRegion": {
-		"name": "AWS Region",
-		"required": True,
-		"regex": "^[a-z]{2}-[a-z]+-[0-9]$",
-		"help": "AWS Region must be lowercase and in the format: us-east-1",
-		"description": "AWS Region is a string that identifies the AWS region. For example, the region 'us-east-1' is located in the United States.",
-		"examples": "us-east-1, us-west-1, us-west-2, eu-west-1, ap-southeast-1",
-		"default": "us-east-1"
-	}
+    "AwsRegion": {
+        "name": "AWS Region",
+        "required": True,
+        "regex": "^[a-z]{2}-[a-z]+-[0-9]$",
+        "help": "AWS Region must be lowercase and in the format: us-east-1",
+        "description": "AWS Region is a string that identifies the AWS region. For example, the region 'us-east-1' is located in the United States.",
+        "examples": "us-east-1, us-west-1, us-west-2, eu-west-1, ap-southeast-1",
+        "default": "us-east-1"
+    },
 
-		"ConfirmChangeset": {
-		"name": "Confirm Changeset",
-		"required": True,
-		"regex": "^(true|false)$",
-		"help": "When deploying a changeset, does the user have the chance to review and confirm the changes?",
-		"description": "When a user runs the sam deploy command, a changeset is generated with all changes listed. If set to true, the user is given the option to confirm executing the changeset.",
-		"examples": "true, false",
-		"default": "true"
-	}
+    "ConfirmChangeset": {
+        "name": "Confirm Changeset",
+        "required": True,
+        "regex": "^(true|false)$",
+        "help": "When deploying a changeset, does the user have the chance to review and confirm the changes?",
+        "description": "When a user runs the sam deploy command, a changeset is generated with all changes listed. If set to true, the user is given the option to confirm executing the changeset.",
+        "examples": "true, false",
+        "default": "true"
+    }
 }
 
 # =============================================================================
@@ -262,37 +267,37 @@ prompts = {
 # Read in CloudFormation template which is a YAML file
 # parse the YAML file and update the prompts dictionary with the values from Parameters
 with open(files["pipelineTemplate"]["path"], "r") as f:
-	dataTemplate = yaml.load(f, Loader=yaml.BaseLoader)
-	f.close()
+    dataTemplate = yaml.load(f, Loader=yaml.BaseLoader)
+    f.close()
 
-	for key in dataTemplate["Parameters"]:
-		param = dataTemplate["Parameters"][key]
+    for key in dataTemplate["Parameters"]:
+        param = dataTemplate["Parameters"][key]
 
-		if "AllowedPattern" in param:
-			prompts[key]["regex"] = param["AllowedPattern"].replace("\\\\", "\\")
-		elif "AllowedValues" in param:
-			prompts[key]["examples"] = ", ".join(i for i in param["AllowedValues"])
+        if "AllowedPattern" in param:
+            prompts[key]["regex"] = param["AllowedPattern"].replace("\\\\", "\\")
+        elif "AllowedValues" in param:
+            prompts[key]["examples"] = ", ".join(i for i in param["AllowedValues"])
 
-		if "Default" in param:
-			prompts[key]["default"] = param["Default"]
-		
-		if "Description" in param:
-			prompts[key]["description"] = param["Description"]
+        if "Default" in param:
+            prompts[key]["default"] = param["Default"]
+        
+        if "Description" in param:
+            prompts[key]["description"] = param["Description"]
 
-		if "ConstraintDescription" in param:
-			prompts[key]["help"] = param["ConstraintDescription"]
+        if "ConstraintDescription" in param:
+            prompts[key]["help"] = param["ConstraintDescription"]
 
-		if "MinLength" in param:
-			prompts[key]["MinLength"] = int(param["MinLength"])
+        if "MinLength" in param:
+            prompts[key]["MinLength"] = int(param["MinLength"])
 
-		if "MaxLength" in param:
-			prompts[key]["MaxLength"] = int(param["MaxLength"])
+        if "MaxLength" in param:
+            prompts[key]["MaxLength"] = int(param["MaxLength"])
 
-		if "MinValue" in param:
-			prompts[key]["MinValue"] = int(param["MinValue"])
+        if "MinValue" in param:
+            prompts[key]["MinValue"] = int(param["MinValue"])
 
-		if "MaxValue" in param:
-			prompts[key]["MaxValue"] = int(param["MaxValue"])
+        if "MaxValue" in param:
+            prompts[key]["MaxValue"] = int(param["MaxValue"])
 
 
 # =============================================================================
@@ -306,9 +311,9 @@ with open(files["pipelineTemplate"]["path"], "r") as f:
 # loop through prompts and place each prompt in a row in the markdown table
 # and write it to files["docsPipelineParamReadme"]["path"]
 with open(files["docsPipelineParamReadme"]["path"], "a") as f:
-	for key in prompts:
-		f.write("| "+prompts[key]["name"]+" | "+str(prompts[key]["required"])+" | "+prompts[key]["description"]+" | "+prompts[key]["help"]+" | "+prompts[key]["examples"]+" |\n")
-	f.close()
+    for key in prompts:
+        f.write("| "+prompts[key]["name"]+" | "+str(prompts[key]["required"])+" | "+prompts[key]["description"]+" | "+prompts[key]["help"]+" | "+prompts[key]["examples"]+" |\n")
+    f.close()
 
 
 # =============================================================================
@@ -317,87 +322,89 @@ with open(files["docsPipelineParamReadme"]["path"], "a") as f:
 
 def getUserInput(prompts, parameters, promptSections):
     #iterate through prompt sections
-	for section in promptSections:
-		sectionKey = section["key"]
-		print("\n--- "+section["name"]+": ---\n")
-		# loop through each parameter and prompt the user for it, then validate input based on requirement and regex
-		for key in prompts[sectionKey]:
-			prompt = prompts[sectionKey][key]
-			req = " "
-			if prompt["required"]:
-				req = " (required)"
-			
-			# Loop until the user enters a valid value for the parameter
-			while True:
-				# Prompt the user for the parameter value
-				pInput = input(prompt['name']+req+" ["+prompt["default"]+"] : ")
+    for section in promptSections:
+        sectionKey = section["key"]
+        print("\n--- "+section["name"]+": ---\n")
+        # loop through each parameter and prompt the user for it, then validate input based on requirement and regex
+        for key in prompts[sectionKey]:
+            prompt = prompts[sectionKey][key]
+            req = " "
+            if prompt["required"]:
+                req = " (required)"
+            
+            # Loop until the user enters a valid value for the parameter
+            while True:
+                # Prompt the user for the parameter value
+                pInput = input(prompt['name']+req+" ["+prompt["default"]+"] : ")
 
-				# Allow user to enter ^ to exit script
-				if pInput == "^":
-					sys.exit(0)
+                # Allow user to enter ^ to exit script
+                if pInput == "^":
+                    sys.exit(0)
 
-				# Allow user to enter ! for help and then go back to start of loop
-				if pInput == "?":
-					tools.displayHelp(prompt, False)
-					continue
+                # Allow user to enter ! for help and then go back to start of loop
+                if pInput == "?":
+                    tools.displayHelp(prompt, False)
+                    continue
 
-				# If the user left blank, use the default value, otherwise, If the user entered a dash, clear the parameter value
-				if pInput == "":
-					pInput = prompt["default"]
-				elif pInput == "-":
-					pInput = ""
+                # If the user left blank, use the default value, otherwise, If the user entered a dash, clear the parameter value
+                if pInput == "":
+                    pInput = prompt["default"]
+                elif pInput == "-":
+                    pInput = ""
 
-				# Validate the input based on regex and re-prompt if invalid
-				if prompt["regex"] != "":
-					if not re.match(prompt["regex"], pInput):
-						tools.displayHelp(prompt, True)
-						continue
+                # Validate the input based on regex and re-prompt if invalid
+                if prompt["regex"] != "":
+                    if not re.match(prompt["regex"], pInput):
+                        tools.displayHelp(prompt, True)
+                        continue
 
-				# if MinLength is set, check that the input is at least that long
-				if "MinLength" in prompt:
-					if len(pInput) < prompt["MinLength"]:
-						tools.displayHelp(prompt, True)
-						continue
+                # if MinLength is set, check that the input is at least that long
+                if "MinLength" in prompt:
+                    if len(pInput) < prompt["MinLength"]:
+                        tools.displayHelp(prompt, True)
+                        continue
 
-				# if MaxLength is set, check that the input is at most that long
-				if "MaxLength" in prompt:
-					if len(pInput) > prompt["MaxLength"]:
-						tools.displayHelp(prompt, True)
-						continue
+                # if MaxLength is set, check that the input is at most that long
+                if "MaxLength" in prompt:
+                    if len(pInput) > prompt["MaxLength"]:
+                        tools.displayHelp(prompt, True)
+                        continue
 
-				# if MinValue is set, check that the input is at least that value
-				if "MinValue" in prompt:
-					if int(pInput) < prompt["MinValue"]:
-						tools.displayHelp(prompt, True)
-						continue
+                # if MinValue is set, check that the input is at least that value
+                if "MinValue" in prompt:
+                    if int(pInput) < prompt["MinValue"]:
+                        tools.displayHelp(prompt, True)
+                        continue
 
-				# if MaxValue is set, check that the input is at most that value
-				if "MaxValue" in prompt:
-					if int(pInput) > prompt["MaxValue"]:
-						tools.displayHelp(prompt, True)
-						continue
+                # if MaxValue is set, check that the input is at most that value
+                if "MaxValue" in prompt:
+                    if int(pInput) > prompt["MaxValue"]:
+                        tools.displayHelp(prompt, True)
+                        continue
 
-				break
+                break
 
-			parameters[sectionKey][key] = pInput
+            parameters[sectionKey][key] = pInput
 
-	tools.printCharStr("-", 80, newlines=True)	
+    tools.printCharStr("-", 80, newlines=True)	
 
 
 def generateTomlFile(deploy_globals, deploy_environments, script_info ):
 
-	# take script_info["script_name"] and remove .py from the end
-	infraType = script_info["script_name"].split(".")[0]
-	output_dir = f"../{infraType}-infrastructure"
-	Prefix = script_info["args"].split(" ")[0]
-	ProjectId = ""
-	if len(script_info["args"].split(" ")) > 1:
-		ProjectId = script_info["args"].split(" ")[1]
-	ProjectIdentifier = Prefix
-	if ProjectId != "":
-		ProjectIdentifier = Prefix + "-" + ProjectId
+    # take script_info["script_name"] and remove .py from the end
+    infraType = script_info["script_name"].split(".")[0]
+    output_dir = f"../{infraType}-infrastructure"
+
+    Prefix = script_info["args"].split(" ")[0]
+    ProjectId = ""
+    if len(script_info["args"].split(" ")) > 1:
+        ProjectId = script_info["args"].split(" ")[1]
+    ProjectIdentifier = Prefix
+    if ProjectId != "":
+        ProjectIdentifier = Prefix + "-" + ProjectId
 
     toml_filename = f"samconfig-{ProjectIdentifier}-{infraType}.toml"
+    sam_deploy_commands = {}
 
     if not os.path.isdir(output_dir):
         os.makedirs(output_dir)
@@ -410,14 +417,14 @@ def generateTomlFile(deploy_globals, deploy_environments, script_info ):
 
     # Create a dictionary of replacements
     replacements = {
-        "$TEMPLATE_FILE$": deploy_globals["template_file"],
-        "$S3_BUCKET_FOR_DEPLOY_ARTIFACTS$": deploy_globals["s3_bucket"],
-        "$REGION$": deploy_globals["region"],
-        "$CAPABILITIES$": deploy_globals["capabilities"],
-        "$CONFIRM_CHANGESET$": deploy_globals["confirm_changeset"],
-        "$IMAGE_REPOSITORIES$": deploy_globals["image_repositories"],
-        "$SCRIPT_NAME$": toml_scriptInfo["scriptName"],
-        "$SCRIPT_ARGS$": toml_scriptInfo["args"]
+        "$TEMPLATE_FILE$": deploy_globals["TemplateFile"],
+        "$S3_BUCKET_FOR_DEPLOY_ARTIFACTS$": deploy_globals["DeployBucket"],
+        "$REGION$": deploy_globals["AwsRegion"],
+        "$CAPABILITIES$": deploy_globals["Capabilities"],
+        "$CONFIRM_CHANGESET$": deploy_globals["ConfirmChangeset"],
+        "$IMAGE_REPOSITORIES$": deploy_globals["ImageRepositories"],
+        "$SCRIPT_NAME$": script_info["script_name"],
+        "$SCRIPT_ARGS$": script_info["args"]
     }
 
     # Perform the replacements
@@ -425,57 +432,84 @@ def generateTomlFile(deploy_globals, deploy_environments, script_info ):
     for placeholder, value in replacements.items():
         toml_content = toml_content.replace(placeholder, str(value))
 
-	# Add the individual deployment sections
-	for dkey, dvalue in deploy_environments:
+    # Add the individual deployment sections
+    for dkey, dvalue in deploy_environments.items():
 
-		sam_deploy_command = f"sam deploy --config-env {dkey} --config-file {toml_filename} --profile default"
+        sam_deploy_command = f"sam deploy --config-env {dkey} --config-file {toml_filename} --profile default"
+        sam_deploy_commands[dkey] = sam_deploy_command
 
-		param_overrides_toml = ""
-		for pkey, pvalue in parameters["stack_parameters"].items():
-			param_overrides_toml += f"\\\"{pkey}\\\"=\\\"{pvalue}\\\" "
+        parameter_overrides = ""
+        for pkey, pvalue in dvalue["stack_parameters"].items():
+            parameter_overrides += f"\\\"{pkey}\\\"=\\\"{pvalue}\\\" "
 
-		param_overrides_toml = param_overrides_toml.rstrip()
+        parameter_overrides = parameter_overrides.rstrip()
 
-		tags_toml = ""
-		for tag in customSvcRoleTags:
-			tkey = tag["Key"]
-			tvalue = tag["Value"]
-			tags_toml += f"\\\"{tkey}\\\"=\\\"{tvalue}\\\" "
+        tags = ""
+        for tag in dvalue["tags"]:
+            tkey = tag["Key"]
+            tvalue = tag["Value"]
+            tags += f"\\\"{tkey}\\\"=\\\"{tvalue}\\\" "
 
-		tags_toml = tags_toml.rstrip()
+        tags = tags.rstrip()
 
-		toml_defaultDeployParams["parameter_overrides"] = param_overrides_toml
-		toml_defaultDeployParams["tags"] = tags_toml
+        stack_identifier = ProjectIdentifier
+        if dkey != "default":
+            stack_identifier += "-"+dkey
 
-		stack_identifier = ProjectIdentifier
-		if dkey != "default":
-			stack_identifier += dkey
+        stack_name = f"{stack_identifier}-{infraType}"
 
-		stack_name = {stack_identifier}+"-"+infraType
+        toml_deployParameters = {
+            "stack_name" : stack_name,
+            "s3_prefix": stack_name,
+            "parameter_overrides": parameter_overrides,
+            "tags": tags
+        }
 
-		toml_defaultDeployParams = {
-			"stack_name" : stack_name,
-			"s3_prefix": stack_name,
-			"parameter_overrides": "",
-			"tags": ""
-		}
+        # Add a [*.deploy.parameters] section to the content
+        toml_content += f"\n\n[{dkey}.deploy.parameters]\n"
 
-		# Add a [*.deploy.parameters] section to the content
-		toml_content += f"\n\n[{dkey}.deploy.parameters]\n"
+        # Add a comment with the sam command to deploy
+        toml_content += "# =====================================================\n"
+        toml_content += f"# {dkey} Deployment Configuration\n"
+        toml_content += "# Deploy command:\n"
+        toml_content += f"# {sam_deploy_command} \n\n"
 
-		# Add a comment with the sam command to deploy
-		toml_content += "# =====================================================\n"
-		toml_content += f"# {dkey} Deployment Configuration\n"
-		toml_content += "# Deploy command:\n"
-		toml_content += f"# {sam_deploy_command} \n\n"
+        # Add the toml_deployParameters to the content
+        for pkey, pvalue in toml_deployParameters.items():
+            toml_content += f"{pkey} = \"{pvalue}\"\n"
 
-		# Add the toml_defaultDeployParams to the content
-		for pkey, pvalue in toml_defaultDeployParams.items():
-			toml_content += f"{pkey} = \"{pvalue}\"\n"
-
-		toml_content += "\n"
+        toml_content += "\n"
 
     # Write the processed TOML file
-    output_toml_path = f"{output_dir}samconfig-{ProjectIdentifier}-{infraType}.toml"
+    output_toml_path = f"{output_dir}/samconfig-{ProjectIdentifier}-{infraType}.toml"
     with open(output_toml_path, "w") as f:
         f.write(toml_content)
+
+    return { "output_dir": output_dir, "sam_deploy_commands": sam_deploy_commands }
+
+def saveSettingsFiles(settingsFiles, parameters, removals):
+
+    data = []
+    data.append(json.dumps(parameters, indent=4))
+    limitedParam = json.dumps(parameters)
+
+    # loop through the removals array and remove the keys from the limitedParam array before appending to data
+    for removal in removals:
+        d = json.loads(limitedParam)
+        for key in removal.keys():
+            for item in removal[key]:
+                d[key].pop(item)
+        limitedParam = json.dumps(d, indent=4)
+        data.append(limitedParam)
+
+    # go through each index of the cliInputFiles array and write out the corresponding data element and add the corresponding element at index in data
+    numFiles = len(settingsFiles)
+
+    for i in range(numFiles):
+        file = settingsFiles[i]
+        d = data[i]
+        # create or overwrite file with d
+        print(" * Saving "+file+"...")
+        with open(file, "w") as f:
+            f.write(d)
+            f.close()
