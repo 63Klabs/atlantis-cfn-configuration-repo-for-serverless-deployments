@@ -29,14 +29,21 @@ print("")
 
 argPrefix = "acme"
 argAcceptDefaults = False
-scriptName = sys.argv[0]
+script_name = sys.argv[0]
+
 
 # Check to make sure there is at least one argument else display message and exit.
 if len(sys.argv) > 1:
-    argPrefix = sys.argv[1]
+    argPrefix = sys.argv[1].lower()
 else:
-    print("\n\nUsage: python "+scriptName+" <Prefix>\n\n")
+    print("\n\nUsage: python "+script_name+" <Prefix>\n\n")
     sys.exit()
+
+script_info = {
+    "name": script_name,
+    "args": argPrefix,
+    "infra": script_name.split(".")[0]
+}
 
 # Default values - Set any of these defaults to your own in the defaults file
 defaults = {
@@ -54,105 +61,17 @@ defaults = {
 	}
 }
 
-deployEnv = "default"
+configEnv = "default" # would be arg 3
 
-# Read in defaults
-    
-print("[ Loading .default files... ]")
+# =============================================================================
+# Load Settings
+# =============================================================================
 
-# Create a file location array - this is the hierarchy of files we will gather defaults from. The most recent file appended (lower on list) will overwrite previous values
-fileLoc = []
-fileLoc.append(atlantis.dirs["settings"]+"service-role/defaults.json")
-fileLoc.append(atlantis.dirs["settings"]+"service-role/defaults-"+argPrefix.lower()+".json")
+settings = atlantis.loadSettings(script_info, defaults)
 
-# iam defaults don't have keysections
-# for i in range(len(fileLoc)):
-# 	if os.path.isfile(fileLoc[i]):
-# 		with open(fileLoc[i], "r") as f:
-# 			temp = json.load(f)
-# 			for key in temp.keys():
-# 				defaults["stack_parameters"][key] = temp[key]
-# 		print(" + Found "+fileLoc[i])
-# 	else:
-# 		print(" - Did not find "+fileLoc[i])
-
-for i in range(len(fileLoc)):
-    if os.path.isfile(fileLoc[i]):
-        with open(fileLoc[i], "r") as f:
-            temp = json.load(f)
-            for sectionKey in temp.keys():
-                # if keySection is a string and in defaultFromIamIndex then map (it came from IAM)
-                # if type(temp[sectionKey]) is str and sectionKey in defaultsFromIamIndex:
-                #     defaults[defaultsFromIamIndex[sectionKey]][sectionKey] = temp[sectionKey]
-                # elif type(temp[sectionKey]) is dict:
-                if type(temp[sectionKey]) is dict:
-                    # otherwise loop through
-                    for key in temp[sectionKey].keys():
-                        defaults[sectionKey][key] = temp[sectionKey][key]
-            print(" + Found "+fileLoc[i])
-    else:
-        print(" - Did not find "+fileLoc[i])
-
-# Read in Custom Parameters
-        
-print("\n[ Loading params files... ]")
-
-customStackParamsFileLoc = []
-customStackParamsFileLoc.append(atlantis.dirs["settings"]+"service-role/params.json")
-customStackParamsFileLoc.append(atlantis.dirs["settings"]+"service-role/params-"+argPrefix+".json")
-
-# If params.json exists, read it in
-customStackParams = {}
-
-for i in range(len(customStackParamsFileLoc)):
-    if os.path.isfile(customStackParamsFileLoc[i]):
-        with open(customStackParamsFileLoc[i], "r") as f:
-            customData = json.load(f)
-            for key in customData.keys():
-                customStackParams[key] = customData[key]
-            print(" + Found "+customStackParamsFileLoc[i])
-    else:
-        print(" - Did not find "+customStackParamsFileLoc[i])
-
-# print the defaults
-# print(customStackParams)
-
-# Read in Custom Stack Tags
-        
-print("\n[ Loading tags files... ]")
-
-tagFileLoc = []
-tagFileLoc.append(atlantis.dirs["settings"]+"service-role/tags.json")
-tagFileLoc.append(atlantis.dirs["settings"]+"service-role/tags-"+argPrefix.lower()+".json")
-
-# If tags.json exists, read it in
-customSvcRoleTags = []
-
-for i in range(len(tagFileLoc)):
-    if os.path.isfile(tagFileLoc[i]):
-        with open(tagFileLoc[i], "r") as f:
-            tagData = json.load(f)
-            # Both customSvcRoleTags and tagData are arrays with {Key: string, Value: string} elements
-            # Loop through the elements in tagData
-            #   1. Search customSvcRoleTags array for an element with Key == tagData[i].Key
-            #   2. If it exists, replace it. Else, append
-            for j in range(len(tagData)):
-                found = False
-                for k in range(len(customSvcRoleTags)):
-                    if customSvcRoleTags[k]["Key"] == tagData[j]["Key"]:
-                        customSvcRoleTags[k]["Value"] = tagData[j]["Value"]
-                        found = True
-                        break
-                if not found:
-                    customSvcRoleTags.append(tagData[j])
-            
-
-            print(" + Found "+tagFileLoc[i])
-    else:
-        print(" - Did not find "+tagFileLoc[i])
-
-# print the customSvcRoleTags
-# print(customSvcRoleTags)
+defaults = settings["defaults"]
+custom_params = settings["custom_params"]
+custom_tags = settings["custom_tags"]
 
 # =============================================================================
 # PROMPTS
@@ -215,8 +134,8 @@ atlantis.getUserInput(prompts, parameters, promptSections)
 # Save files
 # =============================================================================
 
-print("[ Saving default json files... ]")
-
+# TODO: Move to atlantis save
+# TODO: What if prefix is not arg1
 tf = {
     "Prefix": parameters["stack_parameters"]["Prefix"],
 }
@@ -230,12 +149,12 @@ settingsFiles = [
 # we will progressively remove data as we save up the chain of files
 # to do this we will list the data to remove in reverse order
 removals = [
-    {
+    { # defaults.json
         "stack_parameters": ["Prefix"]
     }
 ]
 
-atlantis.saveSettingsFiles(settingsFiles, parameters, removals)
+atlantis.saveSettings(settingsFiles, parameters, removals)
 
 # =============================================================================
 # Generate
@@ -243,23 +162,18 @@ atlantis.saveSettingsFiles(settingsFiles, parameters, removals)
 
 tools.printCharStr("-", 80)
 
-script_info = {
-    "script_name": scriptName,
-    "args": argPrefix
-}
+config_environments = {}
 
-deploy_environments = {}
-
-# Append customStackParams to parameters["stack_parameters"]
-parameters["stack_parameters"].update(customStackParams)
+# Append custom_params to parameters["stack_parameters"]
+parameters["stack_parameters"].update(custom_params)
 
 # Prepend {"Key": "Atlantis", "Value": "iam"} and {"Key": "atlantis:Prefix", "Value": prefix} to tags list
-customSvcRoleTags.insert(0, {"Key": "Atlantis", "Value": "iam"})
-customSvcRoleTags.insert(1, {"Key": "atlantis:Prefix", "Value": parameters["stack_parameters"]["Prefix"]})
+custom_tags.insert(0, {"Key": "Atlantis", "Value": "iam"})
+custom_tags.insert(1, {"Key": "atlantis:Prefix", "Value": parameters["stack_parameters"]["Prefix"]})
 
-deploy_environments[deployEnv] = {
+config_environments[configEnv] = {
     "stack_parameters": parameters["stack_parameters"],
-    "tags": customSvcRoleTags
+    "tags": custom_tags
 }
 
 deploy_globals = parameters["globals"]
@@ -270,10 +184,10 @@ deploy_globals["ImageRepositories"] = "[]"
 
 # TODO: Read in all deployment environment files, order dictionary by default, test*/t*, beta*/b*, stage*/s*, prod*/p*,
 
-sam_deploy_info = atlantis.generateTomlFile(deploy_globals, deploy_environments, script_info )
+sam_deploy_info = atlantis.generateTomlFile(deploy_globals, config_environments, script_info )
 
 output_dir = sam_deploy_info["output_dir"]
-sam_deploy_commands = sam_deploy_info["sam_deploy_commands"][deployEnv]
+sam_deploy_commands = sam_deploy_info["sam_deploy_commands"][configEnv]
 
 print("")
 tools.printCharStr("=", 80, bookend="!", text="CREATE ROLE INFRASTRUCTURE STACK")

@@ -389,10 +389,9 @@ def getUserInput(prompts, parameters, promptSections):
     tools.printCharStr("-", 80, newlines=True)	
 
 
-def generateTomlFile(deploy_globals, deploy_environments, script_info ):
+def generateTomlFile(deploy_globals, config_environments, script_info ):
 
-    # take script_info["script_name"] and remove .py from the end
-    infraType = script_info["script_name"].split(".")[0]
+    infraType = script_info["infra"]
     output_dir = f"../{infraType}-infrastructure"
 
     Prefix = script_info["args"].split(" ")[0]
@@ -423,7 +422,7 @@ def generateTomlFile(deploy_globals, deploy_environments, script_info ):
         "$CAPABILITIES$": deploy_globals["Capabilities"],
         "$CONFIRM_CHANGESET$": deploy_globals["ConfirmChangeset"],
         "$IMAGE_REPOSITORIES$": deploy_globals["ImageRepositories"],
-        "$SCRIPT_NAME$": script_info["script_name"],
+        "$SCRIPT_NAME$": script_info["name"],
         "$SCRIPT_ARGS$": script_info["args"]
     }
 
@@ -433,7 +432,7 @@ def generateTomlFile(deploy_globals, deploy_environments, script_info ):
         toml_content = toml_content.replace(placeholder, str(value))
 
     # Add the individual deployment sections
-    for dkey, dvalue in deploy_environments.items():
+    for dkey, dvalue in config_environments.items():
 
         sam_deploy_command = f"sam deploy --config-env {dkey} --config-file {toml_filename} --profile default"
         sam_deploy_commands[dkey] = sam_deploy_command
@@ -487,7 +486,101 @@ def generateTomlFile(deploy_globals, deploy_environments, script_info ):
 
     return { "output_dir": output_dir, "sam_deploy_commands": sam_deploy_commands }
 
-def saveSettingsFiles(settingsFiles, parameters, removals):
+def loadSettings(script_info, defaults):
+
+    args = script_info["args"].split(" ")
+
+    # Create a file location array - this is the hierarchy of files we will gather defaults from. The most recent file appended (lower on list) will overwrite previous values
+    defaultsFileLoc = []
+    defaultsFileLoc.append(f"{dirs["settings"]}{script_info["infra"]}/defaults.json")
+    defaultsFileLoc.append(f"{dirs["settings"]}{script_info["infra"]}/defaults-{args[0]}.json")
+
+    customParamsFileLoc = []
+    customParamsFileLoc.append(f"{dirs["settings"]}{script_info["infra"]}/params.json")
+    customParamsFileLoc.append(f"{dirs["settings"]}{script_info["infra"]}/params-{args[0]}.json")
+
+    customTagsFileLoc = []
+    customTagsFileLoc.append(f"{dirs["settings"]}{script_info["infra"]}/tags.json")
+    customTagsFileLoc.append(f"{dirs["settings"]}{script_info["infra"]}/tags-{args[0]}.json")
+
+    if args.length > 1:
+        defaultsFileLoc.append(f"{dirs["settings"]}{script_info["infra"]}/defaults-{args[0]}.json")
+        customParamsFileLoc.append(f"{dirs["settings"]}{script_info["infra"]}/params-{args[0]}-{args[1]}.json")
+        customTagsFileLoc.append(f"{dirs["settings"]}{script_info["infra"]}/tags-{args[0]}-{args[1]}.json")
+
+    if args.length > 2:
+        defaultsFileLoc.append(f"{dirs["settings"]}{script_info["infra"]}/defaults-{args[0]}-{args[1]}.json")
+        customParamsFileLoc.append(f"{dirs["settings"]}{script_info["infra"]}/params-{args[0]}-{args[1]}-{args[2]}.json")
+        customTagsFileLoc.append(f"{dirs["settings"]}{script_info["infra"]}/tags-{args[0]}-{args[1]}-{args[2]}.json")
+
+
+    print("[ Loading default json files... ]")
+
+
+    for i in range(len(defaultsFileLoc)):
+        if os.path.isfile(defaultsFileLoc[i]):
+            with open(defaultsFileLoc[i], "r") as f:
+                temp = json.load(f)
+                for sectionKey in temp.keys():
+                    for key in temp[sectionKey].keys():
+                        defaults[sectionKey][key] = temp[sectionKey][key]
+                print(" + Found "+defaultsFileLoc[i])
+        else:
+            print(" - Did not find "+defaultsFileLoc[i])
+
+    # Read in Custom Parameters
+            
+    print("\n[ Loading params files... ]")
+
+
+    # If params.json exists, read it in
+    customParams = {}
+
+    for i in range(len(customParamsFileLoc)):
+        if os.path.isfile(customParamsFileLoc[i]):
+            with open(customParamsFileLoc[i], "r") as f:
+                customData = json.load(f)
+                for key in customData.keys():
+                    customParams[key] = customData[key]
+                print(" + Found "+customParamsFileLoc[i])
+        else:
+            print(" - Did not find "+customParamsFileLoc[i])
+
+    # Read in Custom Stack Tags
+            
+    print("\n[ Loading tags files... ]")
+
+    # If tags.json exists, read it in
+    customTags = []
+
+    for i in range(len(customTagsFileLoc)):
+        if os.path.isfile(customTagsFileLoc[i]):
+            with open(customTagsFileLoc[i], "r") as f:
+                tagData = json.load(f)
+                # Both customTags and tagData are arrays with {Key: string, Value: string} elements
+                # Loop through the elements in tagData
+                #   1. Search customTags array for an element with Key == tagData[i].Key
+                #   2. If it exists, replace it. Else, append
+                for j in range(len(tagData)):
+                    found = False
+                    for k in range(len(customTags)):
+                        if customTags[k]["Key"] == tagData[j]["Key"]:
+                            customTags[k]["Value"] = tagData[j]["Value"]
+                            found = True
+                            break
+                    if not found:
+                        customTags.append(tagData[j])
+                
+
+                print(" + Found "+customTagsFileLoc[i])
+        else:
+            print(" - Did not find "+customTagsFileLoc[i])
+
+    return {"defaults": defaults, "customParams": customParams, "customTags": customTags}
+
+def saveSettings(settingsFiles, parameters, removals):
+
+    print("[ Saving default json files... ]")
 
     data = []
     data.append(json.dumps(parameters, indent=4))
