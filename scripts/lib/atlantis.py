@@ -4,7 +4,7 @@
 #
 # CLI Generator Variable and Function Library for Atlantis CI/CD CodePipeline CloudFormation Template
 # Chad Leigh Kluck
-# v2024.06.17 : lib/atlantis.py
+# v2024.12.30 : lib/atlantis.py
 
 import os
 import json
@@ -200,34 +200,34 @@ prompts = {
 
     # Template specific - pipeline.py
 
-    "pipeline_template_location-BucketName": {
-        "name": "S3 Bucket Name for Pipeline Template",
-        "required": True,
+    "TemplateLocationBucketName": {
+        "name": "Template Location: S3 Bucket",
+        "required": False,
         "regex": "^[a-z0-9][a-z0-9-]*[a-z0-9]$|^$",
-        "help": "S3 bucket name must be lowercase, start with a letter, and contain only letters, numbers, and dashes",
+        "help": "S3 bucket name must be lowercase, start with a letter, and contain only letters, numbers, and dashes. Leave blank if using a local template.",
         "description": "Where is the pipeline template stored?",
         "examples": "63klabs, mybucket",
         "default": "63klabs"
     },
 
-    "pipeline_template_location-BucketKey": {
-        "name": "S3 Bucket Key for Pipeline Template",
-        "required": True,
+    "TemplateLocationPrefix": {
+        "name": "Template Location: S3 Prefix",
+        "required": False,
         "regex": "^\\/[a-zA-Z0-9\\/_-]+\\/$|^\\/$",
-        "help": "S3 bucket key must be lowercase, start and end with a slash and contain only letters, numbers, dashes and underscores",
+        "help": "S3 bucket prefix must be lowercase, start and end with a slash and contain only letters, numbers, dashes and underscores. Leave blank if using a local template.",
         "description": "Where is the pipeline template stored?",
         "examples": "/atlantis/v2/, /atlantis/v3/",
         "default": "/atlantis/v2/"
     },
 
-    "pipeline_template_location-FileName": {
-        "name": "Pipeline Template File Name",
+    "TemplateKeyFileName": {
+        "name": "Template: Key of S3 Object or Local File Name",
         "required": True,
         "regex": "^[a-zA-Z0-9][a-zA-Z0-9-_]*[a-zA-Z0-9]\\.(yml|yaml|json)$",
-        "help": "File name must be lowercase, start with a letter, and contain only letters, numbers, and dashes",
-        "description": "What is the pipeline template file name?",
-        "examples": "template-pipeline.yml, template-pipeline.yaml",
-        "default": "template-pipeline.yml"
+        "help": "File name must be lowercase, start with a letter, and contain only letters, numbers, and dashes. If using a local template do not include path. Make sure local templates are stored in the /templates directory of the appropriate infrastructure.",
+        "description": "What is the template file name?",
+        "examples": "template-pipeline.yml, template-pipeline.yaml, template-storage.yml",
+        "default": ""
     },
 
     "AwsAccountId": {
@@ -391,8 +391,8 @@ def getUserInput(prompts, parameters, promptSections):
 
 def generateTomlFile(deploy_globals, config_environments, script_info ):
 
-    infraType = script_info["infra"]
-    output_dir = f"../{infraType}-infrastructure"
+    infra_type = script_info["infra"]
+    output_dir = f"../{infra_type}-infrastructure"
 
     Prefix = script_info["args"].split(" ")[0]
     ProjectId = ""
@@ -402,7 +402,7 @@ def generateTomlFile(deploy_globals, config_environments, script_info ):
     if ProjectId != "":
         ProjectIdentifier = Prefix + "-" + ProjectId
 
-    toml_filename = f"samconfig-{ProjectIdentifier}-{infraType}.toml"
+    toml_filename = f"samconfig-{ProjectIdentifier}-{infra_type}.toml"
     sam_deploy_commands = {}
 
     if not os.path.isdir(output_dir):
@@ -414,9 +414,16 @@ def generateTomlFile(deploy_globals, config_environments, script_info ):
     with open(template_path, "r") as f:
         toml_template = f.read()
 
+    InfraTemplateFile = ""
+    # If deploy_globals["TemplateLocationBucketName"] is not empty, then the template is in S3
+    if deploy_globals["TemplateLocationBucketName"] != "":
+        InfraTemplateFile = f"s3://{deploy_globals['TemplateLocationBucketName']}{deploy_globals['TemplateLocationPrefix']}{deploy_globals['TemplateKeyFileName']}"
+    else:
+        InfraTemplateFile = f"./{infra_type}/templates/{deploy_globals['TemplateKeyFileName']}"
+
     # Create a dictionary of replacements
     replacements = {
-        "$TEMPLATE_FILE$": deploy_globals["TemplateFile"],
+        "$TEMPLATE_FILE$": InfraTemplateFile,
         "$S3_BUCKET_FOR_DEPLOY_ARTIFACTS$": deploy_globals["DeployBucket"],
         "$REGION$": deploy_globals["AwsRegion"],
         "$CAPABILITIES$": deploy_globals["Capabilities"],
@@ -455,7 +462,7 @@ def generateTomlFile(deploy_globals, config_environments, script_info ):
         if dkey != "default":
             stack_identifier += "-"+dkey
 
-        stack_name = f"{stack_identifier}-{infraType}"
+        stack_name = f"{stack_identifier}-{infra_type}"
 
         toml_deployParameters = {
             "stack_name" : stack_name,
@@ -480,7 +487,7 @@ def generateTomlFile(deploy_globals, config_environments, script_info ):
         toml_content += "\n"
 
     # Write the processed TOML file
-    output_toml_path = f"{output_dir}/samconfig-{ProjectIdentifier}-{infraType}.toml"
+    output_toml_path = f"{output_dir}/samconfig-{ProjectIdentifier}-{infra_type}.toml"
     with open(output_toml_path, "w") as f:
         f.write(toml_content)
 
@@ -503,12 +510,12 @@ def loadSettings(script_info, defaults):
     customTagsFileLoc.append(f"{dirs["settings"]}{script_info["infra"]}/tags.json")
     customTagsFileLoc.append(f"{dirs["settings"]}{script_info["infra"]}/tags-{args[0]}.json")
 
-    if args.length > 1:
+    if len(args) > 1:
         defaultsFileLoc.append(f"{dirs["settings"]}{script_info["infra"]}/defaults-{args[0]}.json")
         customParamsFileLoc.append(f"{dirs["settings"]}{script_info["infra"]}/params-{args[0]}-{args[1]}.json")
         customTagsFileLoc.append(f"{dirs["settings"]}{script_info["infra"]}/tags-{args[0]}-{args[1]}.json")
 
-    if args.length > 2:
+    if len(args) > 2:
         defaultsFileLoc.append(f"{dirs["settings"]}{script_info["infra"]}/defaults-{args[0]}-{args[1]}.json")
         customParamsFileLoc.append(f"{dirs["settings"]}{script_info["infra"]}/params-{args[0]}-{args[1]}-{args[2]}.json")
         customTagsFileLoc.append(f"{dirs["settings"]}{script_info["infra"]}/tags-{args[0]}-{args[1]}-{args[2]}.json")
@@ -534,14 +541,14 @@ def loadSettings(script_info, defaults):
 
 
     # If params.json exists, read it in
-    customParams = {}
+    custom_params = {}
 
     for i in range(len(customParamsFileLoc)):
         if os.path.isfile(customParamsFileLoc[i]):
             with open(customParamsFileLoc[i], "r") as f:
                 customData = json.load(f)
                 for key in customData.keys():
-                    customParams[key] = customData[key]
+                    custom_params[key] = customData[key]
                 print(" + Found "+customParamsFileLoc[i])
         else:
             print(" - Did not find "+customParamsFileLoc[i])
@@ -551,34 +558,57 @@ def loadSettings(script_info, defaults):
     print("\n[ Loading tags files... ]")
 
     # If tags.json exists, read it in
-    customTags = []
+    custom_tags = []
 
     for i in range(len(customTagsFileLoc)):
         if os.path.isfile(customTagsFileLoc[i]):
             with open(customTagsFileLoc[i], "r") as f:
                 tagData = json.load(f)
-                # Both customTags and tagData are arrays with {Key: string, Value: string} elements
+                # Both custom_tags and tagData are arrays with {Key: string, Value: string} elements
                 # Loop through the elements in tagData
-                #   1. Search customTags array for an element with Key == tagData[i].Key
+                #   1. Search custom_tags array for an element with Key == tagData[i].Key
                 #   2. If it exists, replace it. Else, append
                 for j in range(len(tagData)):
                     found = False
-                    for k in range(len(customTags)):
-                        if customTags[k]["Key"] == tagData[j]["Key"]:
-                            customTags[k]["Value"] = tagData[j]["Value"]
+                    for k in range(len(custom_tags)):
+                        if custom_tags[k]["Key"] == tagData[j]["Key"]:
+                            custom_tags[k]["Value"] = tagData[j]["Value"]
                             found = True
                             break
                     if not found:
-                        customTags.append(tagData[j])
+                        custom_tags.append(tagData[j])
                 
 
                 print(" + Found "+customTagsFileLoc[i])
         else:
             print(" - Did not find "+customTagsFileLoc[i])
 
-    return {"defaults": defaults, "customParams": customParams, "customTags": customTags}
+    return {"defaults": defaults, "custom_params": custom_params, "custom_tags": custom_tags}
 
-def saveSettings(settingsFiles, parameters, removals):
+def saveSettings(parameters, removals, script_info):
+
+    InfraType = script_info["infra"]
+    args = script_info["args"].split(" ")
+
+    Prefix = parameters["stack_parameters"]["Prefix"]
+    ProjectId = ""
+    StageId = ""
+    if "ProjectId" in parameters["stack_parameters"]:
+        ProjectId = parameters["stack_parameters"]["ProjectId"]
+    if "StageId" in parameters["stack_parameters"]:
+        StageId = parameters["stack_parameters"]["StageId"]
+
+    # we list the files in reverse as we work up the normal read-in chain
+    settingsFiles = [
+        f"{dirs["settings"]}{InfraType}/defaults-{Prefix}.json",
+        f"{dirs["settings"]}{InfraType}/defaults.json"
+    ]
+
+    if ProjectId != "":
+        defaultsFileLoc.insert(0, f"{dirs["settings"]}{script_info["infra"]}/defaults-{ProjectId}.json")
+
+    if StageId != "":
+        defaultsFileLoc.insert(0, f"{dirs["settings"]}{script_info["infra"]}/defaults-{args[0]}-{args[1]}.json")
 
     print("[ Saving default json files... ]")
 

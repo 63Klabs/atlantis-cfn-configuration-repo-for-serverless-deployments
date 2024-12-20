@@ -1,5 +1,6 @@
 {
     "stack_parameters": {
+        "Prefix": "hank",
         "S3BucketNameOrgPrefix": "asd",
         "RolePath": "/asdf/",
         "PermissionsBoundaryArn": ""

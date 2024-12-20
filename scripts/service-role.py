@@ -31,7 +31,6 @@ argPrefix = "acme"
 argAcceptDefaults = False
 script_name = sys.argv[0]
 
-
 # Check to make sure there is at least one argument else display message and exit.
 if len(sys.argv) > 1:
     argPrefix = sys.argv[1].lower()
@@ -54,7 +53,9 @@ defaults = {
 		"PermissionsBoundaryArn": atlantis.prompts["PermissionsBoundaryArn"]["default"]
     },
     "globals": {
-        "TemplateFile": "./templates/template-service-role.yml", # relative to generated toml file
+        "TemplateLocationBucketName": "",
+        "TemplateLocationPrefix": "",
+        "TemplateKeyFileName": "template-service-role.yml",
         "AwsRegion": atlantis.prompts["AwsRegion"]["default"],
         "DeployBucket": atlantis.prompts["DeployBucket"]["default"],
         "ConfirmChangeset": atlantis.prompts["ConfirmChangeset"]["default"]
@@ -119,6 +120,15 @@ prompts["stack_parameters"]["RolePath"]["default"] = defaults["stack_parameters"
 prompts["stack_parameters"]["PermissionsBoundaryArn"] = atlantis.prompts["PermissionsBoundaryArn"]
 prompts["stack_parameters"]["PermissionsBoundaryArn"]["default"] = defaults["stack_parameters"]["PermissionsBoundaryArn"]
 
+prompts["globals"]["TemplateLocationBucketName"] = atlantis.prompts["TemplateLocationBucketName"]
+prompts["globals"]["TemplateLocationBucketName"]["default"] = defaults["globals"]["TemplateLocationBucketName"]
+
+prompts["globals"]["TemplateLocationPrefix"] = atlantis.prompts["TemplateLocationPrefix"]
+prompts["globals"]["TemplateLocationPrefix"]["default"] = defaults["globals"]["TemplateLocationPrefix"]
+
+prompts["globals"]["TemplateKeyFileName"] = atlantis.prompts["TemplateKeyFileName"]
+prompts["globals"]["TemplateKeyFileName"]["default"] = defaults["globals"]["TemplateKeyFileName"]
+
 prompts["globals"]["AwsRegion"] = atlantis.prompts["AwsRegion"]
 prompts["globals"]["AwsRegion"]["default"] = defaults["globals"]["AwsRegion"]
 
@@ -130,21 +140,17 @@ prompts["globals"]["ConfirmChangeset"]["default"] = defaults["globals"]["Confirm
 
 atlantis.getUserInput(prompts, parameters, promptSections)
 
+# The user may have entered different values than the original arguments
+script_info["args"] = parameters["stack_parameters"]["Prefix"]
+# check if there is a ProjectId property in the parameters. Do same for StageId
+if "ProjectId" in parameters["stack_parameters"]:
+    script_info["args"] += f" {parameters["stack_parameters"]["ProjectId"]}"
+if "StageId" in parameters["stack_parameters"]:
+    script_info["args"] += f" {parameters["stack_parameters"]["StageId"]}"
+
 # =============================================================================
 # Save files
 # =============================================================================
-
-# TODO: Move to atlantis save
-# TODO: What if prefix is not arg1
-tf = {
-    "Prefix": parameters["stack_parameters"]["Prefix"],
-}
-
-# we list the files in reverse as we work up the normal read-in chain
-settingsFiles = [
-    atlantis.dirs["settings"]+"service-role/defaults-"+tf["Prefix"]+".json",
-    atlantis.dirs["settings"]+"service-role/defaults.json"
-]
 
 # we will progressively remove data as we save up the chain of files
 # to do this we will list the data to remove in reverse order
@@ -154,7 +160,7 @@ removals = [
     }
 ]
 
-atlantis.saveSettings(settingsFiles, parameters, removals)
+atlantis.saveSettings(parameters, removals, script_info)
 
 # =============================================================================
 # Generate
@@ -167,24 +173,29 @@ config_environments = {}
 # Append custom_params to parameters["stack_parameters"]
 parameters["stack_parameters"].update(custom_params)
 
+# Add things that are not user editable
+
 # Prepend {"Key": "Atlantis", "Value": "iam"} and {"Key": "atlantis:Prefix", "Value": prefix} to tags list
 custom_tags.insert(0, {"Key": "Atlantis", "Value": "iam"})
 custom_tags.insert(1, {"Key": "atlantis:Prefix", "Value": parameters["stack_parameters"]["Prefix"]})
 
+deploy_globals = parameters["globals"]
+
+deploy_globals["Capabilities"] = "CAPABILITY_IAM"
+deploy_globals["ImageRepositories"] = "[]"
+
+# If this were  Read in all deployment environment files, order dictionary by default, test*/t*, beta*/b*, stage*/s*, prod*/p*,
+# Instead, since we just have the default environment we'll set it manually
 config_environments[configEnv] = {
     "stack_parameters": parameters["stack_parameters"],
     "tags": custom_tags
 }
 
-deploy_globals = parameters["globals"]
-
-deploy_globals["TemplateFile"] = "template-service-role.yml"
-deploy_globals["Capabilities"] = "CAPABILITY_IAM"
-deploy_globals["ImageRepositories"] = "[]"
-
-# TODO: Read in all deployment environment files, order dictionary by default, test*/t*, beta*/b*, stage*/s*, prod*/p*,
-
 sam_deploy_info = atlantis.generateTomlFile(deploy_globals, config_environments, script_info )
+
+# =============================================================================
+# CLI OUTPUT
+# =============================================================================
 
 output_dir = sam_deploy_info["output_dir"]
 sam_deploy_commands = sam_deploy_info["sam_deploy_commands"][configEnv]
