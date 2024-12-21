@@ -168,6 +168,11 @@ atlantis.saveSettings(parameters, removals, script_info)
 
 tools.printCharStr("-", 80)
 
+deploy_globals = parameters["globals"]
+
+deploy_globals["Capabilities"] = "CAPABILITY_IAM"
+deploy_globals["ImageRepositories"] = "[]"
+
 config_environments = {}
 
 # Append custom_params to parameters["stack_parameters"]
@@ -176,13 +181,9 @@ parameters["stack_parameters"].update(custom_params)
 # Add things that are not user editable
 
 # Prepend {"Key": "Atlantis", "Value": "iam"} and {"Key": "atlantis:Prefix", "Value": prefix} to tags list
-custom_tags.insert(0, {"Key": "Atlantis", "Value": "iam"})
+custom_tags.insert(0, {"Key": "Atlantis", "Value": "service-role"})
 custom_tags.insert(1, {"Key": "atlantis:Prefix", "Value": parameters["stack_parameters"]["Prefix"]})
 
-deploy_globals = parameters["globals"]
-
-deploy_globals["Capabilities"] = "CAPABILITY_IAM"
-deploy_globals["ImageRepositories"] = "[]"
 
 # If this were  Read in all deployment environment files, order dictionary by default, test*/t*, beta*/b*, stage*/s*, prod*/p*,
 # Instead, since we just have the default environment we'll set it manually
