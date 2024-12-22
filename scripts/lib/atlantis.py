@@ -15,6 +15,7 @@ import sys
 
 import tools
 import yaml
+import glob
 
 hello = "Hello, World"
 
@@ -217,7 +218,7 @@ prompts = {
         "help": "S3 bucket prefix must be lowercase, start and end with a slash and contain only letters, numbers, dashes and underscores. Leave blank if using a local template.",
         "description": "Where is the pipeline template stored?",
         "examples": "/atlantis/v2/, /atlantis/v3/",
-        "default": "/atlantis/v2/"
+        "default": "/" #/atlantis/v2/
     },
 
     "TemplateKeyFileName": {
@@ -530,6 +531,9 @@ def loadSettings(script_info, defaults):
                 temp = json.load(f)
                 for sectionKey in temp.keys():
                     for key in temp[sectionKey].keys():
+                        # if sectionKey is not in defaults, add it
+                        if sectionKey not in defaults:
+                            defaults[sectionKey] = {}
                         defaults[sectionKey][key] = temp[sectionKey][key]
                 print(" + Found "+defaultsFileLoc[i])
         else:
@@ -605,10 +609,10 @@ def saveSettings(parameters, removals, script_info):
     ]
 
     if ProjectId != "":
-        defaultsFileLoc.insert(0, f"{dirs["settings"]}{script_info["infra"]}/defaults-{ProjectId}.json")
+        settingsFiles.insert(0, f"{dirs["settings"]}{script_info["infra"]}/defaults-{ProjectId}.json")
 
     if StageId != "":
-        defaultsFileLoc.insert(0, f"{dirs["settings"]}{script_info["infra"]}/defaults-{args[0]}-{args[1]}.json")
+        settingsFiles.insert(0, f"{dirs["settings"]}{script_info["infra"]}/defaults-{args[0]}-{args[1]}.json")
 
     print("[ Saving default json files... ]")
 
@@ -636,3 +640,50 @@ def saveSettings(parameters, removals, script_info):
         with open(file, "w") as f:
             f.write(d)
             f.close()
+
+def getConfigEnvironments(script_info):
+    # Read in all deployment environment files, order dictionary by default, test*/t*, beta*/b*, stage*/s*, prod*/p*,
+    # Instead, since we just have the default environment we'll set it manually
+    config_environments = {}
+    
+    infra_type = script_info["infra"]
+    args = script_info["args"].split(" ")
+    Prefix = args[0]
+    ProjectId = ""
+    StageId = ""
+    if len(args) > 1:
+        ProjectId = args[1]
+    if len(args) > 2:
+        StageId = args[2]
+
+    if StageId != "":
+        stages = ["t", "b", "s", "p"] # test, beta, stage, prod
+        # loop through stages
+        for stage in stages:
+            # find all files that match the pattern defaults-{Prefix}-{stage*}.json
+            # if there are any, read them in and add them to the config_environments dictionary
+            # if there are none, skip
+            # if there is only one, add it to the config_environments dictionary with the key {stage}
+            # if there are multiple, add them to the config_environments dictionary with the key {stage}{i}
+            # where i is the index of the file in the list of files
+            files = glob.glob(f"{dirs["settings"]}{infra_type}/defaults-{Prefix}-{ProjectId}-{stage}*")
+            print(files)
+            if len(files) > 0:
+                for i in range(len(files)):
+                    # go through all the files and parse out the stage from the filename
+                    # add the stage to the config_environments dictionary
+                    # read in the file and add it to the config_environments dictionary
+                    stage = files[i].split("-")[-1][0]
+
+        # Now that we know what stages exist, we can loop through config_environments and use loadSettings to read in the files
+        for stage in config_environments.keys():
+            temp_script_info = script_info
+            temp_script_info["args"] = f"{Prefix} {ProjectId} {stage}"
+            config_environments[stage] = loadSettings(temp_script_info, {})
+            print(config_environments["stage"])
+
+    else:
+        config_environments["default"] = loadSettings(script_info, {})
+
+    print(config_environments)
+    return config_environments

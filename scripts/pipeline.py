@@ -37,16 +37,22 @@ argPrefix = "acme"
 argProjectId = "myproject"
 argStageId = "test"
 argAcceptDefaults = False
-scriptName = sys.argv[0]
+script_name = sys.argv[0].lower()
 
 # Check to make sure there are at least three arguments. If there are not 3 arguments then display message and exit. If there are 3 arguments set Prefix, ProjectId, and Stage
 if len(sys.argv) > 3:
-    argPrefix = sys.argv[1]
-    argProjectId = sys.argv[2]
-    argStageId = sys.argv[3]
+    argPrefix = sys.argv[1].lower()
+    argProjectId = sys.argv[2].lower()
+    argStageId = sys.argv[3].lower()
 else:
-    print("\n\nUsage: python "+scriptName+" <Prefix> <ProjectId> <StageId>\n\n")
+    print("\n\nUsage: python "+script_name+" <Prefix> <ProjectId> <StageId>\n\n")
     sys.exit()
+
+script_info = {
+    "name": script_name,
+    "args": argPrefix,
+    "infra": script_name.split(".")[0]
+}
 
 # Check to make sure Prefix + ProjectId is less than or equal to maxLenPrefixProjId
 if len(argPrefix+argProjectId) > constraint["maxLenPrefixProjId"]:
@@ -59,44 +65,6 @@ if len(argPrefix+argProjectId+argStageId) > constraint["maxLenStage"] + constrai
     print("\n\nError: Prefix + ProjectId + Stage is greater than "+str(constraint["maxLenStage"] + constraint["maxLenPrefixProjId"])+" characters.")
     print("Because some resources have a maximum length of 63 and require additional descriptors in their name, Prefix + ProjectId + Stage is restricted to "+str(constraint["maxLenStage"] + constraint["maxLenPrefixProjId"])+" characters.\n\n")
     sys.exit()
-
-# defaultsFromIam = [
-#     {
-#         "key": "Prefix",
-#         "mapToSection": "stack_parameters",
-#     },
-#     {
-#         "key": "S3BucketNameOrgPrefix",
-#         "mapToSection": "stack_parameters",
-#     },
-#     {
-#         "key": "RolePath",
-#         "mapToSection": "stack_parameters",
-#     },
-#     {
-#         "key": "PermissionsBoundaryArn",
-#         "mapToSection": "stack_parameters",
-#     },
-#     {
-#         "key": "AwsAccountId",
-#         "mapToSection": "application",
-#     },
-#     {
-#         "key": "AwsRegion",
-#         "mapToSection": "application",
-#     },
-#     {
-#         "key": "ServiceRoleARN",
-#         "mapToSection": "application",
-#     }
-# ]
-
-# defaultsFromIamArray = []
-# defaultsFromIamIndex = {}
-# # put each key from defaultsFromIam into an array
-# for item in defaultsFromIam:
-#     defaultsFromIamArray.append(item["key"])
-#     defaultsFromIamIndex[item["key"]] = item["mapToSection"]
 
 # Default values - Set any of these defaults to your own in the defaults file
 defaults = {
@@ -125,8 +93,10 @@ defaults = {
         "CodeCommitRepository": "",
         "CodeCommitBranch": atlantis.prompts["CodeCommitBranch"]["default"]
     },
-    "global": {
-        "TemplateFile": "./templates/template-service-role.yml", # relative to generated toml file
+    "globals": {
+        "TemplateLocationBucketName": "",
+        "TemplateLocationPrefix": "/",
+        "TemplateKeyFileName": "template-pipeline.yml",
         "AwsRegion": atlantis.prompts["AwsRegion"]["default"],
         "DeployBucket": atlantis.prompts["DeployBucket"]["default"],
         "ConfirmChangeset": atlantis.prompts["ConfirmChangeset"]["default"]
@@ -149,103 +119,17 @@ if re.match("^prod", argStageId):
 else:
     defaults["stack_parameters"]["CodeCommitBranch"] = argStageId
 
-# Read in defaults
-    
-print("[ Loading .default files... ]")
+configEnv = argStageId
 
-# Create a file location array - this is the hierarchy of files we will gather defaults from. The most recent file appended (lower on list) will overwrite previous values
-fileLoc = []
-fileLoc.append(atlantis.dirs["settings"]["Iam"]+"defaults.json")
-fileLoc.append(atlantis.dirs["settings"]["Iam"]+"defaults-"+argPrefix+".json")
-fileLoc.append(atlantis.dirs["settings"]["Pipeline"]+"defaults.json")
-fileLoc.append(atlantis.dirs["settings"]["Pipeline"]+"defaults-"+argPrefix+".json")
-fileLoc.append(atlantis.dirs["settings"]["Pipeline"]+"defaults-"+argPrefix+"-"+argProjectId+".json")
-fileLoc.append(atlantis.dirs["settings"]["Pipeline"]+"defaults-"+argPrefix+"-"+argProjectId+"-"+argStageId+".json")
+# =============================================================================
+# Load Settings
+# =============================================================================
 
-for i in range(len(fileLoc)):
-    if os.path.isfile(fileLoc[i]):
-        with open(fileLoc[i], "r") as f:
-            temp = json.load(f)
-            for sectionKey in temp.keys():
-                # if keySection is a string and in defaultFromIamIndex then map (it came from IAM)
-                # if type(temp[sectionKey]) is str and sectionKey in defaultsFromIamIndex:
-                #     defaults[defaultsFromIamIndex[sectionKey]][sectionKey] = temp[sectionKey]
-                # elif type(temp[sectionKey]) is dict:
-                if type(temp[sectionKey]) is dict:
-                    # otherwise loop through
-                    for key in temp[sectionKey].keys():
-                        defaults[sectionKey][key] = temp[sectionKey][key]
-            print(" + Found "+fileLoc[i])
-    else:
-        print(" - Did not find "+fileLoc[i])
+settings = atlantis.loadSettings(script_info, defaults)
 
-# print the defaults
-# print(defaults)
-
-# Read in Custom Parameters
-        
-print("\n[ Loading params files... ]")
-
-customStackParamsFileLoc = []
-customStackParamsFileLoc.append(atlantis.dirs["settings"]["Pipeline"]+"params.json")
-customStackParamsFileLoc.append(atlantis.dirs["settings"]["Pipeline"]+"params-"+argPrefix+".json")
-customStackParamsFileLoc.append(atlantis.dirs["settings"]["Pipeline"]+"params-"+argPrefix+"-"+argProjectId+".json")
-customStackParamsFileLoc.append(atlantis.dirs["settings"]["Pipeline"]+"params-"+argPrefix+"-"+argProjectId+"-"+argStageId+".json")
-
-# If params.json exists, read it in
-customStackParams = {}
-
-for i in range(len(customStackParamsFileLoc)):
-    if os.path.isfile(customStackParamsFileLoc[i]):
-        with open(customStackParamsFileLoc[i], "r") as f:
-            customData = json.load(f)
-            for key in customData.keys():
-                customStackParams[key] = customData[key]
-            print(" + Found "+customStackParamsFileLoc[i])
-    else:
-        print(" - Did not find "+customStackParamsFileLoc[i])
-
-# print the defaults
-# print(customStackParams)
-        
-# Read in Custom Stack Tags
-        
-print("\n[ Loading tags files... ]")
-
-tagFileLoc = []
-tagFileLoc.append(atlantis.dirs["settings"]["Pipeline"]+"tags.json")
-tagFileLoc.append(atlantis.dirs["settings"]["Pipeline"]+"tags-"+argPrefix+".json")
-tagFileLoc.append(atlantis.dirs["settings"]["Pipeline"]+"tags-"+argPrefix+"-"+argProjectId+".json")
-tagFileLoc.append(atlantis.dirs["settings"]["Pipeline"]+"tags-"+argPrefix+"-"+argProjectId+"-"+argStageId+".json")
-
-# If tags.json exists, read it in
-customStackTags = []
-
-for i in range(len(tagFileLoc)):
-    if os.path.isfile(tagFileLoc[i]):
-        with open(tagFileLoc[i], "r") as f:
-            tagData = json.load(f)
-            # Both customStackTags and tagData are arrays with {Key: string, Value: string} elements
-            # Loop through the elements in tagData
-            #   1. Search customStackTags array for an element with Key == tagData[i].Key
-            #   2. If it exists, replace it. Else, append
-            for x in range(len(tagData)):
-                found = False
-                for j in range(len(customStackTags)):
-                    if customStackTags[j]["Key"] == tagData[x]["Key"]:
-                        customStackTags[j]["Value"] = tagData[x]["Value"]
-                        found = True
-                        break
-                if not found:
-                    customStackTags.append(tagData[x])
-            
-
-            print(" + Found "+tagFileLoc[i])
-    else:
-        print(" - Did not find "+tagFileLoc[i])
-
-# print the customStackTags
-# print(customStackTags)
+defaults = settings["defaults"]
+custom_params = settings["custom_params"]
+custom_tags = settings["custom_tags"]
 
 # =============================================================================
 # PROMPTS
@@ -253,9 +137,9 @@ for i in range(len(tagFileLoc)):
 
 print("")
 tools.printCharStr("=", 80, bookend="!", text="INSTRUCTIONS")
-tools.printCharStr(" ", 80, bookend="!", text="Enter parameter values to generate CloudFormation Input and AWS CLI commands")
+tools.printCharStr(" ", 80, bookend="!", text="Enter parameter values to generate the Code Pipeline configuration")
 tools.printCharStr("-", 80, bookend="!")
-tools.printCharStr(" ", 80, bookend="!", text="The script will then generate an input file and CLI cmds to create the stack")
+tools.printCharStr(" ", 80, bookend="!", text="The script will then generate a SAM TOML config file and CLI commands")
 tools.printCharStr("-", 80, bookend="!")
 tools.printCharStr(" ", 80, bookend="!", text="Leave blank and press Enter/Return to accept default in square brackets []")
 tools.printCharStr(" ", 80, bookend="!", text="Enter a dash '-' to clear default and leave optional responses blank.")
@@ -266,16 +150,16 @@ print("")
 
 promptSections = [
     {
-        "key": "global",
-        "name": "Global"
-    },
-    {
         "key": "stack_parameters",
         "name": "Stack Parameters"
     },
     {
         "key": "application",
         "name": "Application"
+    },
+    {
+        "key": "globals",
+        "name": "Globals"
     }
 ]
 
@@ -284,27 +168,6 @@ parameters = {}
 for item in promptSections:
     prompts[item["key"]] = {}
     parameters[item["key"]] = {}
-
-# prompts["template_location"]["BucketName"] = atlantis.prompts["template_location-BucketName"]
-# prompts["template_location"]["BucketName"]["default"] = defaults["template_location"]["BucketName"]
-
-# prompts["template_location"]["BucketKey"] = atlantis.prompts["template_location-BucketKey"]
-# prompts["template_location"]["BucketKey"]["default"] = defaults["template_location"]["BucketKey"]
-
-# prompts["template_location"]["FileName"] = atlantis.prompts["template_location-FileName"]
-# prompts["template_location"]["FileName"]["default"] = defaults["template_location"]["FileName"]
-
-prompts["global"]["TemplateFile"] = atlantis.prompts["TemplateFile"]
-prompts["global"]["TemplateFile"]["default"] = defaults["global"]["TemplateFile"]
-
-prompts["global"]["AwsRegion"] = atlantis.prompts["AwsRegion"]
-prompts["global"]["AwsRegion"]["default"] = defaults["global"]["AwsRegion"]
-
-prompts["global"]["DeployBucket"] = atlantis.prompts["DeployBucket"]
-prompts["global"]["DeployBucket"]["default"] = defaults["global"]["DeployBucket"]
-
-prompts["global"]["ConfirmChangeset"] = atlantis.prompts["ConfirmChangeset"]
-prompts["global"]["ConfirmChangeset"]["default"] = defaults["global"]["ConfirmChangeset"]
 
 prompts["stack_parameters"]["Prefix"] = atlantis.prompts["Prefix"]
 prompts["stack_parameters"]["Prefix"]["default"] = defaults["stack_parameters"]["Prefix"]
@@ -348,28 +211,37 @@ prompts["application"]["Name"]["default"] = defaults["application"]["Name"]
 prompts["application"]["ServiceRoleARN"] = atlantis.prompts["ServiceRoleARN"]
 prompts["application"]["ServiceRoleARN"]["default"] = defaults["application"]["ServiceRoleARN"]
 
+prompts["globals"]["TemplateLocationBucketName"] = atlantis.prompts["TemplateLocationBucketName"]
+prompts["globals"]["TemplateLocationBucketName"]["default"] = defaults["globals"]["TemplateLocationBucketName"]
+
+prompts["globals"]["TemplateLocationPrefix"] = atlantis.prompts["TemplateLocationPrefix"]
+prompts["globals"]["TemplateLocationPrefix"]["default"] = defaults["globals"]["TemplateLocationPrefix"]
+
+prompts["globals"]["TemplateKeyFileName"] = atlantis.prompts["TemplateKeyFileName"]
+prompts["globals"]["TemplateKeyFileName"]["default"] = defaults["globals"]["TemplateKeyFileName"]
+
+prompts["globals"]["AwsRegion"] = atlantis.prompts["AwsRegion"]
+prompts["globals"]["AwsRegion"]["default"] = defaults["globals"]["AwsRegion"]
+
+prompts["globals"]["DeployBucket"] = atlantis.prompts["DeployBucket"]
+prompts["globals"]["DeployBucket"]["default"] = defaults["globals"]["DeployBucket"]
+
+prompts["globals"]["ConfirmChangeset"] = atlantis.prompts["ConfirmChangeset"]
+prompts["globals"]["ConfirmChangeset"]["default"] = defaults["globals"]["ConfirmChangeset"]
+
 atlantis.getUserInput(prompts, parameters, promptSections)
 
+# The user may have entered different values than the original arguments
+script_info["args"] = parameters["stack_parameters"]["Prefix"]
+# check if there is a ProjectId property in the parameters. Do same for StageId
+if "ProjectId" in parameters["stack_parameters"]:
+    script_info["args"] += f" {parameters["stack_parameters"]["ProjectId"]}"
+if "StageId" in parameters["stack_parameters"]:
+    script_info["args"] += f" {parameters["stack_parameters"]["StageId"]}"
 
 # =============================================================================
 # Save files
 # =============================================================================
-
-print("[ Saving .default files... ]")
-
-tf = {
-    "Prefix": parameters["stack_parameters"]["Prefix"],
-    "ProjectId": parameters["stack_parameters"]["ProjectId"],
-    "StageId": parameters["stack_parameters"]["StageId"],
-}
-
-# we list the files in reverse as we work up the normal read-in chain
-cliInputsFiles = [
-    atlantis.dirs["settings"]["Pipeline"]+"defaults-"+tf["Prefix"]+"-"+tf["ProjectId"]+"-"+tf["StageId"]+".json",
-    atlantis.dirs["settings"]["Pipeline"]+"defaults-"+tf["Prefix"]+"-"+tf["ProjectId"]+".json",
-    atlantis.dirs["settings"]["Pipeline"]+"defaults-"+tf["Prefix"]+".json",
-    atlantis.dirs["settings"]["Pipeline"]+"defaults.json"
-]
 
 # we will progressively remove data as we save up the chain of files
 # to do this we will list the data to remove in reverse order
@@ -397,289 +269,65 @@ removals = [
     }
 ]
 
-data = []
-data.append(json.dumps(parameters, indent=4))
-limitedParam = json.dumps(parameters)
-
-# loop through the removals array and remove the keys from the limitedParam array before appending to data
-for removal in removals:
-    d = json.loads(limitedParam)
-    for key in removal.keys():
-        for item in removal[key]:
-            d[key].pop(item)
-    limitedParam = json.dumps(d, indent=4)
-    data.append(limitedParam)
-
-# go through each index of the cliInputFiles array and write out the corresponding data element and add the corresponding element at index in data
-numFiles = len(cliInputsFiles)
-
-for i in range(numFiles):
-    file = cliInputsFiles[i]
-    d = data[i]
-    # create or overwrite file with d
-    print(" * Saving "+file+"...")
-    with open(file, "w") as f:
-        f.write(d)
-        f.close()
+atlantis.saveSettings(parameters, removals, script_info)
 
 # =============================================================================
 # Generate
 # =============================================================================
-        
-# Get the path to the generated directory
-cli_output_dir = atlantis.dirs["cli"]["Pipeline"]+parameters["stack_parameters"]["Prefix"]+"/"+parameters["stack_parameters"]["ProjectId"]+"/"
-if not os.path.isdir(cli_output_dir):
-	os.makedirs(cli_output_dir)
 
-def deleteEmptyValues(data, listtype, valuekey):
+tools.printCharStr("-", 80)
 
-    if listtype == "indexed":
+deploy_globals = parameters["globals"]
 
-        #------------------------------------------------------------------------------
-        # loop and remove any empty parameters from CFN.
+deploy_globals["Capabilities"] = "CAPABILITY_IAM" # NAMED_IAM
+deploy_globals["ImageRepositories"] = "[]"
 
-        delList = []
-        length = len(data)
-        for i in range(length):
-            if data[i][valuekey] == "":
-                delList.append(i)
+config_environments = {}
 
-        delList.sort(reverse=True)
+# Append custom_params to parameters["stack_parameters"]
+parameters["stack_parameters"].update(custom_params)
 
-        length = len(delList)
-        for i in range(length):
-            data.pop(delList[i])
+# Add things that are not user editable
 
-    else:
+# Prepend {"Key": "Atlantis", "Value": "iam"} and {"Key": "atlantis:Prefix", "Value": prefix} to tags list
+custom_tags.insert(0, {"Key": "Atlantis", "Value": "pipeline"})
+custom_tags.insert(1, {"Key": "atlantis:Prefix", "Value": parameters["stack_parameters"]["Prefix"]})
 
-        #-----------------------------------------------------------------------------
-        # loop and remove empty from CodeStar input
+config_environments = atlantis.getConfigEnvironments(script_info)
+print(config_environments)
 
-        delList = []
-        for key in data.keys():
-            if data[key] == "":
-                delList.append(key)
+sam_deploy_info = atlantis.generateTomlFile(deploy_globals, config_environments, script_info )
 
-        length = len(delList)
-        for i in range(length):
-            key = delList[i]
-            del data[key]
-            
-    return data
+# =============================================================================
+# CLI OUTPUT
+# =============================================================================
 
-def subPlaceholders(string):
-    string = string.replace("$PIPELINE_TEMPLATE_BUCKETNAME$", parameters["template_location"]["BucketName"])
-    string = string.replace("$PIPELINE_TEMPLATE_BUCKETKEY$", parameters["template_location"]["BucketKey"])
-    string = string.replace("$PIPELINE_TEMPLATE_FILENAME$", parameters["template_location"]["FileName"])
-
-    string = string.replace("$AWS_ACCOUNT$", defaults["application"]["AwsAccountId"]) # not used in sample-input-create-stack
-    string = string.replace("$AWS_REGION$", defaults["application"]["AwsRegion"]) # not used in sample-input-create-stack
-    string = string.replace("$SERVICE_ROLE_ARN$", parameters["application"]["ServiceRoleARN"])
-    string = string.replace("$NAME$", parameters["application"]["Name"])
-
-    string = string.replace("$PREFIX_UPPER$", parameters["stack_parameters"]["Prefix"].upper())
-    string = string.replace("$PREFIX$", parameters["stack_parameters"]["Prefix"])
-    string = string.replace("$PROJECT_ID$", parameters["stack_parameters"]["ProjectId"])
-    string = string.replace("$STAGE_ID$", parameters["stack_parameters"]["StageId"])
-    string = string.replace("$S3_ORG_PREFIX$", parameters["stack_parameters"]["S3BucketNameOrgPrefix"])
-    string = string.replace("$ROLE_PATH$", parameters["stack_parameters"]["RolePath"])
-    string = string.replace("$DEPLOY_ENVIRONMENT$", parameters["stack_parameters"]["DeployEnvironment"])
-    string = string.replace("$DEPLOY_BUCKET$", parameters["stack_parameters"]["DeployBucket"])
-    string = string.replace("$PARAM_STORE_HIERARCHY$", parameters["stack_parameters"]["ParameterStoreHierarchy"])
-    string = string.replace("$ALARM_NOTIFICATION_EMAIL$", parameters["stack_parameters"]["AlarmNotificationEmail"])
-    string = string.replace("$PERMISSIONS_BOUNDARY_ARN$", parameters["stack_parameters"]["PermissionsBoundaryArn"])
-    string = string.replace("$REPOSITORY$", parameters["stack_parameters"]["CodeCommitRepository"])
-    string = string.replace("$REPOSITORY_BRANCH$", parameters["stack_parameters"]["CodeCommitBranch"])   
-
-    return string 
-
-def saveInputFile(template):
-
-    string = json.dumps(template, indent=4)
-
-    string = subPlaceholders(string)
-
-    # convert back to array
-    # remove empty Parameters
-    # remove empty Tags
-
-    myData = json.loads(string)
-
-    myData['Parameters'] = deleteEmptyValues(myData['Parameters'], "indexed", "ParameterValue")
-    # if Parameters are empty, delete
-    if len(myData['Parameters']) == 0:
-        del myData['Parameters']
-
-    myData['Tags'] = deleteEmptyValues(myData['Tags'], "indexed", "Value")
-    # if tags are empty, delete
-    if len(myData['Tags']) == 0:
-        del myData['Tags']
-
-    string = json.dumps(myData, indent=4)
-
-    fileName = cli_output_dir+"input-create-stack-"+parameters["stack_parameters"]["Prefix"]+"-"+parameters["stack_parameters"]["ProjectId"]+"-"+parameters["stack_parameters"]["StageId"]+".json"
-    myFile = open(fileName, "w")
-    n = myFile.write(string)
-    myFile.close()
-
-    # print("")
-    # tools.printCharStr("-", 80, text=fileName)
-    # print(string)
-    # tools.printCharStr("-", 80)
-
-    return fileName
-
-print ("\n[ Loading sample-input-create-stack.json... ]")
-# Bring in the input template file
-with open(atlantis.files["cfnPipelineTemplateInput"]["path"]) as templateCFN_file:
-    templateCFN = json.load(templateCFN_file)
-
-# check to see if customStackParams is empty
-if len(customStackParams) == 0:
-    print(" - No Custom Stack Parameters to add from params files")
-else:
-    # Add Custom Stack Parameters to input template. Not only are new parameters added, existing ones in the template can be overridden
-    print(" + Adding Custom Stack Parameters from params files...")
-    for key in customStackParams.keys():
-        customStackParam = { "ParameterKey": key, "ParameterValue": customStackParams[key], "UsePreviousValue": True }
-        found = False
-        for i in range(len(templateCFN["Parameters"])):
-            if templateCFN["Parameters"][i]["ParameterKey"] == key:
-                templateCFN["Parameters"][i] = customStackParam
-                found = True
-                break
-        if not found:
-            templateCFN["Parameters"].append(customStackParam)
-
-# check to see if customStackTags is empty
-if len(customStackTags) == 0:
-    print(" - No Custom Stack Tags to add from tags files")
-else:
-    print(" + Adding Custom Stack Tags from tags files...")
-    # Add Custom Tags to the input template. Not only are new tags added, existing ones in the template can be overridden
-    for i in range(len(customStackTags)):
-        found = False
-        for j in range(len(templateCFN["Tags"])):
-            if templateCFN["Tags"][j]["Key"] == customStackTags[i]["Key"]:
-                templateCFN["Tags"][j]["Value"] = customStackTags[i]["Value"]
-                found = True
-                break
-        if not found:
-            templateCFN["Tags"].append(customStackTags[i])
-
-# print("")
-# tools.printCharStr("-", 80, text="Updated input template file")
-# print(json.dumps(templateCFN, indent=4))
-# tools.printCharStr("-", 80)
-
-inputCFNFilename = saveInputFile(templateCFN)
+output_dir = sam_deploy_info["output_dir"]
+sam_deploy_commands = sam_deploy_info["sam_deploy_commands"][configEnv]
 
 print("")
-tools.printCharStr("=", 80, bookend="!", text="CREATE STACK INSTRUCTIONS")
-tools.printCharStr(" ", 80, bookend="!", text="Execute the following AWS CLI commands in order to create the stack.")
-tools.printCharStr(" ", 80, bookend="!", text="A copy of the commands have been saved to inputs/ for later use.")
-tools.printCharStr("-", 80, bookend="!")
+tools.printCharStr("=", 80, bookend="!", text="CREATE PIPELINE INFRASTRUCTURE STACK")
 tools.printCharStr(" ", 80, bookend="!", text="Make sure you are logged into AWS CLI with a user role holding permissions")
-tools.printCharStr(" ", 80, bookend="!", text="to create the CloudFormation Stack!")
+tools.printCharStr(" ", 80, bookend="!", text="to create the pipeline stack!")
 tools.printCharStr("-", 80, bookend="!")
-tools.printCharStr(" ", 80, bookend="!", text="Alternately, you can create the stack manually via the AWS Web Console using")
-tools.printCharStr(" ", 80, bookend="!", text="values from the CloudFormation input JSON file found in cli/cfn/")
+tools.printCharStr(" ", 80, bookend="!", text="Ensure the --profile flag is correct")
+tools.printCharStr(" ", 80, bookend="!", text="Ensure the --deployConfig flag is correct")
+tools.printCharStr("-", 80, bookend="!")
+tools.printCharStr(" ", 80, bookend="!", text="To update the pipeline just re-run this script and then execute 'sam deploy'")
 tools.printCharStr("=", 80, bookend="!")
 print("")
 
-stringS3Text = """
+# Print a message indicating the aws sam cli commands to create the stack
 
-# -----------------------------------------------------------------------------
-# If you need to upload $PIPELINE_TEMPLATE_FILENAME$ to S3, 
-# Run the following commands (adjust paths as needed):
+deploy_command = []
+deploy_command.append("# -----------------------------------------------------------------------------")
+deploy_command.append(f"# 1. Navigate to the directory {output_dir}")
+deploy_command.append("# 2. Execute the 'sam deploy' command listed below.")
+deploy_command.append("#    (It has been saved as a comment in the toml file for later reference)")
+deploy_command.append("")
+deploy_command.append(f"cd {output_dir}")
+deploy_command.append(f"{sam_deploy_commands}")
 
-aws s3 cp ../cloudformation-pipeline-template/$PIPELINE_TEMPLATE_FILENAME$ s3://$PIPELINE_TEMPLATE_BUCKETNAME$$PIPELINE_TEMPLATE_BUCKETKEY$$PIPELINE_TEMPLATE_FILENAME$
+deployCmd = "\n".join(deploy_command)
 
-"""
-stringS3 = ""
-if parameters["template_location"]["BucketName"] != "63klabs":
-    stringS3 = stringS3Text
-
-stringCFN = """
-# -----------------------------------------------------------------------------
-# CREATE STACK
-# Run cloudformation create-stack command (adjust path as needed)
-
-cd $ROOT_CLI_DIR_CFN$
-
-aws cloudformation create-stack --cli-input-json file://$INPUTCFNFILENAME$
-
-# -----------------------------------------------------------------------------
-# CHECK PROGRESS:
-
-aws cloudformation describe-stacks --stack-name $PREFIX$-$PROJECT_ID$-$STAGE_ID$-pipeline
-
-# -----------------------------------------------------------------------------
-# UPDATE STACK
-# Update stack using change-set: After updating tags, parameters, and re-running pipeline.py, issue the following commands to update.
-# Be sure to modify values as needed (such as whether to 'no-use-previous-template' or 'include-nested-stacks')
-# https://awscli.amazonaws.com/v2/documentation/api/latest/reference/cloudformation/create-change-set.html
-
-cd $ROOT_CLI_DIR_CFN$
-
-aws cloudformation create-change-set \\
-    --stack-name $STACK_NAME$ \\
-    --change-set-name $CHANGE_SET_NAME$ \\
-    --client-token $CHANGE_SET_TOKEN$ \\
-    --change-set-type UPDATE \\
-    --no-use-previous-template \\
-    --include-nested-stacks \\
-    --cli-input-json file://$INPUTUPDATECFNFILENAME$
-
-aws cloudformation execute-change-set \\
-    --stack-name $STACK_NAME$ \\
-    --change-set-name $CHANGE_SET_NAME$ \\
-    --client-request-token $CHANGE_SET_TOKEN$
-"""
-
-cliCommands = stringS3 + stringCFN
-
-cliCommands = subPlaceholders(cliCommands)
-
-cliCommands = cliCommands.replace("$INPUTCFNFILENAME$", inputCFNFilename.replace(cli_output_dir, ""))
-cliCommands = cliCommands.replace("$CLI_DIR_CFN_PIPELINE_TEMPLATE$", atlantis.dirs["cfnPipeline"])
-cliCommands = cliCommands.replace("$ROOT_CLI_DIR_CFN$", cli_output_dir)
-
-# load in inputData
-with open(inputCFNFilename) as templateCFN_file:
-    inputData = json.load(templateCFN_file)
-
-    # rename key 'OnFailure' to 'OnStackFailure'
-    if "OnFailure" in inputData:
-        inputData["OnStackFailure"] = inputData["OnFailure"]
-        del inputData["OnFailure"]
-
-    # remove key 'EnableTerminationProtection' if it exists
-    if "EnableTerminationProtection" in inputData:
-        del inputData["EnableTerminationProtection"]
-
-    # Change all 'UsePreviousValues' in 'Parameters' to false
-    for i in range(len(inputData["Parameters"])):
-        inputData["Parameters"][i]["UsePreviousValue"] = False
-
-    # write inputData to cli-input-update-stack.json
-    inputDataUpdateFilename = cli_output_dir+"input-update-stack-"+parameters["stack_parameters"]["Prefix"]+"-"+parameters["stack_parameters"]["ProjectId"]+"-"+parameters["stack_parameters"]["StageId"]+".json"
-    myFile = open(inputDataUpdateFilename, "w")
-    n = myFile.write(json.dumps(inputData, indent=4))
-    myFile.close()
-
-    changeSetToken = tools.generateRandomString(10)
-
-    cliCommands = cliCommands.replace("$INPUTUPDATECFNFILENAME$", inputDataUpdateFilename.replace(cli_output_dir, ""))
-    cliCommands = cliCommands.replace("$STACK_NAME$", inputData["StackName"])
-    cliCommands = cliCommands.replace("$CHANGE_SET_TOKEN$", changeSetToken)
-    #  take last 4 characters of changeSetToken and append date stamp in YYYYMMDDHHMM format
-    cliCommands = cliCommands.replace("$CHANGE_SET_NAME$", inputData["StackName"]+"-"+changeSetToken[-4:]+"-"+tools.getDateStamp("%Y%m%d%H%M%S"))
-
-
-# save cliCommands to cli-<Prefix>-<ProjectId>-<StageId>.txt
-cliCommandsFilename = cli_output_dir+"cli-"+parameters["stack_parameters"]["Prefix"]+"-"+parameters["stack_parameters"]["ProjectId"]+"-"+parameters["stack_parameters"]["StageId"]+".txt"
-myFile = open(cliCommandsFilename, "w")
-n = myFile.write(cliCommands)
-
-print(cliCommands)
+print(deployCmd)

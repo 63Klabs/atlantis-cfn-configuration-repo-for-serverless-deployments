@@ -29,7 +29,7 @@ print("")
 
 argPrefix = "acme"
 argAcceptDefaults = False
-script_name = sys.argv[0]
+script_name = sys.argv[0].lower()
 
 # Check to make sure there is at least one argument else display message and exit.
 if len(sys.argv) > 1:
@@ -80,9 +80,9 @@ custom_tags = settings["custom_tags"]
 
 print("")
 tools.printCharStr("=", 80, bookend="!", text="INSTRUCTIONS")
-tools.printCharStr(" ", 80, bookend="!", text="Enter parameter values to generate IAM Service Role and AWS CLI commands")
+tools.printCharStr(" ", 80, bookend="!", text="Enter parameter values to generate IAM Service Role configuration")
 tools.printCharStr("-", 80, bookend="!")
-tools.printCharStr(" ", 80, bookend="!", text="The script will then generate a policy and CLI commands to create the role")
+tools.printCharStr(" ", 80, bookend="!", text="The script will then generate a SAM TOML config file and CLI commands.")
 tools.printCharStr("-", 80, bookend="!")
 tools.printCharStr(" ", 80, bookend="!", text="Leave blank and press Enter/Return to accept default in square brackets []")
 tools.printCharStr(" ", 80, bookend="!", text="Enter a dash '-' to clear default and leave optional responses blank.")
