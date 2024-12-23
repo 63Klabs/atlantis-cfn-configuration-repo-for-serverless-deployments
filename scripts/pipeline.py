@@ -50,7 +50,7 @@ else:
 
 script_info = {
     "name": script_name,
-    "args": argPrefix,
+    "args": f"{argPrefix} {argProjectId} {argStageId}",
     "infra": script_name.split(".")[0]
 }
 
@@ -76,7 +76,7 @@ defaults = {
     "application": {
         # "AwsAccountId": "XXXXXXXXXXXX",
         # "AwsRegion": "us-east-1",
-        "ServiceRoleARN": "",
+        "ServiceRoleArn": "",
         "Name": argPrefix+"-"+argProjectId
     },
     "stack_parameters": {
@@ -208,8 +208,8 @@ prompts["stack_parameters"]["CodeCommitBranch"]["default"] = defaults["stack_par
 prompts["application"]["Name"] = atlantis.prompts["application-Name"]
 prompts["application"]["Name"]["default"] = defaults["application"]["Name"]
 
-prompts["application"]["ServiceRoleARN"] = atlantis.prompts["ServiceRoleARN"]
-prompts["application"]["ServiceRoleARN"]["default"] = defaults["application"]["ServiceRoleARN"]
+prompts["application"]["ServiceRoleArn"] = atlantis.prompts["ServiceRoleArn"]
+prompts["application"]["ServiceRoleArn"]["default"] = defaults["application"]["ServiceRoleArn"]
 
 prompts["globals"]["TemplateLocationBucketName"] = atlantis.prompts["TemplateLocationBucketName"]
 prompts["globals"]["TemplateLocationBucketName"]["default"] = defaults["globals"]["TemplateLocationBucketName"]
@@ -264,7 +264,7 @@ removals = [
             "Prefix"
         ],
         "application": [
-            "ServiceRoleARN"
+            "ServiceRoleArn"
         ]
     }
 ]
@@ -280,21 +280,11 @@ tools.printCharStr("-", 80)
 deploy_globals = parameters["globals"]
 
 deploy_globals["Capabilities"] = "CAPABILITY_IAM" # NAMED_IAM
-deploy_globals["ImageRepositories"] = "[]"
+deploy_globals["ImageRepositories"] = "[]" # string representation
 
 config_environments = {}
 
-# Append custom_params to parameters["stack_parameters"]
-parameters["stack_parameters"].update(custom_params)
-
-# Add things that are not user editable
-
-# Prepend {"Key": "Atlantis", "Value": "iam"} and {"Key": "atlantis:Prefix", "Value": prefix} to tags list
-custom_tags.insert(0, {"Key": "Atlantis", "Value": "pipeline"})
-custom_tags.insert(1, {"Key": "atlantis:Prefix", "Value": parameters["stack_parameters"]["Prefix"]})
-
 config_environments = atlantis.getConfigEnvironments(script_info)
-print(config_environments)
 
 sam_deploy_info = atlantis.generateTomlFile(deploy_globals, config_environments, script_info )
 

@@ -189,7 +189,7 @@ prompts = {
         "default": ""
     },
 
-    "ServiceRoleARN": {
+    "ServiceRoleArn": {
         "name": "Service Role ARN",
         "required": True,
         "regex": "^$|^arn:aws:iam::[0-9]{12}:role\\/[a-zA-Z0-9\\/_-]+$",
@@ -446,13 +446,44 @@ def generateTomlFile(deploy_globals, config_environments, script_info ):
         sam_deploy_commands[dkey] = sam_deploy_command
 
         parameter_overrides = ""
-        for pkey, pvalue in dvalue["stack_parameters"].items():
+        dvalue["defaults"]["stack_parameters"].update(dvalue["custom_params"])
+        for pkey, pvalue in dvalue["defaults"]["stack_parameters"].items():
             parameter_overrides += f"\\\"{pkey}\\\"=\\\"{pvalue}\\\" "
 
-        parameter_overrides = parameter_overrides.rstrip()
+        parameter_overrides = parameter_overrides.rstrip()        
+
+        # Generate automated tags
+        dvalue["custom_tags"].append({"Key": "Atlantis", "Value": infra_type})
+        dvalue["custom_tags"].append({"Key": "atlantis:Prefix", "Value": Prefix})
+        dvalue["custom_tags"].append({"Key": "Provisioner", "Value": "CloudFormation"})
+        dvalue["custom_tags"].append({"Key": "DeployedUsing", "Value": "AWS SAM CLI"})
+
+        dvalue["custom_tags"].append({"Key": "atlantis:TemplateVer", "Value": "Atlantis.v2.0.0"})
+        dvalue["custom_tags"].append({"Key": "atlantis:TemplateFile", "Value": deploy_globals['TemplateKeyFileName']})
+
+        if ProjectId != "":
+            dvalue["custom_tags"].append({"Key": "atlantis:Application", "Value": f"{Prefix}-{ProjectId}"})
+
+        if dkey != "default":
+            dvalue["custom_tags"].append({"Key": "atlantis:ApplicationDeploymentId", "Value": f"{Prefix}-{ProjectId}-{dkey}"})
+            dvalue["custom_tags"].append({"Key": "Stage", "Value": dkey})
+            dvalue["custom_tags"].append({"Key": "Environment", "Value": dvalue["defaults"]["stack_parameters"]["DeployEnvironment"]})
+
+        if "AlarmNotificationEmail" in dvalue["defaults"]["stack_parameters"]:
+            dvalue["custom_tags"].append({"Key": "AlarmNotificationEmail", "Value": dvalue["defaults"]["stack_parameters"]["AlarmNotificationEmail"]})
+        
+        if "application" in dvalue and "Name" in dvalue["application"]:
+            dvalue["custom_tags"].append({"Key": "atlantis:Application", "Value": dvalue["application"]["Name"]})
+
+        if "CodeCommitRepository" in dvalue["defaults"]["stack_parameters"]:
+            repo = dvalue["defaults"]["stack_parameters"]["CodeCommitRepository"]
+            dvalue["custom_tags"].append({"Key": "CodeCommitRepository", "Value": repo})
+            if "CodeCommitBranch" in dvalue["defaults"]["stack_parameters"]:
+                branch = dvalue["defaults"]["stack_parameters"]["CodeCommitBranch"]
+                dvalue["custom_tags"].append({"Key": "CodeCommitBranch", "Value": f"{repo}:{branch}"})
 
         tags = ""
-        for tag in dvalue["tags"]:
+        for tag in dvalue["custom_tags"]:
             tkey = tag["Key"]
             tvalue = tag["Value"]
             tags += f"\\\"{tkey}\\\"=\\\"{tvalue}\\\" "
@@ -512,18 +543,17 @@ def loadSettings(script_info, defaults):
     customTagsFileLoc.append(f"{dirs["settings"]}{script_info["infra"]}/tags-{args[0]}.json")
 
     if len(args) > 1:
-        defaultsFileLoc.append(f"{dirs["settings"]}{script_info["infra"]}/defaults-{args[0]}.json")
+        defaultsFileLoc.append(f"{dirs["settings"]}{script_info["infra"]}/defaults-{args[0]}-{args[1]}.json")
         customParamsFileLoc.append(f"{dirs["settings"]}{script_info["infra"]}/params-{args[0]}-{args[1]}.json")
         customTagsFileLoc.append(f"{dirs["settings"]}{script_info["infra"]}/tags-{args[0]}-{args[1]}.json")
 
     if len(args) > 2:
-        defaultsFileLoc.append(f"{dirs["settings"]}{script_info["infra"]}/defaults-{args[0]}-{args[1]}.json")
+        defaultsFileLoc.append(f"{dirs["settings"]}{script_info["infra"]}/defaults-{args[0]}-{args[1]}-{args[2]}.json")
         customParamsFileLoc.append(f"{dirs["settings"]}{script_info["infra"]}/params-{args[0]}-{args[1]}-{args[2]}.json")
         customTagsFileLoc.append(f"{dirs["settings"]}{script_info["infra"]}/tags-{args[0]}-{args[1]}-{args[2]}.json")
 
 
     print("[ Loading default json files... ]")
-
 
     for i in range(len(defaultsFileLoc)):
         if os.path.isfile(defaultsFileLoc[i]):
@@ -542,7 +572,6 @@ def loadSettings(script_info, defaults):
     # Read in Custom Parameters
             
     print("\n[ Loading params files... ]")
-
 
     # If params.json exists, read it in
     custom_params = {}
@@ -582,7 +611,6 @@ def loadSettings(script_info, defaults):
                     if not found:
                         custom_tags.append(tagData[j])
                 
-
                 print(" + Found "+customTagsFileLoc[i])
         else:
             print(" - Did not find "+customTagsFileLoc[i])
@@ -609,10 +637,10 @@ def saveSettings(parameters, removals, script_info):
     ]
 
     if ProjectId != "":
-        settingsFiles.insert(0, f"{dirs["settings"]}{script_info["infra"]}/defaults-{ProjectId}.json")
+        settingsFiles.insert(0, f"{dirs["settings"]}{script_info["infra"]}/defaults-{Prefix}-{ProjectId}.json")
 
     if StageId != "":
-        settingsFiles.insert(0, f"{dirs["settings"]}{script_info["infra"]}/defaults-{args[0]}-{args[1]}.json")
+        settingsFiles.insert(0, f"{dirs["settings"]}{script_info["infra"]}/defaults-{Prefix}-{ProjectId}-{StageId}.json")
 
     print("[ Saving default json files... ]")
 
@@ -621,8 +649,12 @@ def saveSettings(parameters, removals, script_info):
     limitedParam = json.dumps(parameters)
 
     # loop through the removals array and remove the keys from the limitedParam array before appending to data
+    i = 0
     for removal in removals:
         d = json.loads(limitedParam)
+        #remove tags property and i == 0
+        if "tags" in d and i == 0:
+            d.pop("tags")
         for key in removal.keys():
             for item in removal[key]:
                 d[key].pop(item)
@@ -667,23 +699,23 @@ def getConfigEnvironments(script_info):
             # if there are multiple, add them to the config_environments dictionary with the key {stage}{i}
             # where i is the index of the file in the list of files
             files = glob.glob(f"{dirs["settings"]}{infra_type}/defaults-{Prefix}-{ProjectId}-{stage}*")
-            print(files)
+
             if len(files) > 0:
                 for i in range(len(files)):
                     # go through all the files and parse out the stage from the filename
                     # add the stage to the config_environments dictionary
                     # read in the file and add it to the config_environments dictionary
-                    stage = files[i].split("-")[-1][0]
+                    s = files[i].split("-")[-1].split(".")[0]
+                    config_environments[s] = {}
 
         # Now that we know what stages exist, we can loop through config_environments and use loadSettings to read in the files
         for stage in config_environments.keys():
             temp_script_info = script_info
             temp_script_info["args"] = f"{Prefix} {ProjectId} {stage}"
             config_environments[stage] = loadSettings(temp_script_info, {})
-            print(config_environments["stage"])
 
     else:
         config_environments["default"] = loadSettings(script_info, {})
 
-    print(config_environments)
+    #print(config_environments)
     return config_environments
