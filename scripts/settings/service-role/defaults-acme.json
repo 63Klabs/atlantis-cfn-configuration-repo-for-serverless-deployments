@@ -6,7 +6,10 @@
         "PermissionsBoundaryArn": ""
     },
     "globals": {
-        "AwsRegion": "us-east-1",
+        "TemplateLocationBucketName": "",
+        "TemplateLocationPrefix": "/",
+        "TemplateKeyFileName": "template-service-role.yml",
+        "AwsRegion": "us-east-2",
         "DeployBucket": "cf-asdf",
         "ConfirmChangeset": "true"
     }

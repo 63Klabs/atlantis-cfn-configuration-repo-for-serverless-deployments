@@ -8,7 +8,7 @@
         "TemplateLocationBucketName": "",
         "TemplateLocationPrefix": "/",
         "TemplateKeyFileName": "template-service-role.yml",
-        "AwsRegion": "us-east-1",
+        "AwsRegion": "us-east-2",
         "DeployBucket": "cf-asdf",
         "ConfirmChangeset": "true"
     }

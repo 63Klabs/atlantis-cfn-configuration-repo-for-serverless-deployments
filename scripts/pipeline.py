@@ -76,7 +76,6 @@ defaults = {
     "application": {
         # "AwsAccountId": "XXXXXXXXXXXX",
         # "AwsRegion": "us-east-1",
-        "ServiceRoleArn": "",
         "Name": argPrefix+"-"+argProjectId
     },
     "stack_parameters": {
@@ -94,6 +93,7 @@ defaults = {
         "CodeCommitBranch": atlantis.prompts["CodeCommitBranch"]["default"]
     },
     "globals": {
+        "ServiceRoleArn": "",
         "TemplateLocationBucketName": "",
         "TemplateLocationPrefix": "/",
         "TemplateKeyFileName": "template-pipeline.yml",
@@ -208,8 +208,6 @@ prompts["stack_parameters"]["CodeCommitBranch"]["default"] = defaults["stack_par
 prompts["application"]["Name"] = atlantis.prompts["application-Name"]
 prompts["application"]["Name"]["default"] = defaults["application"]["Name"]
 
-prompts["application"]["ServiceRoleArn"] = atlantis.prompts["ServiceRoleArn"]
-prompts["application"]["ServiceRoleArn"]["default"] = defaults["application"]["ServiceRoleArn"]
 
 prompts["globals"]["TemplateLocationBucketName"] = atlantis.prompts["TemplateLocationBucketName"]
 prompts["globals"]["TemplateLocationBucketName"]["default"] = defaults["globals"]["TemplateLocationBucketName"]
@@ -225,6 +223,9 @@ prompts["globals"]["AwsRegion"]["default"] = defaults["globals"]["AwsRegion"]
 
 prompts["globals"]["DeployBucket"] = atlantis.prompts["DeployBucket"]
 prompts["globals"]["DeployBucket"]["default"] = defaults["globals"]["DeployBucket"]
+
+prompts["globals"]["ServiceRoleArn"] = atlantis.prompts["ServiceRoleArn"]
+prompts["globals"]["ServiceRoleArn"]["default"] = defaults["globals"]["ServiceRoleArn"]
 
 prompts["globals"]["ConfirmChangeset"] = atlantis.prompts["ConfirmChangeset"]
 prompts["globals"]["ConfirmChangeset"]["default"] = defaults["globals"]["ConfirmChangeset"]
@@ -263,7 +264,7 @@ removals = [
         "stack_parameters": [
             "Prefix"
         ],
-        "application": [
+        "globals": [
             "ServiceRoleArn"
         ]
     }

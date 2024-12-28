@@ -189,17 +189,7 @@ prompts = {
         "default": ""
     },
 
-    "ServiceRoleArn": {
-        "name": "Service Role ARN",
-        "required": True,
-        "regex": "^$|^arn:aws:iam::[0-9]{12}:role\\/[a-zA-Z0-9\\/_-]+$",
-        "help": "Service Role ARN must be in the format: arn:aws:iam::{account_id}:role/{policy_name}",
-        "description": "The Service Role gives CloudFormation permission to create, delete, and manage stacks on your behalf.",
-        "examples": "arn:aws:iam::123456789012:role/ACME-CloudFormation-Service-Role",
-        "default": ""
-    },
-
-    # Template specific - pipeline.py
+    # Globals
 
     "TemplateLocationBucketName": {
         "name": "Template Location: S3 Bucket",
@@ -230,16 +220,6 @@ prompts = {
         "examples": "template-pipeline.yml, template-pipeline.yaml, template-storage.yml",
         "default": ""
     },
-
-    "AwsAccountId": {
-        "name": "AWS Account ID",
-        "required": True,
-        "regex": "^[0-9]{12}$",
-        "help": "AWS Account ID must be 12 digits",
-        "description": "AWS Account ID is a 12 digit number that identifies the AWS account.",
-        "examples": "123456789012, 123456789013, 123456789014",
-        "default": ""
-    },
     
     "AwsRegion": {
         "name": "AWS Region",
@@ -259,6 +239,27 @@ prompts = {
         "description": "When a user runs the sam deploy command, a changeset is generated with all changes listed. If set to true, the user is given the option to confirm executing the changeset.",
         "examples": "true, false",
         "default": "true"
+    },
+
+    "ServiceRoleArn": {
+        "name": "Service Role ARN",
+        "required": True,
+        "regex": "^arn:aws:iam::[0-9]{12}:role\\/[a-zA-Z0-9\\/_-]+$",
+        "help": "Service Role ARN must be in the format: arn:aws:iam::{account_id}:role/{role_name}",
+        "description": "The Service Role gives CloudFormation permission to create, delete, and manage stacks on your behalf.",
+        "examples": "arn:aws:iam::123456789012:role/ACME-CloudFormation-Service-Role",
+        "default": ""
+    },
+
+    # Deprecated - The templates now take care of this. Only needed if we are using CLI
+    "AwsAccountId": {
+        "name": "AWS Account ID",
+        "required": True,
+        "regex": "^[0-9]{12}$",
+        "help": "AWS Account ID must be 12 digits",
+        "description": "AWS Account ID is a 12 digit number that identifies the AWS account.",
+        "examples": "123456789012, 123456789013, 123456789014",
+        "default": ""
     }
 }
 
@@ -420,7 +421,11 @@ def generateTomlFile(deploy_globals, config_environments, script_info ):
     if deploy_globals["TemplateLocationBucketName"] != "":
         InfraTemplateFile = f"s3://{deploy_globals['TemplateLocationBucketName']}{deploy_globals['TemplateLocationPrefix']}{deploy_globals['TemplateKeyFileName']}"
     else:
-        InfraTemplateFile = f"./{infra_type}/templates/{deploy_globals['TemplateKeyFileName']}"
+        InfraTemplateFile = f"./templates/{deploy_globals['TemplateKeyFileName']}"
+
+    role_arn = ""
+    if "ServiceRoleArn" in deploy_globals and deploy_globals["ServiceRoleArn"] != "":
+        role_arn = f"role_arn = \"{deploy_globals["ServiceRoleArn"]}\"\n"
 
     # Create a dictionary of replacements
     replacements = {
@@ -431,7 +436,8 @@ def generateTomlFile(deploy_globals, config_environments, script_info ):
         "$CONFIRM_CHANGESET$": deploy_globals["ConfirmChangeset"],
         "$IMAGE_REPOSITORIES$": deploy_globals["ImageRepositories"],
         "$SCRIPT_NAME$": script_info["name"],
-        "$SCRIPT_ARGS$": script_info["args"]
+        "$SCRIPT_ARGS$": script_info["args"],
+        "$ROLE_ARN$": role_arn
     }
 
     # Perform the replacements
