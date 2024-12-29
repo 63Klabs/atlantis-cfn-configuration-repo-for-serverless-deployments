@@ -11,7 +11,7 @@
 # https://github.com/chadkluck/serverless-deploy-pipeline-atlantis/README.md
 #
 AWSTemplateFormatVersion: "2010-09-09"
-Description: "Prefix-based IAM Role and Policy for Atlantis CloudFormation Service Role to be assumed by Pipeline stacks."
+Description: "Prefix-based IAM Role and Managed Policy for Atlantis CloudFormation Service Role to be assumed by Pipeline stacks."
 
 # =============================================================================
 # META DATA
@@ -276,7 +276,7 @@ Resources:
   PrefixBasedManagedPolicy:
     Type: AWS::IAM::ManagedPolicy
     Properties:
-      Description: !Sub "Managed Policy to Create and Manage an AWS CodePipeline for application projects under prefix ${Prefix}"
+      Description: !Sub "Managed Policy to Create and Manage an AWS CodePipeline for application projects under prefix ${Prefix}. Can be attached to Roles, Groups, or Users."
       ManagedPolicyName: !Sub "${PrefixUpper}-CloudFormation-Service-ManagedPolicy"
       Path: !Ref RolePath
       Groups: !If [HasGroupNames, !Ref GroupNames, !Ref 'AWS::NoValue' ]
