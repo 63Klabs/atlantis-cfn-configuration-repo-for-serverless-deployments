@@ -1,5 +1,6 @@
 {
     "stack_parameters": {
+        "Prefix": "acl",
         "S3BucketNameOrgPrefix": "acl",
         "RolePath": "/acl_role_path/",
         "PermissionsBoundaryArn": "",

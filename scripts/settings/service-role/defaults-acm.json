@@ -1,12 +1,14 @@
 {
     "stack_parameters": {
-        "S3BucketNameOrgPrefix": "acl",
-        "RolePath": "/acl_role_path/",
+        "Prefix": "acm",
+        "S3BucketNameOrgPrefix": "asd",
+        "RolePath": "/asdf/",
         "PermissionsBoundaryArn": "",
-        "PrefixUpper": "ACL"
+        "PrefixUpper": "ACM"
     },
     "globals": {
-        "TemplateLocationBucketName": "",
+        "TemplateLocationBucketName": "sev",
+        "TemplateLocationPrefix": "/",
         "TemplateKeyFileName": "template-service-role.yml",
         "AwsRegion": "us-east-2",
         "DeployBucket": "cf-asdf",

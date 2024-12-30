@@ -11,11 +11,10 @@ import json
 import shutil
 import re
 import sys
-
-
-import tools
 import yaml
 import glob
+
+import tools
 
 hello = "Hello, World"
 
@@ -192,7 +191,7 @@ prompts = {
     # Globals
 
     "TemplateLocationBucketName": {
-        "name": "Template Location: S3 Bucket",
+        "name": "Template S3 Bucket",
         "required": False,
         "regex": "^[a-z0-9][a-z0-9-]*[a-z0-9]$|^$",
         "help": "S3 bucket name must be lowercase, start with a letter, and contain only letters, numbers, and dashes. Leave blank if using a local template.",
@@ -202,20 +201,31 @@ prompts = {
     },
 
     "TemplateLocationPrefix": {
-        "name": "Template Location: S3 Prefix",
+        "name": "Template S3 Prefix",
         "required": False,
         "regex": "^\\/[a-zA-Z0-9\\/_-]+\\/$|^\\/$",
-        "help": "S3 bucket prefix must be lowercase, start and end with a slash and contain only letters, numbers, dashes and underscores. Leave blank if using a local template.",
+        "help": "S3 bucket prefix must be lowercase, start and end with a slash and contain only letters, numbers, dashes and underscores.",
         "description": "Where is the pipeline template stored?",
         "examples": "/atlantis/v2/, /atlantis/v3/",
         "default": "/" #/atlantis/v2/
     },
 
-    "TemplateKeyFileName": {
-        "name": "Template: Key of S3 Object or Local File Name",
+    "TemplateLocationKey": {
+        "name": "Template S3 Object Key",
         "required": True,
         "regex": "^[a-zA-Z0-9][a-zA-Z0-9-_]*[a-zA-Z0-9]\\.(yml|yaml|json)$",
-        "help": "File name must be lowercase, start with a letter, and contain only letters, numbers, and dashes. If using a local template do not include path. Make sure local templates are stored in the /templates directory of the appropriate infrastructure.",
+        "help": "File name must be lowercase, start with a letter, and contain only letters, numbers, and dashes. Do not include S3 prefix.",
+        "description": "What is the template file name?",
+        "examples": "template-pipeline.yml, template-pipeline.yaml, template-storage.yml",
+        "default": ""
+    },
+
+    # same as TemplateLocationKey but different help and name
+    "TemplateLocationFile": {
+        "name": "Template File Name",
+        "required": True,
+        "regex": "^[a-zA-Z0-9][a-zA-Z0-9-_]*[a-zA-Z0-9]\\.(yml|yaml|json)$",
+        "help": "File name must be lowercase, start with a letter, and contain only letters, numbers, and dashes. Do not include path. Make sure local templates are stored in the /templates directory of the appropriate infrastructure.",
         "description": "What is the template file name?",
         "examples": "template-pipeline.yml, template-pipeline.yaml, template-storage.yml",
         "default": ""
@@ -322,14 +332,34 @@ with open(files["docsPipelineParamReadme"]["path"], "a") as f:
 # Define Functions
 
 
-def getUserInput(prompts, parameters, promptSections):
+def getUserInput(passed_prompts, parameters, promptSections):
+    localTemplate = False
+
     #iterate through prompt sections
     for section in promptSections:
         sectionKey = section["key"]
         print("\n--- "+section["name"]+": ---\n")
         # loop through each parameter and prompt the user for it, then validate input based on requirement and regex
-        for key in prompts[sectionKey]:
-            prompt = prompts[sectionKey][key]
+        for key in passed_prompts[sectionKey]:
+
+            # ---------------------------------------------------------
+            # Alternate prompt paths
+
+            # Skip certain passed_prompts
+            if key == "TemplateLocationPrefix" and sectionKey == "globals" and parameters["globals"]["TemplateLocationBucketName"] == "":
+                localTemplate = True
+                # skip and go to next key
+                continue
+
+            prompt = passed_prompts[sectionKey][key]
+            # Switch the prompt based on the localTemplate flag
+            if key == "TemplateKeyFileName" and localTemplate:
+                default = passed_prompts[sectionKey][key]["default"]
+                prompt = prompts["TemplateLocationFile"]
+                prompt["default"] = default
+
+            # ---------------------------------------------------------
+
             req = " "
             if prompt["required"]:
                 req = " (required)"
@@ -427,6 +457,14 @@ def generateTomlFile(deploy_globals, config_environments, script_info ):
     if "ServiceRoleArn" in deploy_globals and deploy_globals["ServiceRoleArn"] != "":
         role_arn = f"role_arn = \"{deploy_globals["ServiceRoleArn"]}\"\n"
 
+    global_script_args = script_info["args"]
+    # split global_script_args into a list
+    global_script_args_list = global_script_args.split(" ")
+    # if greater than 1 then change last element to "<stage>"
+    if len(global_script_args_list) > 1:
+        global_script_args_list[-1] = "<stage>"
+    # join the list back into a string
+    global_script_args = " ".join(global_script_args_list)
     # Create a dictionary of replacements
     replacements = {
         "$TEMPLATE_FILE$": InfraTemplateFile,
@@ -436,7 +474,7 @@ def generateTomlFile(deploy_globals, config_environments, script_info ):
         "$CONFIRM_CHANGESET$": deploy_globals["ConfirmChangeset"],
         "$IMAGE_REPOSITORIES$": deploy_globals["ImageRepositories"],
         "$SCRIPT_NAME$": script_info["name"],
-        "$SCRIPT_ARGS$": script_info["args"],
+        "$SCRIPT_ARGS$": global_script_args,
         "$ROLE_ARN$": role_arn
     }
 
@@ -450,9 +488,15 @@ def generateTomlFile(deploy_globals, config_environments, script_info ):
 
         sam_deploy_command = f"sam deploy --config-env {dkey} --config-file {toml_filename} --profile default"
         sam_deploy_commands[dkey] = sam_deploy_command
+        py_regenerate_command = f"python {script_info['name']} {Prefix}"
+        if ProjectId != "":
+            py_regenerate_command += f" {ProjectId}"
+        if dkey != "default":
+            py_regenerate_command += f" {dkey}"
 
         parameter_overrides = ""
         dvalue["defaults"]["stack_parameters"].update(dvalue["custom_params"])
+
         for pkey, pvalue in dvalue["defaults"]["stack_parameters"].items():
             parameter_overrides += f"\\\"{pkey}\\\"=\\\"{pvalue}\\\" "
 
@@ -514,9 +558,12 @@ def generateTomlFile(deploy_globals, config_environments, script_info ):
 
         # Add a comment with the sam command to deploy
         toml_content += "# =====================================================\n"
-        toml_content += f"# {dkey} Deployment Configuration\n"
+        toml_content += f"# {dkey} Deployment Configuration\n\n"
         toml_content += "# Deploy command:\n"
-        toml_content += f"# {sam_deploy_command} \n\n"
+        toml_content += f"# {sam_deploy_command}\n\n"
+        toml_content += "# Do not update this file!\n"
+        toml_content += "# To update parameter_overrides or tags for this deployment, use the generate script:\n"
+        toml_content += f"# {py_regenerate_command}\n\n"
 
         # Add the toml_deployParameters to the content
         for pkey, pvalue in toml_deployParameters.items():
@@ -535,28 +582,38 @@ def loadSettings(script_info, defaults):
 
     args = script_info["args"].split(" ")
 
+    # Change - to _ for file names
+    f_prefix = args[0].replace("-", "_")
+    f_project = args[1].replace("-", "_") if len(args) > 1 else ""
+    f_stage = args[2].replace("-", "_") if len(args) > 2 else ""
+
     # Create a file location array - this is the hierarchy of files we will gather defaults from. The most recent file appended (lower on list) will overwrite previous values
     defaultsFileLoc = []
     defaultsFileLoc.append(f"{dirs["settings"]}{script_info["infra"]}/defaults.json")
-    defaultsFileLoc.append(f"{dirs["settings"]}{script_info["infra"]}/defaults-{args[0]}.json")
+
+    if script_info["infra"] != "service-role":
+        defaultsFileLoc.append(f"{dirs["settings"]}service-role/{f_prefix}.json")
+        defaultsFileLoc.append(f"{dirs["settings"]}service-role/defaults-{f_prefix}.json")
+
+    defaultsFileLoc.append(f"{dirs["settings"]}{script_info["infra"]}/defaults-{f_prefix}.json")
 
     customParamsFileLoc = []
     customParamsFileLoc.append(f"{dirs["settings"]}{script_info["infra"]}/params.json")
-    customParamsFileLoc.append(f"{dirs["settings"]}{script_info["infra"]}/params-{args[0]}.json")
+    customParamsFileLoc.append(f"{dirs["settings"]}{script_info["infra"]}/params-{f_prefix}.json")
 
     customTagsFileLoc = []
     customTagsFileLoc.append(f"{dirs["settings"]}{script_info["infra"]}/tags.json")
-    customTagsFileLoc.append(f"{dirs["settings"]}{script_info["infra"]}/tags-{args[0]}.json")
+    customTagsFileLoc.append(f"{dirs["settings"]}{script_info["infra"]}/tags-{f_prefix}.json")
 
     if len(args) > 1:
-        defaultsFileLoc.append(f"{dirs["settings"]}{script_info["infra"]}/defaults-{args[0]}-{args[1]}.json")
-        customParamsFileLoc.append(f"{dirs["settings"]}{script_info["infra"]}/params-{args[0]}-{args[1]}.json")
-        customTagsFileLoc.append(f"{dirs["settings"]}{script_info["infra"]}/tags-{args[0]}-{args[1]}.json")
+        defaultsFileLoc.append(f"{dirs["settings"]}{script_info["infra"]}/defaults-{f_prefix}-{f_project}.json")
+        customParamsFileLoc.append(f"{dirs["settings"]}{script_info["infra"]}/params-{f_prefix}-{f_project}.json")
+        customTagsFileLoc.append(f"{dirs["settings"]}{script_info["infra"]}/tags-{f_prefix}-{f_project}.json")
 
     if len(args) > 2:
-        defaultsFileLoc.append(f"{dirs["settings"]}{script_info["infra"]}/defaults-{args[0]}-{args[1]}-{args[2]}.json")
-        customParamsFileLoc.append(f"{dirs["settings"]}{script_info["infra"]}/params-{args[0]}-{args[1]}-{args[2]}.json")
-        customTagsFileLoc.append(f"{dirs["settings"]}{script_info["infra"]}/tags-{args[0]}-{args[1]}-{args[2]}.json")
+        defaultsFileLoc.append(f"{dirs["settings"]}{script_info["infra"]}/defaults-{f_prefix}-{f_project}-{f_stage}.json")
+        customParamsFileLoc.append(f"{dirs["settings"]}{script_info["infra"]}/params-{f_prefix}-{f_project}-{f_stage}.json")
+        customTagsFileLoc.append(f"{dirs["settings"]}{script_info["infra"]}/tags-{f_prefix}-{f_project}-{f_stage}.json")
 
 
     print("[ Loading default json files... ]")
@@ -636,17 +693,21 @@ def saveSettings(parameters, removals, script_info):
     if "StageId" in parameters["stack_parameters"]:
         StageId = parameters["stack_parameters"]["StageId"]
 
+    f_prefix = Prefix.replace("-", "_")
+    f_project = ProjectId.replace("-", "_") if ProjectId != "" else ""
+    f_stage = StageId.replace("-", "_") if StageId != "" else ""
+
     # we list the files in reverse as we work up the normal read-in chain
     settingsFiles = [
-        f"{dirs["settings"]}{InfraType}/defaults-{Prefix}.json",
+        f"{dirs["settings"]}{InfraType}/defaults-{f_prefix}.json",
         f"{dirs["settings"]}{InfraType}/defaults.json"
     ]
 
     if ProjectId != "":
-        settingsFiles.insert(0, f"{dirs["settings"]}{script_info["infra"]}/defaults-{Prefix}-{ProjectId}.json")
+        settingsFiles.insert(0, f"{dirs["settings"]}{script_info["infra"]}/defaults-{f_prefix}-{f_project}.json")
 
     if StageId != "":
-        settingsFiles.insert(0, f"{dirs["settings"]}{script_info["infra"]}/defaults-{Prefix}-{ProjectId}-{StageId}.json")
+        settingsFiles.insert(0, f"{dirs["settings"]}{script_info["infra"]}/defaults-{f_prefix}-{f_project}-{f_stage}.json")
 
     print("[ Saving default json files... ]")
 
@@ -712,6 +773,8 @@ def getConfigEnvironments(script_info):
                     # add the stage to the config_environments dictionary
                     # read in the file and add it to the config_environments dictionary
                     s = files[i].split("-")[-1].split(".")[0]
+                    # convert any _ to dashes
+                    s = s.replace("_", "-")
                     config_environments[s] = {}
 
         # Now that we know what stages exist, we can loop through config_environments and use loadSettings to read in the files

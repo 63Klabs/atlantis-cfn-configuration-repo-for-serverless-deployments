@@ -7,10 +7,10 @@
 #
 
 import os
-import json
 import sys
 
-sys.path.append('./lib')
+sys.path.append(os.path.join(os.path.dirname(__file__), 'lib'))
+
 import tools
 import atlantis
 
@@ -54,7 +54,7 @@ defaults = {
     },
     "globals": {
         "TemplateLocationBucketName": "",
-        "TemplateLocationPrefix": "",
+        "TemplateLocationPrefix": atlantis.prompts["TemplateLocationPrefix"]["default"],
         "TemplateKeyFileName": "template-service-role.yml",
         "AwsRegion": atlantis.prompts["AwsRegion"]["default"],
         "DeployBucket": atlantis.prompts["DeployBucket"]["default"],
@@ -123,11 +123,15 @@ prompts["stack_parameters"]["PermissionsBoundaryArn"]["default"] = defaults["sta
 prompts["globals"]["TemplateLocationBucketName"] = atlantis.prompts["TemplateLocationBucketName"]
 prompts["globals"]["TemplateLocationBucketName"]["default"] = defaults["globals"]["TemplateLocationBucketName"]
 
+
 prompts["globals"]["TemplateLocationPrefix"] = atlantis.prompts["TemplateLocationPrefix"]
 prompts["globals"]["TemplateLocationPrefix"]["default"] = defaults["globals"]["TemplateLocationPrefix"]
-
-prompts["globals"]["TemplateKeyFileName"] = atlantis.prompts["TemplateKeyFileName"]
+    
+prompts["globals"]["TemplateKeyFileName"] = atlantis.prompts["TemplateLocationKey"]
 prompts["globals"]["TemplateKeyFileName"]["default"] = defaults["globals"]["TemplateKeyFileName"]
+
+# prompts["globals"]["TemplateKeyFileName"] = atlantis.prompts["TemplateLocationFile"]
+# prompts["globals"]["TemplateKeyFileName"]["default"] = defaults["globals"]["TemplateKeyFileName"]
 
 prompts["globals"]["AwsRegion"] = atlantis.prompts["AwsRegion"]
 prompts["globals"]["AwsRegion"]["default"] = defaults["globals"]["AwsRegion"]
@@ -142,11 +146,9 @@ atlantis.getUserInput(prompts, parameters, promptSections)
 
 # The user may have entered different values than the original arguments
 script_info["args"] = parameters["stack_parameters"]["Prefix"]
-# check if there is a ProjectId property in the parameters. Do same for StageId
-if "ProjectId" in parameters["stack_parameters"]:
-    script_info["args"] += f" {parameters["stack_parameters"]["ProjectId"]}"
-if "StageId" in parameters["stack_parameters"]:
-    script_info["args"] += f" {parameters["stack_parameters"]["StageId"]}"
+
+# Add the UPPER case prefix to the parameters
+parameters["stack_parameters"]["PrefixUpper"] = parameters["stack_parameters"]["Prefix"].upper()
 
 # =============================================================================
 # Save files
@@ -207,6 +209,8 @@ deploy_command.append("#    (It has been saved as a comment in the toml file for
 deploy_command.append("")
 deploy_command.append(f"cd {output_dir}")
 deploy_command.append(f"{sam_deploy_commands}")
+deploy_command.append("")
+
 
 deployCmd = "\n".join(deploy_command)
 

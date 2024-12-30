@@ -1,9 +1,10 @@
 {
     "stack_parameters": {
-        "S3BucketNameOrgPrefix": "acl",
-        "RolePath": "/acl_role_path/",
+        "Prefix": "acj",
+        "S3BucketNameOrgPrefix": "acj",
+        "RolePath": "/role_path/",
         "PermissionsBoundaryArn": "",
-        "PrefixUpper": "ACL"
+        "PrefixUpper": "ACJ"
     },
     "globals": {
         "TemplateLocationBucketName": "",
