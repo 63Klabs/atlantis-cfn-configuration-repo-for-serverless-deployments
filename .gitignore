@@ -27,6 +27,8 @@ storage-infrastructure/samconfig-*
 pipeline-infrastructure/samconfig-*
 network-infrastructure/samconfig-*
 
+imports/*
+
 # ----------------------------------------
 
 !sample-*

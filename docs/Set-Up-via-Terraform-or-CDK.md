@@ -1,3 +1,3 @@
-# Terraform or CDK
+# Extend Using Terraform or CDK
 
-The AWS CLI commands and inputs can always be adapted to create a Terraform or AWS CDK process for creating and maintaining your roles.
+After understanding how templates, configuration files, and SAM works, you can deconstruct this repository and create your own solutions using SAM, AWS CLI, AWS CDK, or Terraform.
