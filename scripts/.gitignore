@@ -1,9 +1,0 @@
-# Comment out these lines if you want to save your generated files in a repository
-settings/iam/*
-settings/storage/*
-settings/pipeline/*
-settings/network/*
-
-!sample-*
-!sample.*
-!README.md

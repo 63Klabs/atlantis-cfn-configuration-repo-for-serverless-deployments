@@ -8,11 +8,28 @@ x_samconfig*.toml
 *.DS_Store
 *desktop.ini
 
+# If you need to remove .DS_Store
+# find . -name .DS_Store -print0 | xargs -0 git rm -f --ignore-unmatch
+
 # Ignore 
 node_modules/
 
-# Don't ignore .gitignore (excludes from capture by .* above)
-!.gitignore
+# ----------------------------------------
+# RECOMMENDED! Comment out these lines when saving generated files to a private repository!
 
-# If you need to remove .DS_Store
-# find . -name .DS_Store -print0 | xargs -0 git rm -f --ignore-unmatch
+scripts/settings/service-role/*
+scripts/settings/storage/*
+scripts/settings/pipeline/*
+scripts/settings/network/*
+
+service-role-infrastructure/samconfig-*
+storage-infrastructure/samconfig-*
+pipeline-infrastructure/samconfig-*
+network-infrastructure/samconfig-*
+
+# ----------------------------------------
+
+!sample-*
+!sample.*
+!README.md
+!.gitignore
