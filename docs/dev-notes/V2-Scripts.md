@@ -102,6 +102,7 @@ The naming convention for stacks are as follows:
 - `<Prefix>-<ProjectId>-storage`
 - `<Prefix>-<ProjectId>-<StageId>-pipeline`
 - `<Prefix>-<ProjectId>-<StageId>-network`
+- `<Prefix>-<ProjectId>-<StageId>-application`
 
 Similar names are used to name the samconfig files.
 
