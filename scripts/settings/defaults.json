@@ -1,0 +1,11 @@
+{
+	"global": {
+		"s3_bucket": "my-deploy-bucket",
+		"region": "us-east-2",
+		"confirm_changeset": true
+	},
+	"parameter_overrides": {
+		"PermissionsBoundaryArn": "arn:aws:iam::123456789012:policy/MyPermissionsBoundary",
+		"RolePath": "/app-role/"
+	}
+}

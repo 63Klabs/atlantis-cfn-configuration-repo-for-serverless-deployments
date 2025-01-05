@@ -1,15 +1,18 @@
 # pip install boto3 toml click
 
-# v0.1 - 2025-01-06
-# Designed, Prompt Engineered, and Reviewed by Chad Leigh Kluck
-# Written by Amazon Q
+# v0.1 - 2025-01-12
+# Designed, Prompt Engineered, Reviewed, and Developed into final script by Chad Leigh Kluck
+# Written by Amazon Q & Chad Leigh Kluck
 
-# TODO: Read in tags 
-# TODO: Add tags to config
-# TODO: Write toml file to correct location with correct name
 # TODO: Read in toml file and set defaults
-# TODO: For pipeline, network allow multiple stages instead of just default
+# TODO: Allow multiple stages instead of just default
+# TODO: Add tags to config
+# TODO: Read in tags 
+# TODO: If Environment and RepositoryBranch are param, preset based on stage_id
 
+# TODO: If self.prefix is different than the prompt, remove all non self.stage_id stages
+
+# TODO: Test validation of prompts
 # TODO: Test deploy
 # TODO: Test read existing stack
 
@@ -27,20 +30,21 @@ import click
 from botocore.exceptions import ClientError
 
 class ConfigManager:
-    def __init__(self, prefix: str, infra_type: str, project_id: str, stage_id: Optional[str] = None):
+    def __init__(self, infra_type: str, prefix: str, project_id: str, stage_id: Optional[str] = None):
         self.prefix = prefix
         self.infra_type = infra_type
         self.project_id = project_id
         self.stage_id = stage_id or 'default'
         self.cfn_client = boto3.client('cloudformation')
         self.templates_dir = Path('..') / f"{infra_type}-infrastructure/templates"
+        self.samconfig_dir = Path('..') / f"{infra_type}-infrastructure"
         self.settings_dir = Path("settings")
 
         # Validate inputs
         if infra_type != 'service-role' and project_id is None:
             raise ValueError("project_id is required for non-service-role infrastructure types")
 
-    def generate_stack_name(prefix: str, project_id: str, stage_id: str, infra_type: str) -> str:
+    def generate_stack_name(self, prefix: str, project_id: str, stage_id: str) -> str:
         """Generate the stack name based on the prefix, project, stage, and infra type"""
         stack_name = f"{prefix}-"
 
@@ -50,25 +54,58 @@ class ConfigManager:
         if stage_id != 'default' and stage_id:
             stack_name += f"{stage_id}-"
 
-        stack_name += f"{infra_type}"
+        stack_name += f"{self.infra_type}"
 
         return stack_name
     
-    def read_samconfig(self) -> Optional[Dict]:
-        """Read existing samconfig.toml if it exists
-		
+    def generate_samconfig_path(self, prefix: str, project_id: str) -> Path:
+        """Generate the samconfig path based on the prefix, project, stage, and infra type
+        		
 		Naming convention: samconfig-Prefix-ProjectId-InfraType.toml
 		For service-role: samconfig-Prefix-service-role.toml
-		"""
+"""
         if self.infra_type == 'service-role':
-			# For service-role, we don't include project_id in the filename
-            samconfig_path = Path(f"samconfig-{self.prefix}-service-role.toml")
+            # For service-role, we don't include project_id in the filename
+            samconfig_path = self.samconfig_dir / f"samconfig-{prefix}-service-role.toml"
         else:
-			# For all other infrastructure types, include project_id
-            samconfig_path = Path(f"samconfig-{self.prefix}-{self.project_id}-{self.infra_type}.toml")
+            # For all other infrastructure types, include project_id
+            samconfig_path = self.samconfig_dir / f"samconfig-{prefix}-{project_id}-{self.infra_type}.toml"
+
+        return samconfig_path
+    
+    def read_samconfig(self) -> Optional[Dict]:
+        """Read existing samconfig.toml if it exists
+        Returns the configuration as a dictionary or None if the file doesn't exist
+        Returns in the format:
+        {
+            'global': {
+                'deploy': {
+                    'parameters': {}
+                }
+            },
+            'deployments': {
+                'default': {
+                    'deploy': {
+                        'parameters': {}
+                        }
+                    }
+                }
+            }
+        }
+		"""
+        
+        samconfig_path = self.generate_samconfig_path(self.prefix, self.project_id)
 		
         if samconfig_path.exists():
-            return toml.load(samconfig_path)
+            samconfig_data = { 'global': {}, 'deployments': {} }
+            samconfig = toml.load(samconfig_path)
+            samconfig_data['global'] = samconfig.get('global', {})
+
+            for key, value in samconfig.items():
+                if key != 'global':
+                    samconfig_data['deployments'][key] = value
+
+            return samconfig_data
         return None
 
     def get_stack_config(self, stack_name: str) -> Optional[Dict]:
@@ -154,9 +191,9 @@ class ConfigManager:
         1. defaults.json
         2. {prefix}-defaults.json
         3. {prefix}-{project_id}-defaults.json
-        4. infra_type/{prefix}-defaults.json
-        5. infra_type/{prefix}-{project_id}-defaults.json
-        6. infra_type/{prefix}-{project_id}-{stage_id}-defaults.json
+        4. infra_type/defaults.json
+        5. infra_type/{prefix}-defaults.json
+        6. infra_type/{prefix}-{project_id}-defaults.json
         """
         defaults = {}
         
@@ -173,6 +210,7 @@ class ConfigManager:
             ])
         
         # Add infra_type specific files
+        config_files.append(self.settings_dir / f"{self.infra_type}" / "defaults.json")
         config_files.append(self.settings_dir / f"{self.infra_type}" / f"{self.prefix}-defaults.json")
         
         # Add project_id specific files in infra_type directory
@@ -180,13 +218,6 @@ class ConfigManager:
             config_files.append(
                 self.settings_dir / f"{self.infra_type}" / f"{self.prefix}-{self.project_id}-defaults.json"
             )
-            
-            # Add stage_id specific file only if both project_id and stage_id exist
-            if self.stage_id and self.stage_id != 'default':
-                config_files.append(
-                    self.settings_dir / f"{self.infra_type}" / 
-                    f"{self.prefix}-{self.project_id}-{self.stage_id}-defaults.json"
-                )
         
         # Load each config file in sequence if it exists
         for config_file in config_files:
@@ -204,22 +235,32 @@ class ConfigManager:
 
     def prompt_for_parameters(self, parameters: Dict, defaults: Dict) -> Dict:
         """Prompt user for parameter values"""
+
+        print('\n------------------------------\n'
+                'Template Parameters:\n')
+        
         values = {}
         
         # Add prefix, project_id and stage_id to defaults if they exist
-        if self.prefix and 'Prefix' in parameters:
-            defaults['Prefix'] = self.prefix
-
-        if self.prefix and 'PrefixUpper' in parameters:
-            defaults['PrefixUpper'] = self.prefix.upper()
+        if self.prefix:
+            if 'Prefix' in parameters:
+                defaults['Prefix'] = self.prefix
+            if 'PrefixUpper' in parameters:
+                defaults['PrefixUpper'] = self.prefix.upper()
 
         if self.project_id and 'ProjectId' in parameters:
             defaults['ProjectId'] = self.project_id
         
         if self.stage_id and 'StageId' in parameters:
             defaults['StageId'] = self.stage_id
+
         
         for param_name, param_def in parameters.items():
+
+            # Skip PrefixUpper as it will be handled automatically
+            if param_name == 'PrefixUpper':
+                continue
+
             default_value = defaults.get(param_name, param_def.get('Default', ''))
             
             while True:
@@ -237,12 +278,26 @@ class ConfigManager:
                 elif value == '-':
                     value = ''
                 
-                # Validate parameter
+                # Validate and store parameter
                 if self.validate_parameter(value, param_def):
                     values[param_name] = value
+
+                    # If we just got a Prefix value, automatically set PrefixUpper and update self.prefix
+                    if param_name == 'Prefix' and 'PrefixUpper' in parameters:
+                        values['PrefixUpper'] = value.upper()
+                        self.prefix = value
+                    
+                    # Update project_id and stage_id if they were just set
+                    if param_name == 'ProjectId':
+                        self.project_id = value
+
+                    if param_name == 'StageId':
+                        self.stage_id = value
+
                     break
                 else:
                     click.echo(f"Invalid value for {param_name}")
+
                     
         return values
 
@@ -277,29 +332,33 @@ class ConfigManager:
                 print("\nTemplate selection cancelled")
                 sys.exit(1)
 
-    def gather_global_parameters(self, infra_type: str) -> Dict:
+    def gather_global_parameters(self, infra_type: str, global_defaults: Dict) -> Dict:
         """Gather global deployment parameters"""
+
+        print('\n------------------------------\n'
+                'Global deployment parameters:\n')
+
         global_params = {}
         
         # Get S3 bucket for deployments
         global_params['s3_bucket'] = click.prompt(
             "S3 bucket for deployments",
             type=str,
-            default=os.getenv('SAM_DEPLOY_BUCKET', '')
+            default=global_defaults.get('s3_bucket', (os.getenv('SAM_DEPLOY_BUCKET', '')))
         )
         
         # Get AWS region
         global_params['region'] = click.prompt(
             "AWS region",
             type=str,
-            default=os.getenv('AWS_REGION', 'us-east-1')
+            default=global_defaults.get('region', (os.getenv('AWS_REGION', 'us-east-1')))
         )
         
         # Confirm changeset prompt
         global_params['confirm_changeset'] = click.prompt(
             "Confirm changeset before deploy",
-            type=bool,
-            default=True
+            type=str,
+            default= ('true' if (global_defaults.get('confirm_changeset', True)) else 'false')
         )
         
         # Get role ARN if this is a pipeline deployment
@@ -307,45 +366,59 @@ class ConfigManager:
             global_params['role_arn'] = click.prompt(
                 "IAM role ARN for deployments",
                 type=str,
-                default=os.getenv('SAM_DEPLOY_ROLE', '')
+                default=global_defaults.get('role_arn', (os.getenv('SAM_DEPLOY_ROLE', '')))
             )
         
         return global_params
 
-    def build_config(self, template_file: str, parameter_values: Dict, infra_type: str) -> Dict:
+    def build_config(self, template_file: str, parameter_values: Dict, infra_type: str, global_defaults: Dict) -> Dict:
         """Build the complete config dictionary"""
         # Get global parameters
-        global_params = self.gather_global_parameters(infra_type)
+        global_params = self.gather_global_parameters(infra_type, global_defaults)
 
-        stack_name = self.generate_stack_name(self.prefix, self.project_id, self.stage_id, infra_type)
-        
+        # Generate stack name
+        stack_name = self.generate_stack_name(
+            parameter_values.get('Prefix', ''),
+            parameter_values.get('ProjectId', ''),
+            parameter_values.get('StageId', '')
+        )
+
+        deployment_parameters = {
+            'stack_name': stack_name,
+            's3_prefix': stack_name,
+            'parameter_overrides': parameter_values
+        }
+
+        deployments = {}
+        deployments[self.stage_id] = {
+            'deploy': {
+                'parameters': deployment_parameters
+            }
+        }
+
+        # if template_file is not s3 it is local and use the local path
+        if not template_file.startswith('s3://'):
+            template_file = f'./templates/{template_file}'
+
         # Build the config structure
         config = {
-            'globals': {
+            'global': {
                 'deploy': {
                     'parameters': {
                         'template_file': template_file,
                         's3_bucket': global_params['s3_bucket'],
                         'region': global_params['region'],
                         'capabilities': 'CAPABILITY_NAMED_IAM',
-                        'confirm_changeset': global_params['confirm_changeset']
+                        'confirm_changeset': (global_params['confirm_changeset'].lower() == 'true')
                     }
                 }
             },
-            'default': {
-                'deploy': {
-                    'parameters': {
-                        'stack_name': stack_name,
-                        's3_prefix': stack_name,
-                        'parameter_overrides': parameter_values
-                    }
-                }
-            }
+            'deployments': deployments
         }
         
         # Add role_arn if this is a pipeline deployment
         if infra_type == 'pipeline':
-            config['globals']['deploy']['parameters']['role_arn'] = global_params['role_arn']
+            config['global']['deploy']['parameters']['role_arn'] = global_params['role_arn']
         
         return config
 
@@ -450,8 +523,15 @@ class ConfigManager:
         """Save configuration to samconfig.toml file"""
         try:
             # Get the parameter values from the config
-            parameter_values = config.get('default', {}).get('deploy', {}).get('parameters', {}).get('parameter_overrides', {})
+            parameter_values = config.get('deployments', {}).get(self.stage_id, {}).get('deploy', {}).get('parameters', {}).get('parameter_overrides', {})
             
+            prefix = parameter_values.get('Prefix', '')
+            project_id = parameter_values.get('ProjectId', '')
+
+            pystr = f"{sys.argv[0]} {self.infra_type} {prefix}"
+            if project_id:
+                pystr += f" {project_id}"
+
             # Convert parameter_values dict to parameter_overrides string
             if isinstance(parameter_values, dict):
                 parameter_overrides = " ".join([
@@ -459,24 +539,62 @@ class ConfigManager:
                 ])
                 
                 # Update the config with the string version
-                config['default']['deploy']['parameters']['parameter_overrides'] = parameter_overrides
+                config['deployments'][self.stage_id]['deploy']['parameters']['parameter_overrides'] = parameter_overrides
             
+            header_pystr = f"{pystr}"
+            if self.stage_id != 'default':
+                header_pystr += f" {self.stage_id}"
             # Create the header with version and comments
             header = (
                 'version = 0.1\n\n'
                 '# !!! DO NOT EDIT THIS FILE !!!\n\n'
                 '# Make changes and re-generate this file by running the python script:\n\n'
-                f'# python {sys.argv[0]} {" ".join(sys.argv[1:])}\n\n'
+                f'# python {header_pystr}\n\n'
                 '# Using the script provides consistent parameter overrides and tags '
                 'and ensures your changes are not overwritten!\n\n'
             )
+
+            global_section = {
+                'global': config.get('global', {})
+            }
+
+            non_global_sections = {}
+            # Reorder the deployments to place default first, then those starting with t, b, s, and finall p
+            for stage_id in sorted(config.get('deployments', {}), key=lambda x: (x[0] != 'd', x[0] != 't', x[0] != 'b', x[0] != 's', x[0] != 'p')):
+                non_global_sections[stage_id] = config['deployments'][stage_id]
+            
             
             # Write the config to samconfig.toml
-            with open('samconfig.toml', 'w') as f:
+            samconfig_path = self.generate_samconfig_path(prefix, project_id)
+            
+            with open(samconfig_path, 'w') as f:
                 f.write(header)
-                toml.dump(config, f)
+                toml.dump(global_section, f)
+
+                fnstr = prefix
+                if project_id:
+                    fnstr += f"-{project_id}"
+                    
+                for section, section_config in non_global_sections.items():
+
+                    section_pystr = f"{pystr}"
+                    if section != 'default':
+                        section_pystr += f" {section}"
+
+                    deploy_section_header = (
+                        '# =====================================================\n'
+                        f'# {section} Deployment Configuration\n\n'
+                        '# Deploy command:\n'
+                        f'# sam deploy --config-env {section} --config-file samconfig-{fnstr}-{self.infra_type}.toml --profile default\n\n'
+                        '# Do not update this file!\n'
+                        '# To update parameter_overrides or tags for this deployment, use the generate script:\n'
+                        f'# python {section_pystr}\n'
+                    )
+                    f.write(f'\n{deploy_section_header}\n')
+                    toml.dump({section: section_config}, f)
                 
             logging.info("Configuration saved to samconfig.toml")
+            print(f"Configuration saved to {samconfig_path}")
             
         except Exception as e:
             logging.error(f"Error saving configuration: {e}")
@@ -499,13 +617,13 @@ def main(check_stack: bool, profile: str, infra_type: str, prefix: str,
     if infra_type != 'service-role' and not project_id:
         raise click.UsageError("project_id is required for non-service-role infrastructure types")
         
-    config_manager = ConfigManager(prefix, infra_type, project_id, stage_id)
+    config_manager = ConfigManager(infra_type, prefix, project_id, stage_id)
     
     # Read existing configuration
     local_config = config_manager.read_samconfig()
     
     if check_stack:
-        stack_name = f"{project_id}-{stage_id}"
+        stack_name = config_manager.generate_stack_name(prefix, project_id, stage_id)
         stack_config = config_manager.get_stack_config(stack_name)
         
         if stack_config and local_config:
@@ -525,21 +643,28 @@ def main(check_stack: bool, profile: str, infra_type: str, prefix: str,
                     local_config = stack_config
 
     # Handle template selection and parameter configuration
-    # Handle template selection and parameter configuration
     if not local_config:
         templates = config_manager.discover_templates()
         template_file = config_manager.select_template(templates)
     else:
-        template_file = local_config['template_file']
+        template_file_from_config = local_config['global']['deploy']['parameters'].get('template_file')
+        # if template file starts with s3://, use it as is, else parse
+        if template_file_from_config and template_file_from_config.startswith('s3://'):
+            template_file = template_file_from_config
+        else:
+            # Split by / and get the last part
+            template_file = template_file_from_config.split('/')[-1]
 
     parameters = config_manager.get_template_parameters(template_file)
     defaults = config_manager.load_defaults()
+    parameter_defaults = defaults.get('parameter_overrides', {})
+    global_defaults = defaults.get('global', {})
     
     # Prompt for parameters
-    parameter_values = config_manager.prompt_for_parameters(parameters, defaults)
+    parameter_values = config_manager.prompt_for_parameters(parameters, parameter_defaults)
     
     # Build the complete config
-    config = config_manager.build_config(template_file, parameter_values, infra_type)
+    config = config_manager.build_config(template_file, parameter_values, infra_type, global_defaults)
     
     # Save the config
     config_manager.save_config(config)
