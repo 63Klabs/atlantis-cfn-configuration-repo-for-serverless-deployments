@@ -42,8 +42,8 @@ class ConfigManager:
         self.templates_dir = Path('..') / f"{infra_type}-infrastructure/templates"
         self.samconfig_dir = Path('..') / f"{infra_type}-infrastructure"
         self.settings_dir = Path("settings")
-        self.template_file = ''
         self.template_version = 'No version found'
+        self.template_file = None
 
         # Validate inputs
         if infra_type != 'service-role' and project_id is None:
@@ -234,17 +234,28 @@ class ConfigManager:
         """Discover available templates in the infrastructure type directory"""
         return [f.name for f in self.templates_dir.glob('*.yml')]
 
+    def deep_update(self, original: Dict, update: Dict) -> Dict:
+        """
+        Recursively update a dictionary with another dictionary's values.
+        Lists are replaced entirely rather than merged.
+        """
+        for key, value in update.items():
+            if key in original and isinstance(original[key], dict) and isinstance(value, dict):
+                self.deep_update(original[key], value)
+            else:
+                original[key] = value
+        return original
+
     def load_defaults(self) -> Dict:
-        """Load default values from settings files in a specific order, with later files
-        overwriting properties from earlier files.
+        """Load and merge configuration files in sequence
         
         Order:
         1. defaults.json
         2. {prefix}-defaults.json
         3. {prefix}-{project_id}-defaults.json
-        4. infra_type/defaults.json
-        5. infra_type/{prefix}-defaults.json
-        6. infra_type/{prefix}-{project_id}-defaults.json
+        4. {infra_type}/defaults.json
+        5. {infra_type}/{prefix}-defaults.json
+        6. {infra_type}/{prefix}-{project_id}-defaults.json
         """
         defaults = {}
         
@@ -275,13 +286,15 @@ class ConfigManager:
             try:
                 if config_file.exists():
                     with open(config_file) as f:
-                        # Update defaults with new values, overwriting any existing ones
-                        defaults.update(json.load(f))
+                        # Deep update defaults with new values
+                        new_config = json.load(f)
+                        self.deep_update(defaults, new_config)
+                        logging.debug(f"Loaded config from {config_file}")
             except json.JSONDecodeError as e:
                 logging.error(f"Error parsing JSON from {config_file}: {e}")
             except Exception as e:
                 logging.error(f"Error loading config file {config_file}: {e}")
-                
+        
         return defaults
 
     def prompt_for_parameters(self, parameters: Dict, defaults: Dict) -> Dict:
@@ -477,7 +490,7 @@ class ConfigManager:
         # then deployments = {} else set to local_config deployments
         # Because that means we made a copy and are creating a fresh copy 
         # with only global and current stage
-        if prefix != sys.argv[2] or (project_id and project_id != sys.argv[3]):
+        if not isinstance(local_config, dict) or prefix != sys.argv[2] or (project_id and project_id != sys.argv[3]):
             deployments = {}
         else:
             deployments = local_config.get('deployments', {})

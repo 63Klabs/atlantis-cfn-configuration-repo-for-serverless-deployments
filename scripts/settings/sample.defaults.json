@@ -5,9 +5,9 @@
 		"confirm_changeset": true
 	},
 	"parameter_overrides": {
-		"S3BucketNameOrgPrefix": "acmeco",
+		"PermissionsBoundaryArn": "arn:aws:iam::123456789012:policy/MyPermissionsBoundary",
 		"RolePath": "/app-role/",
 		"DeployBucket": "my-pipeline-deploy-bucket",
-		"PermissionsBoundaryArn": "arn:aws:iam::123456789012:policy/MyPermissionsBoundary"
+		"S3BucketNameOrgPrefix": "acmeco"
 	}
 }
