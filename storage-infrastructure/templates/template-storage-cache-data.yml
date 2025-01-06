@@ -1,10 +1,15 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Transform: AWS::Serverless-2016-10-31
-Description: Shared storage for Lambda applications utilizing Cache-Data (S3/DynamoDb)
+Description: "Shared storage for Lambda applications utilizing Cache-Data (S3/DynamoDb) - Deployed using SAM"
 
-# Atlantis Storage Infrastructure Template
-# template-storage-cache-data.yml
+# Atlantis for AWS SAM Deployments
+# Storage Infrastructure Template - Cache Data 
+# Chad Kluck - chadkluck.me
 # v0.0.12/2024-10-22
+
+# Documentation, Issues/Feature Requests, Latest Updates, and Security Reports on GitHub:
+# https://github.com/chadkluck/atlantis-for-aws-sam-deployments/
+
 
 # =============================================================================
 # META DATA

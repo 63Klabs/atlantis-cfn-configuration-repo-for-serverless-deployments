@@ -1,17 +1,15 @@
 
-## This file is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, 
-# either express or implied. See the License for the specific language governing permissions 
-# and limitations under the License.
-#
-# Atlantis SAM IAM Template Version 2
-# Chad Leigh Kluck
-# v2024.10.18 : template-pipeline-service-role.yml
-# 
-# README documentation goes through installation steps. 
-# https://github.com/chadkluck/serverless-deploy-pipeline-atlantis/README.md
-#
 AWSTemplateFormatVersion: "2010-09-09"
-Description: "Prefix-based IAM Role and Managed Policy for Atlantis CloudFormation Service Role to be assumed by Pipeline stacks."
+Description: "Prefix-based IAM Role and Managed Policy for Atlantis Service Role to be assumed when deploying pipeline infrastructure - Deployed using SAM"
+
+# Atlantis for AWS SAM Deployments
+# Service Role Infrastructure Template 
+# Chad Kluck - chadkluck.me
+# v0.0.12/2024-10-22
+
+# Documentation, Issues/Feature Requests, Latest Updates, and Security Reports on GitHub:
+# https://github.com/chadkluck/atlantis-for-aws-sam-deployments/
+
 
 # =============================================================================
 # META DATA

@@ -1,10 +1,6 @@
 [
 	{
-		"Key": "Department",
-		"Value": "Web Services"
-	},
-	{
-		"Key": "Creator",
-		"Value": "John Doe"
+		"Key": "SampleTag",
+		"Value": "Pipeline"
 	}
 ]

@@ -1,17 +1,18 @@
 
-## This file is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, 
-# either express or implied. See the License for the specific language governing permissions 
-# and limitations under the License.
-#
-# Atlantis CI/CD CodePipeline CloudFormation Template Version 2
-# Chad Leigh Kluck
-# v2024.12.16 : template-pipeline.yml
-# 
-# README documentation goes through installation steps. 
-# https://github.com/chadkluck/serverless-deploy-pipeline-atlantis/README.md
-#
 AWSTemplateFormatVersion: "2010-09-09"
-Description: "Deploy Pipeline Template V2. Creates a CodePipeline that executes after changes are committed to a specific CodeCommit branch."
+Description: "CodePipeline for Deployments - Deployed using SAM"
+
+# Atlantis for AWS SAM Deployments
+# Pipeline Infrastructure Template
+# Chad Kluck - chadkluck.me
+# v2.0.12/2024-12-16
+
+# Documentation, Issues/Feature Requests, Latest Updates, and Security Reports on GitHub:
+# https://github.com/chadkluck/atlantis-for-aws-sam-deployments/
+
+# Creates an AWS CodePipeline that is triggered when a watched branch
+# receives a new commit. Uses CodeBuild and then CloudFormation to deploy.
+
 
 # =============================================================================
 # META DATA

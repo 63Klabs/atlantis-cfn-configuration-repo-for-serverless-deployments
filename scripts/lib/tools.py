@@ -3,7 +3,7 @@
 # and limitations under the License.
 #
 # Python Function Library
-# Chad Leigh Kluck
+# Chad Kluck
 # v2024.02.29 : lib/tools.py
 
 def indent(spaces=4, prepend=''):

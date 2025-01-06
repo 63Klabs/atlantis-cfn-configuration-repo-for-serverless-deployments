@@ -3,7 +3,7 @@
 # and limitations under the License.
 #
 # CLI Generator Variable and Function Library for Atlantis CI/CD CodePipeline CloudFormation Template
-# Chad Leigh Kluck
+# Chad Kluck
 # v2024.12.30 : lib/atlantis.py
 
 import os

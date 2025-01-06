@@ -1,10 +1,15 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Transform: AWS::Serverless-2016-10-31
-Description: CloudFront distribution with an S3 origin secured with origin access control (OAC). Includes CloudFront cache invalidation Lambda function triggered by S3 events.
+Description: "CloudFront distribution with S3 origin access control (OAC). Includes CloudFront cache invalidation - Deployed using SAM"
 
-# Atlantis Storage Infrastructure Template
-# template-storage-s3-oac-for-cloudfront.yml
+# Atlantis for AWS SAM Deployments
+# Storage Infrastructure Template 
+# Chad Kluck - chadkluck.me
 # v0.0.12/2024-10-22
+
+# Documentation, Issues/Feature Requests, Latest Updates, and Security Reports on GitHub:
+# https://github.com/chadkluck/atlantis-for-aws-sam-deployments/
+
 
 # =============================================================================
 # META DATA

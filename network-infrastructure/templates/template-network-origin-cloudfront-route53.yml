@@ -1,6 +1,14 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
-Description: CloudFront Distribution w/ optional Route53 for Static Content (S3 OAC) and/or API Gateway - Deployed using SAM
+Description: "CloudFront Distribution w/ optional Route53 for Static Content (S3 OAC) and/or API Gateway - Deployed using SAM"
+
+# Atlantis for AWS SAM Deployments
+# Network Infrastructure Template
+# Chad Kluck - chadkluck.me
+# v0.0.12/2024-10-22
+
+# Documentation, Issues/Feature Requests, Latest Updates, and Security Reports on GitHub:
+# https://github.com/chadkluck/atlantis-for-aws-sam-deployments/
 
 # Apply custom sub-domains via Route53 to static content in an S3 bucket 
 # and/or  an API Gateway. Static and API can reside on same sub-domains with routing 
@@ -9,9 +17,6 @@ Description: CloudFront Distribution w/ optional Route53 for Static Content (S3 
 # it can use CloudFront or direct routing from Route53. Requires existing 
 # S3 bucket with access policy and/or existing API Gateway. 
 
-# Atlantis Network Infrastructure Template
-# template-network-origin-cloudfront-route53.yml
-# v0.0.12/2024-10-22-
 
 # =============================================================================
 # META DATA

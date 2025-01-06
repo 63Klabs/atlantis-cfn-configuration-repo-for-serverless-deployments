@@ -1,20 +1,22 @@
 # pip install boto3 toml click
 
-# v0.1 - 2025-01-12
-# Designed, Prompt Engineered, Reviewed, and Developed into final script by Chad Leigh Kluck
-# Written by Amazon Q & Chad Leigh Kluck
+# v0.1.0/2025-01-12
+# Written by Amazon Q Developer with assistance from Chad Kluck
 
-# TODO: Read in toml file and set defaults
-# TODO: Allow multiple stages instead of just default
-# TODO: Add tags to config
+# TODO: Generate Tags
 # TODO: Read in tags 
-# TODO: If Environment and RepositoryBranch are param, preset based on stage_id
-
-# TODO: If self.prefix is different than the prompt, remove all non self.stage_id stages
 
 # TODO: Test validation of prompts
 # TODO: Test deploy
 # TODO: Test read existing stack
+
+# Q's suggestions
+# TODO: More robust parameter validation
+# TODO: Better error handling
+# TODO: Support for additional CloudFormation template formats
+# TODO: More detailed logging
+# TODO: Support for additional parameter sources
+# TODO: Template validation before deployment
 
 import boto3
 import toml
@@ -24,6 +26,7 @@ import yaml
 import re
 import sys
 import os
+import shlex
 from pathlib import Path
 from typing import Dict, Optional, List
 import click
@@ -39,6 +42,8 @@ class ConfigManager:
         self.templates_dir = Path('..') / f"{infra_type}-infrastructure/templates"
         self.samconfig_dir = Path('..') / f"{infra_type}-infrastructure"
         self.settings_dir = Path("settings")
+        self.template_file = ''
+        self.template_version = 'No version found'
 
         # Validate inputs
         if infra_type != 'service-role' and project_id is None:
@@ -63,7 +68,7 @@ class ConfigManager:
         		
 		Naming convention: samconfig-Prefix-ProjectId-InfraType.toml
 		For service-role: samconfig-Prefix-service-role.toml
-"""
+        """
         if self.infra_type == 'service-role':
             # For service-role, we don't include project_id in the filename
             samconfig_path = self.samconfig_dir / f"samconfig-{prefix}-service-role.toml"
@@ -74,39 +79,81 @@ class ConfigManager:
         return samconfig_path
     
     def read_samconfig(self) -> Optional[Dict]:
-        """Read existing samconfig.toml if it exists
-        Returns the configuration as a dictionary or None if the file doesn't exist
-        Returns in the format:
-        {
-            'global': {
-                'deploy': {
-                    'parameters': {}
-                }
-            },
-            'deployments': {
-                'default': {
-                    'deploy': {
-                        'parameters': {}
-                        }
-                    }
-                }
-            }
-        }
-		"""
-        
+        """Read existing samconfig.toml if it exists"""
         samconfig_path = self.generate_samconfig_path(self.prefix, self.project_id)
-		
+        
         if samconfig_path.exists():
-            samconfig_data = { 'global': {}, 'deployments': {} }
-            samconfig = toml.load(samconfig_path)
-            samconfig_data['global'] = samconfig.get('global', {})
+            try:
+                samconfig_data = {'global': {}, 'deployments': {}}
+                samconfig = toml.load(samconfig_path)
+                
+                # Handle global section
+                if 'global' in samconfig and isinstance(samconfig['global'], dict):
+                    samconfig_data['global'] = samconfig['global']
 
-            for key, value in samconfig.items():
-                if key != 'global':
-                    samconfig_data['deployments'][key] = value
+                # Handle deployment sections
+                for key, value in samconfig.items():
+                    if key != 'global' and isinstance(value, dict):
+                        try:
+                            deploy_params = value.get('deploy', {}).get('parameters', {})
+                            if isinstance(deploy_params, dict):
+                                parameter_overrides = deploy_params.get('parameter_overrides', '')
+                                if parameter_overrides and isinstance(parameter_overrides, str):
+                                    value['deploy']['parameters']['parameter_overrides'] = self.parse_parameter_overrides(parameter_overrides)
+                                samconfig_data['deployments'][key] = value
+                        except (AttributeError, TypeError) as e:
+                            logging.warning(f"Skipping invalid deployment section '{key}': {e}")
+                            continue
 
-            return samconfig_data
+                return samconfig_data
+            except Exception as e:
+                logging.error(f"Error reading samconfig file {samconfig_path}: {e}")
+                return None
         return None
+
+    def parse_parameter_overrides(self, parameter_overrides_as_string: str) -> Dict:
+        """Parse parameter overrides string into a dictionary"""
+        if not parameter_overrides_as_string:
+            return {}
+        
+        parameters = {}
+        current_key = None
+        current_value = []
+        
+        # Split the string while preserving quoted strings
+        tokens = shlex.split(parameter_overrides_as_string)
+        
+        for token in tokens:
+            if '=' in token:
+                # If we have a previous key-value pair, add it to parameters
+                if current_key is not None:
+                    parameters[current_key] = ' '.join(current_value)
+                    current_value = []
+                
+                # Start new key-value pair
+                key, value = token.split('=', 1)
+                current_key = key.strip('"')
+                current_value = [value.strip('"')]
+            else:
+                # Continuation of previous value
+                if current_key is not None:
+                    current_value.append(token.strip('"'))
+        
+        # Add the last key-value pair
+        if current_key is not None:
+            parameters[current_key] = ' '.join(current_value)
+        
+        return parameters
+
+
+    def stringify_parameter_overrides(self, parameter_overrides_as_dict: Dict) -> str:
+        """Convert parameter overrides from dictionary to string"""
+
+        parameter_overrides_as_string = " ".join([
+            f'"{key}"="{value}"' for key, value in parameter_overrides_as_dict.items()
+        ])
+        
+        return parameter_overrides_as_string
 
     def get_stack_config(self, stack_name: str) -> Optional[Dict]:
         """Get configuration from existing CloudFormation stack"""
@@ -151,6 +198,7 @@ class ConfigManager:
             template_path = self.templates_dir / template_path
             
             try:
+
                 # Read the file content
                 with open(template_path) as f:
                     # Look for the Parameters section
@@ -161,6 +209,9 @@ class ConfigManager:
                         if line.startswith('Parameters:'):
                             in_parameters = True
                             parameters_section = line
+                        elif line.startswith('# v'):
+                            if 'v' in line and '/' in line:
+                                self.template_version = line.strip('# ').strip()
                         elif in_parameters:
                             # Check if we've moved to a new top-level section
                             if line.strip() and not line.startswith(' ') and line.strip().endswith(':'):
@@ -254,7 +305,6 @@ class ConfigManager:
         if self.stage_id and 'StageId' in parameters:
             defaults['StageId'] = self.stage_id
 
-        
         for param_name, param_def in parameters.items():
 
             # Skip PrefixUpper as it will be handled automatically
@@ -283,9 +333,10 @@ class ConfigManager:
                     values[param_name] = value
 
                     # If we just got a Prefix value, automatically set PrefixUpper and update self.prefix
-                    if param_name == 'Prefix' and 'PrefixUpper' in parameters:
-                        values['PrefixUpper'] = value.upper()
+                    if param_name == 'Prefix':
                         self.prefix = value
+                        if 'PrefixUpper' in parameters:
+                            values['PrefixUpper'] = value.upper()
                     
                     # Update project_id and stage_id if they were just set
                     if param_name == 'ProjectId':
@@ -293,6 +344,35 @@ class ConfigManager:
 
                     if param_name == 'StageId':
                         self.stage_id = value
+
+                        # stage_id impacts the defaults of the 
+                        # DeployEnvironment, RepositoryBranch/CodeCommitBranch
+                        if 'DeployEnvironment' in parameters:
+                            # if value starts with t then 'TEST', d then 'DEV', otherwise 'PROD'
+                            envValue = 'PROD'
+                            if value.startswith('t'):
+                                envValue = 'TEST'
+                            elif value.startswith('d'):
+                                envValue = 'DEV'
+                            
+                            parameters['DeployEnvironment']['Default'] = envValue
+
+                        if 'RepositoryBranch' in parameters:
+                            # if value is prod, then set RepositoryBranch
+                            # to 'main' otherwise set to value
+                            if value == 'prod':
+                                parameters['RepositoryBranch']['Default'] = 'main'
+                            else:
+                                parameters['RepositoryBranch']['Default'] = value  
+
+                        # CodeCommitBranch will be replaced by RepositoryBranch
+                        if 'CodeCommitBranch' in parameters:
+                            # if value is prod, then set CodeCommitBranch 
+                            # to 'main' otherwise set to value
+                            if value == 'prod':
+                                parameters['CodeCommitBranch']['Default'] = 'main'
+                            else:
+                                parameters['CodeCommitBranch']['Default'] = value                      
 
                     break
                 else:
@@ -371,26 +451,38 @@ class ConfigManager:
         
         return global_params
 
-    def build_config(self, template_file: str, parameter_values: Dict, infra_type: str, global_defaults: Dict) -> Dict:
+    def build_config(self, template_file: str, parameter_values: Dict, infra_type: str, global_defaults: Dict, local_config: Dict) -> Dict:
         """Build the complete config dictionary"""
         # Get global parameters
         global_params = self.gather_global_parameters(infra_type, global_defaults)
 
+        prefix = parameter_values.get('Prefix', '')
+        project_id = parameter_values.get('ProjectId', '')
+        stage_id = parameter_values.get('StageId', '')
+
         # Generate stack name
-        stack_name = self.generate_stack_name(
-            parameter_values.get('Prefix', ''),
-            parameter_values.get('ProjectId', ''),
-            parameter_values.get('StageId', '')
-        )
+        stack_name = self.generate_stack_name(prefix, project_id, stage_id)
+
+        # Generate automated tags
+        tags = f'"atlantis:TemplateVersion"="{self.template_version}"'
 
         deployment_parameters = {
             'stack_name': stack_name,
             's3_prefix': stack_name,
-            'parameter_overrides': parameter_values
+            'parameter_overrides': parameter_values,
+            'tags': tags
         }
 
-        deployments = {}
-        deployments[self.stage_id] = {
+        # if self.prefix or self.project_id is not equal to sys arg 2 and 3 
+        # then deployments = {} else set to local_config deployments
+        # Because that means we made a copy and are creating a fresh copy 
+        # with only global and current stage
+        if prefix != sys.argv[2] or (project_id and project_id != sys.argv[3]):
+            deployments = {}
+        else:
+            deployments = local_config.get('deployments', {})
+
+        deployments[stage_id] = {
             'deploy': {
                 'parameters': deployment_parameters
             }
@@ -532,15 +624,7 @@ class ConfigManager:
             if project_id:
                 pystr += f" {project_id}"
 
-            # Convert parameter_values dict to parameter_overrides string
-            if isinstance(parameter_values, dict):
-                parameter_overrides = " ".join([
-                    f'{key}="{value}"' for key, value in parameter_values.items()
-                ])
-                
-                # Update the config with the string version
-                config['deployments'][self.stage_id]['deploy']['parameters']['parameter_overrides'] = parameter_overrides
-            
+
             header_pystr = f"{pystr}"
             if self.stage_id != 'default':
                 header_pystr += f" {self.stage_id}"
@@ -590,6 +674,15 @@ class ConfigManager:
                         '# To update parameter_overrides or tags for this deployment, use the generate script:\n'
                         f'# python {section_pystr}\n'
                     )
+
+                    # Convert parameter_values dict to parameter_overrides string
+                    p_overrides = section_config.get('deploy', {}).get('parameters', {}).get('parameter_overrides', '')
+                    if isinstance(p_overrides, dict):
+                        parameter_overrides = self.stringify_parameter_overrides(p_overrides)
+                        
+                        # Update the config with the string version
+                        section_config['deploy']['parameters']['parameter_overrides'] = parameter_overrides
+                    
                     f.write(f'\n{deploy_section_header}\n')
                     toml.dump({section: section_config}, f)
                 
@@ -600,6 +693,9 @@ class ConfigManager:
             logging.error(f"Error saving configuration: {e}")
             sys.exit(1)
 
+# ============================================================
+# ----------------- Main function ----------------------------
+# ============================================================
 
 @click.command()
 @click.option('--check-stack', is_flag=True, help='Check existing stack configuration')
@@ -623,7 +719,7 @@ def main(check_stack: bool, profile: str, infra_type: str, prefix: str,
     local_config = config_manager.read_samconfig()
     
     if check_stack:
-        stack_name = config_manager.generate_stack_name(prefix, project_id, stage_id)
+        stack_name = config_manager.generate_stack_name(config_manager.prefix, config_manager.project_id, config_manager.stage_id)
         stack_config = config_manager.get_stack_config(stack_name)
         
         if stack_config and local_config:
@@ -647,7 +743,7 @@ def main(check_stack: bool, profile: str, infra_type: str, prefix: str,
         templates = config_manager.discover_templates()
         template_file = config_manager.select_template(templates)
     else:
-        template_file_from_config = local_config['global']['deploy']['parameters'].get('template_file')
+        template_file_from_config = local_config.get('global', {}).get('deploy', {}).get('parameters', {}).get('template_file', '')
         # if template file starts with s3://, use it as is, else parse
         if template_file_from_config and template_file_from_config.startswith('s3://'):
             template_file = template_file_from_config
@@ -657,14 +753,20 @@ def main(check_stack: bool, profile: str, infra_type: str, prefix: str,
 
     parameters = config_manager.get_template_parameters(template_file)
     defaults = config_manager.load_defaults()
+
     parameter_defaults = defaults.get('parameter_overrides', {})
-    global_defaults = defaults.get('global', {})
+    if local_config:
+        parameter_defaults.update(local_config.get('deployments', {}).get(config_manager.stage_id, {}).get('deploy', {}).get('parameters', {}).get('parameter_overrides', {}))
     
+    global_defaults = defaults.get('global', {})
+    if local_config:
+        global_defaults.update(local_config.get('global', {}).get('deploy', {}).get('parameters', {}))
+
     # Prompt for parameters
     parameter_values = config_manager.prompt_for_parameters(parameters, parameter_defaults)
     
     # Build the complete config
-    config = config_manager.build_config(template_file, parameter_values, infra_type, global_defaults)
+    config = config_manager.build_config(template_file, parameter_values, infra_type, global_defaults, local_config)
     
     # Save the config
     config_manager.save_config(config)
