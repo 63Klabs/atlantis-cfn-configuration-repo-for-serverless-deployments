@@ -1,14 +1,38 @@
-# pip install boto3 toml click
-
 # v0.1.0/2025-01-12
 # Written by Amazon Q Developer with assistance from Chad Kluck
+# GitHub Copilot assisted in all coloring of output and prompts
+
+# =============================================================================
+# Usage:
+# python config.py <infra_type> <prefix> [<project_id>] [<stage_id>] [--check-stack true] [--profile default]
+# Create/Update a service-role with prefix acme
+# python config.py service-role acme
+# Create/Update a pipeline with prefix acme, project_id widget-ws, and stage_id test
+# python config.py pipeline acme widget-ws test
+# Import/Check existing stack using local AWS credential profile devuser
+# python config.py network acme widget-ws test --check-stack true --profile devuser
+# -----------------------------------------------------------------------------
+# Install:
+# sudo pip install boto3 toml click colorama
+# or
+# sudo apt install python3-boto3 python3-toml python3-click python3-colorama
+# -----------------------------------------------------------------------------
+# Full Documentation:
+# Check local READMEs or GitHub repository:
+# https://github.com/chadkluck/atlantis-for-aws-sam-deployments/
+# =============================================================================
+
+# TODO: Instructional Text
 
 # TODO: Generate Tags
 # TODO: Read in tags 
+# TODO: Filename and hash
 
 # TODO: Test validation of prompts
 # TODO: Test deploy
 # TODO: Test read existing stack
+
+# TODO: Set defaults and tags from script
 
 # Q's suggestions
 # TODO: More robust parameter validation
@@ -27,10 +51,15 @@ import re
 import sys
 import os
 import shlex
+import click
+import hashlib
+# from colorama import init, Fore, Back, Style
 from pathlib import Path
 from typing import Dict, Optional, List
-import click
 from botocore.exceptions import ClientError
+
+# Initialize colorama
+# init(autoreset=True)
 
 class ConfigManager:
     def __init__(self, infra_type: str, prefix: str, project_id: str, stage_id: Optional[str] = None):
@@ -43,6 +72,8 @@ class ConfigManager:
         self.samconfig_dir = Path('..') / f"{infra_type}-infrastructure"
         self.settings_dir = Path("settings")
         self.template_version = 'No version found'
+        self.template_hash = None
+        self.template_hash_id = None
         self.template_file = None
 
         # Validate inputs
@@ -200,12 +231,33 @@ class ConfigManager:
             try:
 
                 # Read the file content
-                with open(template_path) as f:
+                with open(template_path, "rb") as f:
+
+                    # get SHA256 hash of template file
+                    sha256_hash = hashlib.sha256()
+                    for byte_block in iter(lambda: f.read(4096), b""):
+                        sha256_hash.update(byte_block)
+                    full_hash = sha256_hash.hexdigest()
+                    self.template_hash = full_hash
+                    self.template_hash_id = full_hash[-6:]
+
+                    # let user know what template is being used
+                    click.echo(click.style(f"\nUsing template file: ", fg="green", bold=True) + 
+                               click.style(f"{template_path}", fg="yellow"))
+                    click.echo(click.style(f"Template hash: ", fg="green", bold=True) + 
+                               click.style(f"{full_hash}", fg="yellow"))
+                    click.echo(click.style(f"Template hash ID: ", fg="green", bold=True) + 
+                               click.style(f"{self.template_hash_id}", fg="yellow"))
+
+                    # Go back to start of file to process contents
+                    f.seek(0)
+
                     # Look for the Parameters section
                     parameters_section = ""
                     in_parameters = False
                     
                     for line in f:
+                        line = line.decode('utf-8')  # Decode each line to process as text
                         if line.startswith('Parameters:'):
                             in_parameters = True
                             parameters_section = line
@@ -300,8 +352,8 @@ class ConfigManager:
     def prompt_for_parameters(self, parameters: Dict, defaults: Dict) -> Dict:
         """Prompt user for parameter values"""
 
-        print('\n------------------------------\n'
-                'Template Parameters:\n')
+        click.echo(click.style('\n--------------------------------------------------------------------------------\n'
+                'Template Parameter Overrides:\n', fg='green', bold=True))
         
         values = {}
         
@@ -328,13 +380,15 @@ class ConfigManager:
             
             while True:
                 value = click.prompt(
-                    f"{param_name} [{default_value}]",
+                    click.style(f"{param_name} [", fg='cyan', bold=True) + 
+                    click.style(f"{default_value}", fg='magenta') +
+                    click.style(f"]", fg='cyan', bold=True),
                     default=default_value,
                     show_default=False
                 )
                 
                 if value == '?':
-                    click.echo(param_def.get('Description', 'No description available'))
+                    click.echo(click.style(f"{param_def.get('Description', 'No description available')}", fg='blue'))
                     continue
                 elif value == '^':
                     raise click.Abort()
@@ -428,38 +482,38 @@ class ConfigManager:
     def gather_global_parameters(self, infra_type: str, global_defaults: Dict) -> Dict:
         """Gather global deployment parameters"""
 
-        print('\n------------------------------\n'
-                'Global deployment parameters:\n')
+        click.echo(click.style('\n--------------------------------------------------------------------------------\n'
+                'Global Deployment Parameters:\n', fg='green', bold=True))
 
         global_params = {}
         
         # Get S3 bucket for deployments
-        global_params['s3_bucket'] = click.prompt(
+        global_params['s3_bucket'] = formatted_prompt(
             "S3 bucket for deployments",
-            type=str,
-            default=global_defaults.get('s3_bucket', (os.getenv('SAM_DEPLOY_BUCKET', '')))
+            global_defaults.get('s3_bucket', os.getenv('SAM_DEPLOY_BUCKET', '')),
+            str
         )
-        
+
         # Get AWS region
-        global_params['region'] = click.prompt(
+        global_params['region'] = formatted_prompt(
             "AWS region",
-            type=str,
-            default=global_defaults.get('region', (os.getenv('AWS_REGION', 'us-east-1')))
+            global_defaults.get('region', os.getenv('AWS_REGION', 'us-east-1')),
+            str
         )
-        
+
         # Confirm changeset prompt
-        global_params['confirm_changeset'] = click.prompt(
+        global_params['confirm_changeset'] = formatted_prompt(
             "Confirm changeset before deploy",
-            type=str,
-            default= ('true' if (global_defaults.get('confirm_changeset', True)) else 'false')
+            'true' if global_defaults.get('confirm_changeset', True) else 'false',
+            str
         )
-        
+
         # Get role ARN if this is a pipeline deployment
         if infra_type == 'pipeline':
-            global_params['role_arn'] = click.prompt(
+            global_params['role_arn'] = formatted_prompt(
                 "IAM role ARN for deployments",
-                type=str,
-                default=global_defaults.get('role_arn', (os.getenv('SAM_DEPLOY_ROLE', '')))
+                global_defaults.get('role_arn', os.getenv('SAM_DEPLOY_ROLE', '')),
+                str
             )
         
         return global_params
@@ -705,6 +759,16 @@ class ConfigManager:
         except Exception as e:
             logging.error(f"Error saving configuration: {e}")
             sys.exit(1)
+
+# This function was written by GitHub Copilot :)
+# GitHub Copilot also assisted in all coloring of output and prompts
+def formatted_prompt(prompt_text: str, default_value: str, value_type: type):
+    """Format prompts so that they are consistent"""
+    formatted_text = click.style(f"{prompt_text} [", fg='cyan', bold=True) + \
+                    click.style(f"{default_value}", fg='magenta') + \
+                    click.style("]", fg='cyan', bold=True)
+    return click.prompt(formatted_text, type=value_type, default=default_value, show_default=False)
+
 
 # ============================================================
 # ----------------- Main function ----------------------------

@@ -1,6 +1,6 @@
 
 AWSTemplateFormatVersion: "2010-09-09"
-Description: "CodePipeline for Deployments - Deployed using SAM"
+Description: "CodePipeline for Automated Deployments from repository - Deployed using SAM"
 
 # Atlantis for AWS SAM Deployments
 # Pipeline Infrastructure Template
@@ -12,6 +12,10 @@ Description: "CodePipeline for Deployments - Deployed using SAM"
 
 # Creates an AWS CodePipeline that is triggered when a watched branch
 # receives a new commit. Uses CodeBuild and then CloudFormation to deploy.
+
+# USE WITH:
+# - Application Infrastructure (API Gateway)
+# - OPTIONAL: Route53 and CloudFront for custom domains 
 
 
 # =============================================================================
