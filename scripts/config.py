@@ -1,4 +1,4 @@
-# v0.1.0/2025-01-12
+VERSION = "v0.1.0/2025-01-12"
 # Written by Amazon Q Developer with assistance from Chad Kluck
 # GitHub Copilot assisted in all coloring of output and prompts
 
@@ -23,6 +23,7 @@
 # =============================================================================
 
 # TODO: Instructional Text
+# TODO: Fix issue when saving new config file
 
 # TODO: Generate Tags
 # TODO: Read in tags 
@@ -115,6 +116,10 @@ class ConfigManager:
         
         if samconfig_path.exists():
             try:
+                print()
+                click.echo(formatted_output_with_value("Using samconfig file:", samconfig_path))
+                print()
+
                 samconfig_data = {'global': {}, 'deployments': {}}
                 samconfig = toml.load(samconfig_path)
                 
@@ -242,12 +247,11 @@ class ConfigManager:
                     self.template_hash_id = full_hash[-6:]
 
                     # let user know what template is being used
-                    click.echo(click.style(f"\nUsing template file: ", fg="green", bold=True) + 
-                               click.style(f"{template_path}", fg="yellow"))
-                    click.echo(click.style(f"Template hash: ", fg="green", bold=True) + 
-                               click.style(f"{full_hash}", fg="yellow"))
-                    click.echo(click.style(f"Template hash ID: ", fg="green", bold=True) + 
-                               click.style(f"{self.template_hash_id}", fg="yellow"))
+                    print()
+                    click.echo(formatted_output_with_value("Using template file:", template_path))
+                    click.echo(formatted_output_with_value("Template hash:", full_hash))
+                    click.echo(formatted_output_with_value("Template hash ID:", self.template_hash_id))
+                    print()
 
                     # Go back to start of file to process contents
                     f.seek(0)
@@ -352,8 +356,10 @@ class ConfigManager:
     def prompt_for_parameters(self, parameters: Dict, defaults: Dict) -> Dict:
         """Prompt user for parameter values"""
 
-        click.echo(click.style('\n--------------------------------------------------------------------------------\n'
-                'Template Parameter Overrides:\n', fg='green', bold=True))
+        print()
+        click.echo(formatted_divider())
+        click.echo(formatted_output_bold("Template Parameter Overrides:"))
+        print()
         
         values = {}
         
@@ -377,18 +383,17 @@ class ConfigManager:
                 continue
 
             default_value = defaults.get(param_name, param_def.get('Default', ''))
-            
+
             while True:
-                value = click.prompt(
-                    click.style(f"{param_name} [", fg='cyan', bold=True) + 
-                    click.style(f"{default_value}", fg='magenta') +
-                    click.style(f"]", fg='cyan', bold=True),
-                    default=default_value,
-                    show_default=False
+
+                value = formatted_prompt(
+                    param_name,
+                    default_value,
+                    str
                 )
                 
                 if value == '?':
-                    click.echo(click.style(f"{param_def.get('Description', 'No description available')}", fg='blue'))
+                    click.echo(formatted_info(f"{param_def.get('Description', 'No description available')}"))
                     continue
                 elif value == '^':
                     raise click.Abort()
@@ -443,7 +448,7 @@ class ConfigManager:
 
                     break
                 else:
-                    click.echo(f"Invalid value for {param_name}")
+                    click.echo(formatted_error(f"Invalid value for {param_name}"))
 
                     
         return values
@@ -458,13 +463,20 @@ class ConfigManager:
         templates.sort()
         
         # Display numbered list
-        print("\nAvailable templates:")
+        click.echo(formatted_question("Available templates:"))
         for idx, template in enumerate(templates, 1):
-            print(f"{idx}. {template}")
+            click.echo(formatted_option(f"{idx}. {template}"))
         
+        print()
+
         while True:
             try:
-                choice = input("\nEnter template number: ")
+                default = ''
+                # if only one template, make it the default
+                if len(templates) == 1:
+                    default = 1
+
+                choice = formatted_prompt("Enter template number", default, str)
                 # Check if input is a number
                 template_idx = int(choice) - 1
                 
@@ -472,18 +484,20 @@ class ConfigManager:
                 if 0 <= template_idx < len(templates):
                     return templates[template_idx]
                 else:
-                    print(f"Please enter a number between 1 and {len(templates)}")
+                    click.echo(formatted_error(f"Please enter a number between 1 and {len(templates)}"))
             except ValueError:
-                print("Please enter a valid number")
+                click.echo(formatted_error("Please enter a valid number"))
             except KeyboardInterrupt:
-                print("\nTemplate selection cancelled")
+                click.echo(formatted_info("Template selection cancelled"))
                 sys.exit(1)
 
     def gather_global_parameters(self, infra_type: str, global_defaults: Dict) -> Dict:
         """Gather global deployment parameters"""
 
-        click.echo(click.style('\n--------------------------------------------------------------------------------\n'
-                'Global Deployment Parameters:\n', fg='green', bold=True))
+        print()
+        click.echo(formatted_divider())
+        click.echo(formatted_output_bold("Global Deployment Parameters:"))
+        print()
 
         global_params = {}
         
@@ -754,25 +768,86 @@ class ConfigManager:
                     toml.dump({section: section_config}, f)
                 
             logging.info("Configuration saved to samconfig.toml")
-            print(f"Configuration saved to {samconfig_path}")
+            
+            print()
+            click.echo(formatted_output_with_value("Configuration saved to", samconfig_path))
+            click.echo(formatted_output_bold("Open file for 'sam deploy' commands"))
+            print()
             
         except Exception as e:
             logging.error(f"Error saving configuration: {e}")
             sys.exit(1)
 
+# =============================================================================
+# ----- Helper functions ------------------------------------------------------
+# =============================================================================
+
+# Prompt colors may be changable at a later date
+COLOR_PROMPT = 'cyan'
+COLOR_OPTION = 'magenta'
+COLOR_OUTPUT = 'green'
+COLOR_OUTPUT_VALUE = 'yellow'
+COLOR_ERROR = 'red'
+COLOR_WARNING = 'yellow'
+COLOR_INFO = 'blue'
+
 # This function was written by GitHub Copilot :)
 # GitHub Copilot also assisted in all coloring of output and prompts
-def formatted_prompt(prompt_text: str, default_value: str, value_type: type):
+def formatted_prompt(prompt_text: str, default_value: str, value_type: type = str, show_default: bool = False):
     """Format prompts so that they are consistent"""
-    formatted_text = click.style(f"{prompt_text} [", fg='cyan', bold=True) + \
-                    click.style(f"{default_value}", fg='magenta') + \
-                    click.style("]", fg='cyan', bold=True)
-    return click.prompt(formatted_text, type=value_type, default=default_value, show_default=False)
+    formatted_text = ''
+    
+    if default_value != '':
+        formatted_text = click.style(f"{prompt_text} [", fg=COLOR_PROMPT, bold=True) + \
+                         click.style(f"{default_value}", fg=COLOR_OPTION) + \
+                         click.style("]", fg=COLOR_PROMPT, bold=True)
+    else:
+        formatted_text = click.style(f"{prompt_text}", fg=COLOR_PROMPT, bold=True)
 
+    return click.prompt(formatted_text, type=value_type, default=default_value, show_default=show_default)
 
-# ============================================================
-# ----------------- Main function ----------------------------
-# ============================================================
+def formatted_question(question_text: str):
+    """Format questions so that they are consistent"""
+    return click.style(f"{question_text} ", fg=COLOR_PROMPT, bold=True)
+
+def formatted_option(option_text: str):
+    """Format options so that they are consistent"""
+    return click.style(f"{option_text} ", fg=COLOR_OPTION)
+
+def formatted_output_with_value(response_text: str, response_value: str):
+    """Format responses so that they are consistent"""
+    return click.style(f"{response_text.strip()} ", fg=COLOR_OUTPUT, bold=True) + \
+           click.style(f"{response_value}", fg=COLOR_OUTPUT_VALUE)
+
+def formatted_output_bold(response_text: str):
+    """Format responses so that they are consistent"""
+    return click.style(f"{response_text} ", fg=COLOR_OUTPUT, bold=True)
+
+def formatted_output(response_text: str):
+    """Format responses so that they are consistent"""
+    return click.style(f"{response_text} ", fg=COLOR_OUTPUT)
+
+def formatted_error(response_text: str):
+    """Format responses so that they are consistent"""
+    return click.style(f"{response_text} ", fg=COLOR_ERROR, bold=True)
+
+def formatted_warning(response_text: str):
+    """Format responses so that they are consistent"""
+    return click.style(f"{response_text} ", fg=COLOR_WARNING, bold=True)
+
+def formatted_info(response_text: str):
+    """Format responses so that they are consistent"""
+    return click.style(f"{response_text} ", fg=COLOR_INFO)
+
+def formatted_divider(char: str = '-'):
+    """Format dividers so that they are consistent"""
+    return click.style(f"{char * 80}", fg=COLOR_OUTPUT, bold=True)
+
+# =============================================================================
+# ----- Main function ---------------------------------------------------------
+# =============================================================================
+
+VALID_INFRA_TYPES = ['service-role', 'pipeline', 'storage', 'network']
 
 @click.command()
 @click.option('--check-stack', is_flag=True, help='Check existing stack configuration')
@@ -786,9 +861,20 @@ def main(check_stack: bool, profile: str, infra_type: str, prefix: str,
     if profile:
         boto3.setup_default_session(profile_name=profile)
     
+    # Validate infra_type
+    if infra_type not in VALID_INFRA_TYPES:
+        raise click.UsageError(f"Invalid infra_type. Must be one of {VALID_INFRA_TYPES}")
+
     # Validate project_id requirement
     if infra_type != 'service-role' and not project_id:
         raise click.UsageError("project_id is required for non-service-role infrastructure types")
+    
+    print()
+    click.echo(formatted_divider("="))
+    click.echo(formatted_output_bold(f"Configuration Generator ({VERSION})"))
+    click.echo(formatted_output_with_value("Infra Type:", infra_type))
+    click.echo(formatted_divider("="))
+    print()
         
     config_manager = ConfigManager(infra_type, prefix, project_id, stage_id)
     
@@ -796,19 +882,17 @@ def main(check_stack: bool, profile: str, infra_type: str, prefix: str,
     local_config = config_manager.read_samconfig()
     
     if check_stack:
+
         stack_name = config_manager.generate_stack_name(config_manager.prefix, config_manager.project_id, config_manager.stage_id)
         stack_config = config_manager.get_stack_config(stack_name)
         
         if stack_config and local_config:
             differences = config_manager.compare_configurations(local_config, stack_config)
             if differences:
-                click.echo("Differences found between local and deployed configuration:")
-                click.echo(json.dumps(differences, indent=2))
+                click.echo(formatted_warning("Differences found between local and deployed configuration:"))
+                click.echo(formatted_warning(json.dumps(differences, indent=2)))
                 
-                choice = click.prompt(
-                    "Choose configuration to use (local/deployed/cancel)",
-                    type=click.Choice(['local', 'deployed', 'cancel'])
-                )
+                choice = formatted_prompt("Choose configuration to use (local/deployed/cancel)", "", click.Choice(['local', 'deployed', 'cancel']))
                 
                 if choice == 'cancel':
                     raise click.Abort()
@@ -845,8 +929,15 @@ def main(check_stack: bool, profile: str, infra_type: str, prefix: str,
     # Build the complete config
     config = config_manager.build_config(template_file, parameter_values, infra_type, global_defaults, local_config)
     
+    print()
+    click.echo(formatted_divider())
+
     # Save the config
     config_manager.save_config(config)
+
+    click.echo(formatted_divider("="))
+    print()
+
 
 if __name__ == '__main__':
     main()
