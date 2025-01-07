@@ -1,0 +1,13 @@
+{
+	"global": {},
+	"parameter_overrides": {
+		"DomainForCloudFront": "example.com",
+		"AcmCertificateArnForCloudFront": "arn:aws:acm:us-east-1:123456789012:cert/ACME-Cert"
+	},
+	"tags": [
+		{
+			"Key": "ServiceTeam",
+			"Value": "NetworkAndContentDelivery"
+		}
+	]
+}

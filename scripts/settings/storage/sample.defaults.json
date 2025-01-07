@@ -1,0 +1,10 @@
+{
+	"global": {},
+	"parameter_overrides": {},
+	"tags": [
+		{
+			"Key": "ServiceTeam",
+			"Value": "SysOpsDataAdm"
+		}
+	]
+}

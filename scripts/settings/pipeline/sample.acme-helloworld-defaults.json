@@ -1,0 +1,13 @@
+{
+	"global": {},
+	"parameter_overrides": {
+		"AlarmNotificationEmail": "asdf@example.com",
+		"CodeCommitRepository": "acme-hello-world-api-webservice"
+	},
+	"tags": [
+		{
+			"Key": "Owner",
+			"Value": "JaneSmith"
+		}
+	]
+}
