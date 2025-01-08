@@ -4,8 +4,8 @@ Description: "Serves Static Content (S3) and/or API Gateway via CloudFront with 
 
 # Atlantis for AWS SAM Deployments
 # Network Infrastructure Template
-# Chad Kluck - chadkluck.me
-# v0.0.12/2024-10-22
+# Author: Chad Kluck - chadkluck.me
+# Version: v0.0.12/2024-10-22
 
 # Documentation, Issues/Feature Requests, Latest Updates, and Security Reports on GitHub:
 # https://github.com/chadkluck/atlantis-for-aws-sam-deployments/

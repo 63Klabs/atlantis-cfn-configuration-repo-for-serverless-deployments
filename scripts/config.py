@@ -1,33 +1,38 @@
 VERSION = "v0.1.0/2025-01-12"
-# Written by Amazon Q Developer with assistance from Chad Kluck
-# GitHub Copilot assisted in all coloring of output and prompts
+# Written by Chad Kluck with AI assistance from Amazon Q Developer
+# GitHub Copilot assisted in color formats of output and prompts
 
 # =============================================================================
 # Usage:
-# python config.py <infra_type> <prefix> [<project_id>] [<stage_id>] [--check-stack true] [--profile default]
+#
+# `python config.py <infra_type> <prefix> [<project_id>] [<stage_id>] [--check-stack true] [--profile default]`
+#
 # Create/Update a service-role with prefix acme
-# python config.py service-role acme
+# `python config.py service-role acme`
+#
 # Create/Update a pipeline with prefix acme, project_id widget-ws, and stage_id test
-# python config.py pipeline acme widget-ws test
+# `python config.py pipeline acme widget-ws test`
+#
 # Import/Check existing stack using local AWS credential profile devuser
-# python config.py network acme widget-ws test --check-stack true --profile devuser
+# `python config.py network acme widget-ws test --check-stack true --profile devuser`
+#
 # -----------------------------------------------------------------------------
 # Install:
-# sudo pip install boto3 toml click colorama
-# or
-# sudo apt install python3-boto3 python3-toml python3-click python3-colorama
+#
+# `sudo pip install boto3 toml click`
+# ---------- OR ----------
+# `sudo apt install python3-boto3 python3-toml python3-click`
+#
 # -----------------------------------------------------------------------------
 # Full Documentation:
+#
 # Check local READMEs or GitHub repository:
 # https://github.com/chadkluck/atlantis-for-aws-sam-deployments/
+#
 # =============================================================================
-
-# TODO: Instructional Text
-# TODO: Fix issue when saving new config file
 
 # TODO: Generate Tags
 # TODO: Read in tags 
-# TODO: Filename and hash
 
 # TODO: Test validation of prompts
 # TODO: Test deploy
@@ -54,20 +59,16 @@ import os
 import shlex
 import click
 import hashlib
-# from colorama import init, Fore, Back, Style
 from pathlib import Path
 from typing import Dict, Optional, List
 from botocore.exceptions import ClientError
 
-# Initialize colorama
-# init(autoreset=True)
-
 class ConfigManager:
-    def __init__(self, infra_type: str, prefix: str, project_id: str, stage_id: Optional[str] = None):
+    def __init__(self, infra_type: str, prefix: str, project_id: str, stage_id: Optional[str] = 'default'):
         self.prefix = prefix
         self.infra_type = infra_type
         self.project_id = project_id
-        self.stage_id = stage_id or 'default'
+        self.stage_id = stage_id
         self.cfn_client = boto3.client('cloudformation')
         self.templates_dir = Path('..') / f"{infra_type}-infrastructure/templates"
         self.samconfig_dir = Path('..') / f"{infra_type}-infrastructure"
@@ -88,7 +89,7 @@ class ConfigManager:
         if project_id:
             stack_name += f"{project_id}-"
         
-        if stage_id != 'default' and stage_id:
+        if  stage_id and stage_id != 'default':
             stack_name += f"{stage_id}-"
 
         stack_name += f"{self.infra_type}"
@@ -246,9 +247,18 @@ class ConfigManager:
                     self.template_hash = full_hash
                     self.template_hash_id = full_hash[-6:]
 
+                    # get version from template file
+                    f.seek(0)
+                    for line in f:
+                        line = line.decode('utf-8')  # Decode each line to process as text
+                        if line.startswith('# Version:'):
+                            self.template_version = line.split(':', 1)[1].strip()
+                            break
+
                     # let user know what template is being used
                     print()
                     click.echo(formatted_output_with_value("Using template file:", template_path))
+                    click.echo(formatted_output_with_value("Template version:", self.template_version))
                     click.echo(formatted_output_with_value("Template hash:", full_hash))
                     click.echo(formatted_output_with_value("Template hash ID:", self.template_hash_id))
                     print()
@@ -265,9 +275,6 @@ class ConfigManager:
                         if line.startswith('Parameters:'):
                             in_parameters = True
                             parameters_section = line
-                        elif line.startswith('# v'):
-                            if 'v' in line and '/' in line:
-                                self.template_version = line.strip('# ').strip()
                         elif in_parameters:
                             # Check if we've moved to a new top-level section
                             if line.strip() and not line.startswith(' ') and line.strip().endswith(':'):
@@ -373,7 +380,7 @@ class ConfigManager:
         if self.project_id and 'ProjectId' in parameters:
             defaults['ProjectId'] = self.project_id
         
-        if self.stage_id and 'StageId' in parameters:
+        if self.stage_id and self.stage_id != 'default' and 'StageId' in parameters:
             defaults['StageId'] = self.stage_id
 
         for param_name, param_def in parameters.items():
@@ -539,7 +546,10 @@ class ConfigManager:
 
         prefix = parameter_values.get('Prefix', '')
         project_id = parameter_values.get('ProjectId', '')
-        stage_id = parameter_values.get('StageId', '')
+        if parameter_values.get('StageId', '') != '':
+            stage_id = parameter_values.get('StageId', '')
+        else:
+            stage_id = self.stage_id
 
         # Generate stack name
         stack_name = self.generate_stack_name(prefix, project_id, stage_id)
@@ -694,6 +704,7 @@ class ConfigManager:
 
     def save_config(self, config: Dict) -> None:
         """Save configuration to samconfig.toml file"""
+
         try:
             # Get the parameter values from the config
             parameter_values = config.get('deployments', {}).get(self.stage_id, {}).get('deploy', {}).get('parameters', {}).get('parameter_overrides', {})
@@ -724,11 +735,10 @@ class ConfigManager:
             }
 
             non_global_sections = {}
-            # Reorder the deployments to place default first, then those starting with t, b, s, and finall p
+            # Reorder the deployments to place default first, then those starting with t, b, s, and finally p
             for stage_id in sorted(config.get('deployments', {}), key=lambda x: (x[0] != 'd', x[0] != 't', x[0] != 'b', x[0] != 's', x[0] != 'p')):
                 non_global_sections[stage_id] = config['deployments'][stage_id]
-            
-            
+                        
             # Write the config to samconfig.toml
             samconfig_path = self.generate_samconfig_path(prefix, project_id)
             
@@ -869,6 +879,12 @@ def main(check_stack: bool, profile: str, infra_type: str, prefix: str,
     if infra_type != 'service-role' and not project_id:
         raise click.UsageError("project_id is required for non-service-role infrastructure types")
     
+    # Validate stage_id requirement
+    if infra_type != 'service-role' and infra_type != 'storage' and not stage_id:
+        raise click.UsageError(f"stage_id is required for infrastructure type: {infra_type}")
+    
+    stage_id = stage_id if stage_id else 'default'
+
     print()
     click.echo(formatted_divider("="))
     click.echo(formatted_output_bold(f"Configuration Generator ({VERSION})"))
@@ -914,6 +930,13 @@ def main(check_stack: bool, profile: str, infra_type: str, prefix: str,
 
     parameters = config_manager.get_template_parameters(template_file)
     defaults = config_manager.load_defaults()
+
+    print()
+    click.echo(formatted_divider("-"))
+    click.echo(formatted_output_bold("[Enter] to accept default"))
+    click.echo(formatted_output_bold("[-] to ignore default and leave blank"))
+    click.echo(formatted_output_bold("[?] to see description"))
+    click.echo(formatted_output_bold("[^] to cancel and exit"))
 
     parameter_defaults = defaults.get('parameter_overrides', {})
     if local_config:
