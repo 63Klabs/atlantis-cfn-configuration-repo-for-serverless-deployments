@@ -782,6 +782,8 @@ class ConfigManager:
             print()
             click.echo(formatted_output_with_value("Configuration saved to", samconfig_path))
             click.echo(formatted_output_bold("Open file for 'sam deploy' commands"))
+            click.echo(formatted_output_bold(f"You must be in the {self.infra_type}-infrastructure directory to run the command"))
+            click.echo(formatted_output(f"cd ../{self.infra_type}-infrastructure"))
             print()
             
         except Exception as e:
