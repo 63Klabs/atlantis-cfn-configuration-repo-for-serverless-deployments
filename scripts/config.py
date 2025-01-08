@@ -31,8 +31,7 @@ VERSION = "v0.1.0/2025-01-12"
 #
 # =============================================================================
 
-# TODO: Generate Tags
-# TODO: Read in tags 
+# TODO: Read in tags - fix overwrite
 
 # TODO: Test validation of prompts
 # TODO: Test deploy
@@ -555,7 +554,7 @@ class ConfigManager:
         stack_name = self.generate_stack_name(prefix, project_id, stage_id)
 
         # Generate automated tags
-        tags = f'"atlantis:TemplateVersion"="{self.template_version}"'
+        tags = self.generate_tags(parameter_values, [])
 
         deployment_parameters = {
             'stack_name': stack_name,
@@ -702,6 +701,121 @@ class ConfigManager:
         
         return True
 
+    def generate_automated_tags(self, parameters: Dict) -> Dict:
+        """Generate automated tags for the deployment"""
+        tags = [
+            {
+                "Key": "Atlantis",
+                "Value": self.infra_type
+            },
+            {
+                "Key": "atlantis:Prefix",
+                "Value": parameters.get('Prefix', '')
+            },
+            {
+                "Key": "Provisioner",
+                "Value": "CloudFormation"
+            },
+            {
+                "Key": "DeployedUsing",
+                "Value": "AWS SAM CLI"
+            },
+            {
+                "Key": "atlantis:TemplateVersion",
+                "Value": f"{self.template_version} {self.template_hash_id}"              
+            },
+            {
+                "Key": "atlantis:TemplateFile",
+                "Value": self.template_file
+            }
+        ]
+
+        # Add ProjectId if defined
+        if parameters.get('ProjectId'):
+            tags.append({
+                "Key": "atlantis:Application",
+                "Value": f"{parameters['Prefix']}-{parameters['ProjectId']}"
+            })
+            tags.append({
+                "Key": "Name",
+                "Value": f"{parameters['Prefix']}-{parameters['ProjectId']}"
+            })
+
+        # Add StageId if defined
+        if parameters.get('StageId'):
+            tags.append({
+                "Key": "atlantis:ApplicationDeploymentId",
+                "Value": f"{parameters['Prefix']}-{parameters['ProjectId']}-{parameters['StageId']}"
+            })
+            tags.append({
+                "Key": "Stage",
+                "Value": parameters['Stage']
+            })
+
+        # Add Environment if defined
+        if parameters.get('DeployEnvironment'):
+            tags.append({
+                "Key": "Environment",
+                "Value": parameters['DeployEnvironment']
+            })
+
+        # Add AlarmNotificationEmail if defined
+        if parameters.get('AlarmNotificationEmail'):
+            tags.append({
+                "Key": "AlarmNotificationEmail",
+                "Value": parameters['AlarmNotificationEmail']
+            })
+
+        # Add CodeCommitRepository if defined
+        if parameters.get('Repository'):
+            tags.append({
+                "Key": "CodeCommitRepository",
+                "Value": parameters['CodeCommitRepository']
+            })
+
+        # Add CodeCommitBranch if defined
+        if parameters.get('RepositoryBranch'):
+            tags.append({
+                "Key": "CodeCommitBranch",
+                "Value": parameters['CodeCommitBranch']
+            })
+
+        return tags
+
+    def generate_tags(self, parameters: Dict, custom_tags: Dict) -> Dict:
+        """Generate tags for the deployment"""
+        # Generate automated tags
+        automated_tags = self.generate_automated_tags(parameters)
+
+        return self.merge_tags(automated_tags, custom_tags)
+    
+    def merge_tags(self, automated_tags: List[Dict], custom_tags: List[Dict]) -> List[Dict]:
+        """
+        Merge automated and custom tags with custom tags taking precedence unless the tag
+        key starts with 'atlantis:' or 'Atlantis'
+        """
+        # Convert automated tags to a dictionary for easier lookup
+        tag_dict = {
+            tag['Key']: tag['Value'] 
+            for tag in automated_tags
+        }
+        
+        # Process custom tags
+        for custom_tag in custom_tags:
+            key = custom_tag['Key']
+            # Only allow custom tags to override if they don't start with atlantis: or Atlantis
+            if key in tag_dict and not (key.startswith('atlantis:') or key.startswith('Atlantis')):
+                tag_dict[key] = custom_tag['Value']
+            elif key not in tag_dict:  # Add new custom tags
+                tag_dict[key] = custom_tag['Value']
+        
+        # Convert back to list of dictionaries
+        return [{'Key': k, 'Value': v} for k, v in tag_dict.items()]
+    
+    def stringify_tags(self, tags: Dict) -> str:
+        """Convert tags to a string"""
+        return ' '.join([f'"{tag['Key']}"="{tag['Value']}"' for tag in tags])
+    
     def save_config(self, config: Dict) -> None:
         """Save configuration to samconfig.toml file"""
 
@@ -773,6 +887,11 @@ class ConfigManager:
                         
                         # Update the config with the string version
                         section_config['deploy']['parameters']['parameter_overrides'] = parameter_overrides
+
+                    tags = section_config.get('deploy', {}).get('parameters', {}).get('tags', '')
+                    if isinstance(tags, list):
+                        # Update the config with the string version
+                        section_config['deploy']['parameters']['tags'] = self.stringify_tags(tags)
                     
                     f.write(f'\n{deploy_section_header}\n')
                     toml.dump({section: section_config}, f)
