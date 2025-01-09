@@ -185,6 +185,50 @@ class ConfigManager:
         
         return parameters
 
+    def parse_tags(self, tags_as_string: str) -> List[Dict[str, str]]:
+        """Parse tags string into a list of Key-Value dictionaries
+        
+        Example input: '"atlantis"="pipeline" "Stage"="test"'
+        Returns: [{'Key': 'atlantis', 'Value': 'pipeline'}, {'Key': 'Stage', 'Value': 'test'}]
+        """
+        if not tags_as_string:
+            return []
+        
+        tags_list = []
+        current_key = None
+        current_value = []
+        
+        # Split the string while preserving quoted strings
+        tokens = shlex.split(tags_as_string)
+        
+        for token in tokens:
+            if '=' in token:
+                # If we have a previous key-value pair, add it to tags_list
+                if current_key is not None:
+                    tags_list.append({
+                        'Key': current_key,
+                        'Value': ' '.join(current_value)
+                    })
+                    current_value = []
+                
+                # Start new key-value pair
+                key, value = token.split('=', 1)
+                current_key = key.strip('"')
+                current_value = [value.strip('"')]
+            else:
+                # Continuation of previous value
+                if current_key is not None:
+                    current_value.append(token.strip('"'))
+        
+        # Add the last key-value pair
+        if current_key is not None:
+            tags_list.append({
+                'Key': current_key,
+                'Value': ' '.join(current_value)
+            })
+        
+        return tags_list
+
 
     def stringify_parameter_overrides(self, parameter_overrides_as_dict: Dict) -> str:
         """Convert parameter overrides from dictionary to string"""
