@@ -32,6 +32,7 @@ VERSION = "v0.1.0/2025-01-12"
 # =============================================================================
 
 # TODO: Read in tags - fix overwrite
+# TODO: Fix ^ so it doesn't save (looks like in the global param it accepted ^ as input)
 
 # TODO: Test validation of prompts
 # TODO: Test deploy
@@ -136,6 +137,9 @@ class ConfigManager:
                                 parameter_overrides = deploy_params.get('parameter_overrides', '')
                                 if parameter_overrides and isinstance(parameter_overrides, str):
                                     value['deploy']['parameters']['parameter_overrides'] = self.parse_parameter_overrides(parameter_overrides)
+                                tags = deploy_params.get('tags', '')
+                                if tags and isinstance(tags, str):
+                                    value['deploy']['parameters']['tags'] = self.parse_tags(tags)
                                 samconfig_data['deployments'][key] = value
                         except (AttributeError, TypeError) as e:
                             logging.warning(f"Skipping invalid deployment section '{key}': {e}")
@@ -706,11 +710,11 @@ class ConfigManager:
         tags = [
             {
                 "Key": "Atlantis",
-                "Value": self.infra_type
+                "Value": f"{self.infra_type}-infrastructure"
             },
             {
                 "Key": "atlantis:Prefix",
-                "Value": parameters.get('Prefix', '')
+                "Value": parameters.get('Prefix')
             },
             {
                 "Key": "Provisioner",
@@ -749,7 +753,7 @@ class ConfigManager:
             })
             tags.append({
                 "Key": "Stage",
-                "Value": parameters['Stage']
+                "Value": parameters['StageId']
             })
 
         # Add Environment if defined
@@ -1066,6 +1070,10 @@ def main(check_stack: bool, profile: str, infra_type: str, prefix: str,
     global_defaults = defaults.get('global', {})
     if local_config:
         global_defaults.update(local_config.get('global', {}).get('deploy', {}).get('parameters', {}))
+
+    tag_defaults = defaults.get('tags', [])
+    if local_config:
+        tag_defaults = config_manager.merge_tags(tag_defaults, local_config.get('tags', []))
 
     # Prompt for parameters
     parameter_values = config_manager.prompt_for_parameters(parameters, parameter_defaults)
