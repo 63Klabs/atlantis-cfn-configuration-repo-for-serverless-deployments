@@ -57,6 +57,10 @@ from pathlib import Path
 from typing import Dict, Optional, List
 from botocore.exceptions import ClientError
 
+# if logs directory does not exist, create it
+if not os.path.exists('logs'):
+    os.makedirs('logs')
+    
 logging.basicConfig(
     level=logging.INFO,
     filename='logs/script.log',
