@@ -13,6 +13,7 @@ x_samconfig*.toml
 
 # Ignore 
 node_modules/
+scripts/logs/*
 
 # ----------------------------------------
 # UPDATE FOR PRODUCTION USE!

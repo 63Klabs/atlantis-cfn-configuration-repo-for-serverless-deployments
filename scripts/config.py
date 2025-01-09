@@ -38,7 +38,6 @@ VERSION = "v0.1.0/2025-01-12"
 # TODO: Validate Tag reads
 
 # Q's suggestions
-# TODO: More robust parameter validation
 # TODO: Better error handling
 # TODO: More detailed logging
 # TODO: Template validation before deployment
@@ -57,6 +56,13 @@ import hashlib
 from pathlib import Path
 from typing import Dict, Optional, List
 from botocore.exceptions import ClientError
+
+logging.basicConfig(
+    level=logging.INFO,
+    filename='logs/script.log',
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
+
 
 class ConfigManager:
     def __init__(self, infra_type: str, prefix: str, project_id: str, stage_id: Optional[str] = 'default'):
@@ -269,7 +275,10 @@ class ConfigManager:
 
     def get_template_parameters(self, template_path: str) -> Dict:
         """Get parameters from CloudFormation template"""
+
         self.template_file = str(template_path)
+        logging.info(f"Using template file: '{self.template_file}'")
+
         if template_path.startswith('s3://'):
             # Handle S3 template
             pass
@@ -391,16 +400,14 @@ class ConfigManager:
             )
         
         # Load each config file in sequence if it exists
-        config_file_found = []
         for config_file in config_files:
             try:
                 if config_file.exists():
-                    config_file_found.append(config_file)
                     with open(config_file) as f:
                         # Deep update defaults with new values
                         new_config = json.load(f)
                         self.deep_update(defaults, new_config)
-                        logging.debug(f"Loaded config from {config_file}")
+                        logging.info(f"Loaded config from '{config_file}'")
             except json.JSONDecodeError as e:
                 logging.error(f"Error parsing JSON from {config_file}: {e}")
             except Exception as e:
@@ -944,7 +951,7 @@ class ConfigManager:
                     f.write(f'\n{deploy_section_header}\n')
                     toml.dump({section: section_config}, f)
                 
-            logging.info("Configuration saved to samconfig.toml")
+            logging.info(f"Configuration saved to '{samconfig_path}'")
             
             print()
             click.echo(formatted_output_with_value("Configuration saved to", samconfig_path))
@@ -1037,6 +1044,10 @@ VALID_INFRA_TYPES = ['service-role', 'pipeline', 'storage', 'network']
 @click.argument('stage_id', required=False)
 def main(check_stack: bool, profile: str, infra_type: str, prefix: str, 
         project_id: Optional[str], stage_id: Optional[str]):
+    
+    # log script arguments
+    logging.info(f"{sys.argv}")
+
     if profile:
         boto3.setup_default_session(profile_name=profile)
     
