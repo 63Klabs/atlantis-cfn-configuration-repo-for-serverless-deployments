@@ -31,14 +31,14 @@ VERSION = "v0.1.0/2025-01-12"
 #
 # =============================================================================
 
-# TODO: Read in tags - fix overwrite
+# TODO: File name in tags
 # TODO: Fix ^ so it doesn't save (looks like in the global param it accepted ^ as input)
 
 # TODO: Test validation of prompts
 # TODO: Test deploy
 # TODO: Test read existing stack
 
-# TODO: Set defaults and tags from script
+# TODO: Set defaults and tags from script?
 
 # Q's suggestions
 # TODO: More robust parameter validation
@@ -274,6 +274,7 @@ class ConfigManager:
 
     def get_template_parameters(self, template_path: str) -> Dict:
         """Get parameters from CloudFormation template"""
+        self.template_file = str(template_path)
         if template_path.startswith('s3://'):
             # Handle S3 template
             pass
@@ -352,8 +353,11 @@ class ConfigManager:
         for key, value in update.items():
             if key in original and isinstance(original[key], dict) and isinstance(value, dict):
                 self.deep_update(original[key], value)
+            elif key in original and isinstance(original[key], list) and isinstance(value, list):
+                original[key] = self.merge_tags(original[key], value)
             else:
                 original[key] = value
+
         return original
 
     def load_defaults(self) -> Dict:
@@ -392,9 +396,11 @@ class ConfigManager:
             )
         
         # Load each config file in sequence if it exists
+        config_file_found = []
         for config_file in config_files:
             try:
                 if config_file.exists():
+                    config_file_found.append(config_file)
                     with open(config_file) as f:
                         # Deep update defaults with new values
                         new_config = json.load(f)
@@ -404,7 +410,7 @@ class ConfigManager:
                 logging.error(f"Error parsing JSON from {config_file}: {e}")
             except Exception as e:
                 logging.error(f"Error loading config file {config_file}: {e}")
-        
+        print(config_file_found)
         return defaults
 
     def prompt_for_parameters(self, parameters: Dict, defaults: Dict) -> Dict:
@@ -586,7 +592,7 @@ class ConfigManager:
         
         return global_params
 
-    def build_config(self, template_file: str, parameter_values: Dict, infra_type: str, global_defaults: Dict, local_config: Dict) -> Dict:
+    def build_config(self, infra_type: str, template_file: str, global_defaults: Dict, parameter_values: Dict, tag_defaults: List, local_config: Dict) -> Dict:
         """Build the complete config dictionary"""
         # Get global parameters
         global_params = self.gather_global_parameters(infra_type, global_defaults)
@@ -602,7 +608,7 @@ class ConfigManager:
         stack_name = self.generate_stack_name(prefix, project_id, stage_id)
 
         # Generate automated tags
-        tags = self.generate_tags(parameter_values, [])
+        tags = self.generate_tags(parameter_values, tag_defaults)
 
         deployment_parameters = {
             'stack_name': stack_name,
@@ -749,7 +755,7 @@ class ConfigManager:
         
         return True
 
-    def generate_automated_tags(self, parameters: Dict) -> Dict:
+    def generate_automated_tags(self, parameters: Dict) -> List[Dict]:
         """Generate automated tags for the deployment"""
         tags = [
             {
@@ -830,14 +836,14 @@ class ConfigManager:
 
         return tags
 
-    def generate_tags(self, parameters: Dict, custom_tags: Dict) -> Dict:
+    def generate_tags(self, parameters: Dict, custom_tags: List[Dict]) -> List[Dict]:
         """Generate tags for the deployment"""
         # Generate automated tags
         automated_tags = self.generate_automated_tags(parameters)
 
         return self.merge_tags(automated_tags, custom_tags)
     
-    def merge_tags(self, automated_tags: List[Dict], custom_tags: List[Dict]) -> List[Dict]:
+    def merge_tags(self, original_tags: List[Dict], new_tags: List[Dict]) -> List[Dict]:
         """
         Merge automated and custom tags with custom tags taking precedence unless the tag
         key starts with 'atlantis:' or 'Atlantis'
@@ -845,22 +851,22 @@ class ConfigManager:
         # Convert automated tags to a dictionary for easier lookup
         tag_dict = {
             tag['Key']: tag['Value'] 
-            for tag in automated_tags
+            for tag in original_tags
         }
         
         # Process custom tags
-        for custom_tag in custom_tags:
-            key = custom_tag['Key']
-            # Only allow custom tags to override if they don't start with atlantis: or Atlantis
+        for new_tag in new_tags:
+            key = new_tag['Key']
+            # Only allow new tags to override if they don't start with atlantis: or Atlantis
             if key in tag_dict and not (key.startswith('atlantis:') or key.startswith('Atlantis')):
-                tag_dict[key] = custom_tag['Value']
+                tag_dict[key] = new_tag['Value']
             elif key not in tag_dict:  # Add new custom tags
-                tag_dict[key] = custom_tag['Value']
+                tag_dict[key] = new_tag['Value']
         
         # Convert back to list of dictionaries
         return [{'Key': k, 'Value': v} for k, v in tag_dict.items()]
     
-    def stringify_tags(self, tags: Dict) -> str:
+    def stringify_tags(self, tags: List[Dict]) -> str:
         """Convert tags to a string"""
         return ' '.join([f'"{tag['Key']}"="{tag['Value']}"' for tag in tags])
     
@@ -1107,23 +1113,24 @@ def main(check_stack: bool, profile: str, infra_type: str, prefix: str,
     click.echo(formatted_output_bold("[?] to see description"))
     click.echo(formatted_output_bold("[^] to cancel and exit"))
 
-    parameter_defaults = defaults.get('parameter_overrides', {})
-    if local_config:
-        parameter_defaults.update(local_config.get('deployments', {}).get(config_manager.stage_id, {}).get('deploy', {}).get('parameters', {}).get('parameter_overrides', {}))
-    
     global_defaults = defaults.get('global', {})
     if local_config:
         global_defaults.update(local_config.get('global', {}).get('deploy', {}).get('parameters', {}))
 
-    tag_defaults = defaults.get('tags', [])
+    parameter_defaults = defaults.get('parameter_overrides', {})
     if local_config:
-        tag_defaults = config_manager.merge_tags(tag_defaults, local_config.get('tags', []))
+        parameter_defaults.update(local_config.get('deployments', {}).get(config_manager.stage_id, {}).get('deploy', {}).get('parameters', {}).get('parameter_overrides', {}))
 
+    tag_defaults = defaults.get('tags', [])
+    print(tag_defaults)
+    if local_config:
+        tag_defaults = config_manager.merge_tags(tag_defaults, local_config.get('deployments', {}).get(config_manager.stage_id, {}).get('deploy', {}).get('parameters', {}).get('tags', []))
+    print(tag_defaults)
     # Prompt for parameters
     parameter_values = config_manager.prompt_for_parameters(parameters, parameter_defaults)
     
     # Build the complete config
-    config = config_manager.build_config(template_file, parameter_values, infra_type, global_defaults, local_config)
+    config = config_manager.build_config(infra_type, template_file, global_defaults, parameter_values, tag_defaults, local_config)
     
     print()
     click.echo(formatted_divider())
