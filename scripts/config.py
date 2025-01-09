@@ -31,21 +31,16 @@ VERSION = "v0.1.0/2025-01-12"
 #
 # =============================================================================
 
-# TODO: File name in tags
-# TODO: Fix ^ so it doesn't save (looks like in the global param it accepted ^ as input)
-
-# TODO: Test validation of prompts
+# TODO: Test validation of prompts along with ? - ^
 # TODO: Test deploy
 # TODO: Test read existing stack
 
-# TODO: Set defaults and tags from script?
+# TODO: Validate Tag reads
 
 # Q's suggestions
 # TODO: More robust parameter validation
 # TODO: Better error handling
-# TODO: Support for additional CloudFormation template formats
 # TODO: More detailed logging
-# TODO: Support for additional parameter sources
 # TODO: Template validation before deployment
 
 import boto3
@@ -410,7 +405,6 @@ class ConfigManager:
                 logging.error(f"Error parsing JSON from {config_file}: {e}")
             except Exception as e:
                 logging.error(f"Error loading config file {config_file}: {e}")
-        print(config_file_found)
         return defaults
 
     def prompt_for_parameters(self, parameters: Dict, defaults: Dict) -> Dict:
@@ -1122,10 +1116,9 @@ def main(check_stack: bool, profile: str, infra_type: str, prefix: str,
         parameter_defaults.update(local_config.get('deployments', {}).get(config_manager.stage_id, {}).get('deploy', {}).get('parameters', {}).get('parameter_overrides', {}))
 
     tag_defaults = defaults.get('tags', [])
-    print(tag_defaults)
     if local_config:
         tag_defaults = config_manager.merge_tags(tag_defaults, local_config.get('deployments', {}).get(config_manager.stage_id, {}).get('deploy', {}).get('parameters', {}).get('tags', []))
-    print(tag_defaults)
+
     # Prompt for parameters
     parameter_values = config_manager.prompt_for_parameters(parameters, parameter_defaults)
     
