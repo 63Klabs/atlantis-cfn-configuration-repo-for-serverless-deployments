@@ -63,7 +63,7 @@ if not os.path.exists('logs'):
     
 logging.basicConfig(
     level=logging.INFO,
-    filename='logs/script.log',
+    filename='logs/script-config.log',
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
 
