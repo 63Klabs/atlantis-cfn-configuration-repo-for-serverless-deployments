@@ -57,6 +57,10 @@ from pathlib import Path
 from typing import Dict, Optional, List
 from botocore.exceptions import ClientError
 
+sys.path.append(os.path.join(os.path.dirname(__file__), 'lib'))
+
+import tools
+
 # if logs directory does not exist, create it
 if not os.path.exists('logs'):
     os.makedirs('logs')
@@ -153,6 +157,7 @@ class ConfigManager:
                 return samconfig_data
             except Exception as e:
                 logging.error(f"Error reading samconfig file {samconfig_path}: {e}")
+                click.echo(formatted_error("Error reading samconfig file. Check logs for more info."))
                 return None
         return None
 
@@ -346,6 +351,7 @@ class ConfigManager:
                     
             except Exception as e:
                 logging.error(f"Error parsing template file {template_path}: {e}")
+                click.echo(formatted_error("Error parsing template file. Check logs for more info."))
                 return {}
 
 
@@ -458,7 +464,39 @@ class ConfigManager:
                 )
                 
                 if value == '?':
-                    click.echo(formatted_info(f"{param_def.get('Description', 'No description available')}"))
+                    help = []
+
+                    help.append({"header": "Description", "text": param_def.get('Description', 'No description available')})
+
+                    allowed_pattern = param_def.get('AllowedPattern', None)
+                    if allowed_pattern:
+                        help.append({"header": "Allowed Pattern", "text": allowed_pattern})
+
+                    allowed_values = param_def.get('AllowedValues', None)
+                    if allowed_values:
+                        help.append({"header": "Allowed Values", "text": ", ".join(allowed_values)})
+
+                    constraint_description = param_def.get('ConstraintDescription', None)
+                    if constraint_description:
+                        help.append({"header": "Constraint Description", "text": constraint_description})
+
+                    # Assemble help text from MinLength, MaxLength, MinValue, MaxValue in one line like "MinLength: x, MaxLength: x, "
+                    help_text = ""
+                    if 'Type' in param_def:
+                        help_text += f"Type: {param_def['Type']}, "
+                    if 'MinLength' in param_def:
+                        help_text += f"MinLength: {param_def['MinLength']}, "
+                    if 'MaxLength' in param_def:
+                        help_text += f"MaxLength: {param_def['MaxLength']}, "
+                    if 'MinValue' in param_def:
+                        help_text += f"MinValue: {param_def['MinValue']}, "
+                    if 'MaxValue' in param_def:
+                        help_text += f"MaxValue: {param_def['MaxValue']}, "
+                    if help_text:
+                        help.append({"header": None, "text": help_text[:-2]})
+
+                    formatted_box_info(help)
+
                     continue
                 elif value == '^':
                     raise click.Abort()
@@ -466,7 +504,8 @@ class ConfigManager:
                     value = ''
                 
                 # Validate and store parameter
-                if self.validate_parameter(value, param_def):
+                validation_result = self.validate_parameter(value, param_def)
+                if validation_result.get("valid", False):
                     values[param_name] = value
 
                     # If we just got a Prefix value, automatically set PrefixUpper and update self.prefix
@@ -514,6 +553,8 @@ class ConfigManager:
                     break
                 else:
                     click.echo(formatted_error(f"Invalid value for {param_name}"))
+                    click.echo(formatted_error(validation_result.get("reason")))
+                    click.echo(formatted_info("Use the ? key and press Enter for parameter information and requirements"))
 
                     
         return values
@@ -522,6 +563,7 @@ class ConfigManager:
         """Display numbered list of templates and let user select by number"""
         if not templates:
             logging.error("No templates found")
+            click.echo(formatted_error("No templates found"))
             sys.exit(1)
         
         # Sort templates for consistent ordering
@@ -672,23 +714,22 @@ class ConfigManager:
         - MinLength/MaxLength (for string types)
         - MinValue/MaxValue (for numeric types)
         """
+
         if not value and param_def.get('Default'):
             # Empty value with default defined is valid
-            return True
+            return {"reason": "Valid", "valid": True}
             
         param_type = param_def.get('Type', 'String')
         
         # Check AllowedValues if defined
         allowed_values = param_def.get('AllowedValues', [])
         if allowed_values and value not in allowed_values:
-            logging.error(f"Value must be one of: {', '.join(allowed_values)}")
-            return False
+            return {"reason": f"Value must be one of: {', '.join(allowed_values)}", "valid": False}
         
         # Check AllowedPattern if defined
         allowed_pattern = param_def.get('AllowedPattern')
         if allowed_pattern and not re.match(allowed_pattern, value):
-            logging.error(f"Value must match pattern: {allowed_pattern}")
-            return False
+            return {"reason": f"Value must match pattern: {allowed_pattern}", "valid": False}
         
         # Type-specific validations
         if param_type in ['String', 'AWS::SSM::Parameter::Value<String>']:
@@ -699,11 +740,9 @@ class ConfigManager:
                 max_length = int(max_length)
             
             if len(value) < min_length:
-                logging.error(f"String length must be at least {min_length}")
-                return False
+                return {"reason": f"String length must be at least {min_length}", "valid": False}
             if max_length is not None and len(value) > max_length:
-                logging.error(f"String length must be no more than {max_length}")
-                return False
+                return {"reason": f"String length must be no more than {max_length}", "valid": False}
                 
         elif param_type in ['Number', 'AWS::SSM::Parameter::Value<Number>']:
             try:
@@ -712,22 +751,18 @@ class ConfigManager:
                 max_value = float(param_def.get('MaxValue', float('inf')))
                 
                 if num_value < min_value:
-                    logging.error(f"Number must be at least {min_value}")
-                    return False
+                    return {"reason": f"Number must be at least {min_value}", "valid": False}
                 if num_value > max_value:
-                    logging.error(f"Number must be no more than {max_value}")
-                    return False
+                    return {"reason": f"Number must be no more than {max_value}", "valid": False}
                     
             except ValueError:
-                logging.error("Value must be a number")
-                return False
+                return {"reason": "Value must be a number", "valid": False}
                 
         elif param_type == 'CommaDelimitedList':
             # Validate each item in the comma-delimited list
             items = [item.strip() for item in value.split(',')]
             if not all(items):
-                logging.error("CommaDelimitedList cannot contain empty items")
-                return False
+                return {"reason": "CommaDelimitedList cannot contain empty items", "valid": False}
                 
         elif param_type == 'List<Number>':
             try:
@@ -735,30 +770,25 @@ class ConfigManager:
                 # Verify each item is a valid number
                 [float(item) for item in items]
             except ValueError:
-                logging.error("All items must be valid numbers")
-                return False
+                return {"reason": "All items must be valid numbers", "valid": False}
                 
         elif param_type == 'AWS::EC2::KeyPair::KeyName':
             if not value:
-                logging.error("KeyPair name cannot be empty")
-                return False
+                return {"reason": "KeyPair name cannot be empty", "valid": False}
                 
         elif param_type == 'AWS::EC2::VPC::Id':
             if not value.startswith('vpc-'):
-                logging.error("VPC ID must start with 'vpc-'")
-                return False
+                return {"reason": "VPC ID must start with 'vpc-'", "valid": False}
                 
         elif param_type == 'AWS::EC2::Subnet::Id':
             if not value.startswith('subnet-'):
-                logging.error("Subnet ID must start with 'subnet-'")
-                return False
+                return {"reason": "Subnet ID must start with 'subnet-'", "valid": False}
                 
         elif param_type == 'AWS::EC2::SecurityGroup::Id':
             if not value.startswith('sg-'):
-                logging.error("Security Group ID must start with 'sg-'")
-                return False
+                return {"reason": "Security Group ID must start with 'sg-'", "valid": False}
         
-        return True
+        return {"reason": "Valid", "valid": True}
 
     def generate_automated_tags(self, parameters: Dict) -> List[Dict]:
         """Generate automated tags for the deployment"""
@@ -966,6 +996,7 @@ class ConfigManager:
             
         except Exception as e:
             logging.error(f"Error saving configuration: {e}")
+            click.echo(formatted_error(f"Error saving configuration. Check logs for more info."))
             sys.exit(1)
 
 # =============================================================================
@@ -980,10 +1011,11 @@ COLOR_OUTPUT_VALUE = 'yellow'
 COLOR_ERROR = 'red'
 COLOR_WARNING = 'yellow'
 COLOR_INFO = 'blue'
+COLOR_BOX_TEXT = 'white'
 
 # This function was written by GitHub Copilot :)
 # GitHub Copilot also assisted in all coloring of output and prompts
-def formatted_prompt(prompt_text: str, default_value: str, value_type: type = str, show_default: bool = False):
+def formatted_prompt(prompt_text: str, default_value: str, value_type: type = str, show_default: bool = False) -> str:
     """Format prompts so that they are consistent"""
     formatted_text = ''
     
@@ -996,42 +1028,110 @@ def formatted_prompt(prompt_text: str, default_value: str, value_type: type = st
 
     return click.prompt(formatted_text, type=value_type, default=default_value, show_default=show_default)
 
-def formatted_question(question_text: str):
+def formatted_question(question_text: str) -> str:
     """Format questions so that they are consistent"""
     return click.style(f"{question_text} ", fg=COLOR_PROMPT, bold=True)
 
-def formatted_option(option_text: str):
+def formatted_option(option_text: str) -> str:
     """Format options so that they are consistent"""
     return click.style(f"{option_text} ", fg=COLOR_OPTION)
 
-def formatted_output_with_value(response_text: str, response_value: str):
+def formatted_output_with_value(response_text: str, response_value: str) -> str:
     """Format responses so that they are consistent"""
     return click.style(f"{response_text.strip()} ", fg=COLOR_OUTPUT, bold=True) + \
            click.style(f"{response_value}", fg=COLOR_OUTPUT_VALUE)
 
-def formatted_output_bold(response_text: str):
+def formatted_output_bold(response_text: str) -> str:
     """Format responses so that they are consistent"""
     return click.style(f"{response_text} ", fg=COLOR_OUTPUT, bold=True)
 
-def formatted_output(response_text: str):
+def formatted_output(response_text: str) -> str:
     """Format responses so that they are consistent"""
     return click.style(f"{response_text} ", fg=COLOR_OUTPUT)
 
-def formatted_error(response_text: str):
+def formatted_error(response_text: str) -> str:
     """Format responses so that they are consistent"""
     return click.style(f"{response_text} ", fg=COLOR_ERROR, bold=True)
 
-def formatted_warning(response_text: str):
+def formatted_warning(response_text: str) -> str:
     """Format responses so that they are consistent"""
     return click.style(f"{response_text} ", fg=COLOR_WARNING, bold=True)
 
-def formatted_info(response_text: str):
+def formatted_info(response_text: str) -> str:
     """Format responses so that they are consistent"""
-    return click.style(f"{response_text} ", fg=COLOR_INFO)
+    return click.style(f"{response_text} ", fg=COLOR_INFO, bold=True)
 
-def formatted_divider(char: str = '-'):
+def formatted_divider(char: str = '-', num: int = 80, fg=COLOR_OUTPUT) -> str:
     """Format dividers so that they are consistent"""
-    return click.style(f"{char * 80}", fg=COLOR_OUTPUT, bold=True)
+    return click.style(f"{char * tools.get_terminal_width(num)}", fg=COLOR_OUTPUT, bold=True)
+
+def formatted_box_info(sections: List[Dict], *, width=80) -> None:
+    """Format responses so that they are consistent"""
+    fg = COLOR_BOX_TEXT
+    bg = COLOR_INFO
+
+    formatted_box(sections, width=width, fg=fg, bg=bg)
+
+def formatted_box_warning(sections: List[Dict], *, width=80) -> None:
+    """Format responses so that they are consistent"""
+    # Switched due to contrast
+    fg = "black"
+    bg = COLOR_WARNING
+
+    formatted_box(sections, width=width, fg=fg, bg=bg)
+
+def formatted_box_error(sections: List[Dict], *, width=80) -> None:
+    """Format responses so that they are consistent"""
+    fg = COLOR_BOX_TEXT
+    bg = COLOR_ERROR
+
+    formatted_box(sections, width=width, fg=fg, bg=bg)
+
+def formatted_box_output(sections: List[Dict], *, width=80) -> None:
+    """Format responses so that they are consistent"""
+    # Switched due to contrast
+    fg = COLOR_OUTPUT
+    bg = COLOR_BOX_TEXT
+
+    formatted_box(sections, width=width, fg=fg, bg=bg)
+
+def formatted_box(sections: List[Dict], *, width=80, fg=COLOR_BOX_TEXT, bg=COLOR_INFO) -> None:
+    """Format responses so that they are consistent"""
+    width = tools.get_terminal_width(width)
+
+    i = 0
+
+    for section in sections:
+        i += 1
+        header = section.get("header", None)
+        if header:
+            if i > 1:
+                formatted_box_divider(' ', width=width, fg=fg, bg=bg)
+            formatted_box_header(header, width=width, fg=fg, bg=bg)
+        else:
+            formatted_box_divider('~', width=width, fg=fg, bg=bg)
+        text = section.get("text", "")
+        formatted_box_text(text, width=width, fg=fg, bg=bg)
+    formatted_box_divider('~', width=width, fg=fg, bg=bg)
+
+
+def formatted_box_header(heading_text: str, *, width=80, fg=COLOR_BOX_TEXT, bg=COLOR_INFO) -> None:
+    """Format responses so that they are consistent"""
+    width = tools.get_terminal_width(width)
+    text = f"~~~~~~ {heading_text} "
+    text += tools.charStr("~", (width - len(text)))
+    click.echo(click.style(text, fg=fg, bg=bg, bold=True))
+
+def formatted_box_divider(char: str = '~', *,  width=80, fg=COLOR_BOX_TEXT, bg=COLOR_INFO) -> None:
+    click.echo(click.style(f"{char * tools.get_terminal_width(width)}", fg=fg, bg=bg, bold=True))
+
+def formatted_box_text(text: str, *, width=80, fg=COLOR_BOX_TEXT, bg=COLOR_INFO) -> None:
+    """Format responses so that they are consistent"""
+    width = tools.get_terminal_width(width)
+    text_multi_line = tools.break_lines(text).split('\n', width)
+    for line in text_multi_line:
+        click.echo(click.style(f"{line.rstrip():<{width}}", fg=fg, bg=bg))
+
 
 # =============================================================================
 # ----- Main function ---------------------------------------------------------

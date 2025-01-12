@@ -150,7 +150,7 @@ Parameters:
     Type: String
     Description: "Parameters specific to the application may be organized within a hierarchy based on your organizational or operations structure. For example, /Finance/ops/ for this value would then generate /Finance/ops/<DeployEnvironment>/<Prefix>-<ProjectId>-<StageId>/<parameterName>. Must either be a single '/' or begin and end with a '/'."
     Default: "/"
-    AllowedPattern: "^\\/([a-zA-Z0-9_.\\-]*[\\/])+$|^\\/$"
+    AllowedPattern: "^\\/([a-zA-Z0-9_.\\-]*[\\/])*$|^$"
     ConstraintDescription: "Must only contain alpha-numeric, dashes, underscores, or slashes. Must be a single slash or begin and end with a slash. (/Finance/, /Finance/ops/, or /)"
   AlarmNotificationEmail:
     Type: String

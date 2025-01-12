@@ -6,30 +6,34 @@
 # Chad Kluck
 # v2024.02.29 : lib/tools.py
 
+import os
+
 def indent(spaces=4, prepend=''):
-	return prepend + " " * spaces
+    return prepend + " " * spaces
 
 # A function that accepts a string and breaks it into lines that are no longer than 80 characters each, breaking only on a whitespace character
-def breakLines(string, indent, break_at=80):
+def break_lines(string: str, indent: str = "", break_at: int = 80):
 
-	lines = []
-	line = ""
+    lines = []
+    line = ""
+    
+    break_at = get_terminal_width(break_at)
 
-	# Break the string into words and loop through each, creating a line that is no longer than 80 characters
-	words = string.split(" ")
-	for word in words:
-		if len(line) + len(word) >= break_at:
-			lines.append(line.rstrip())
-			line = indent
-		line += word + " "
+    # Break the string into words and loop through each, creating a line that is no longer than 80 characters
+    words = string.split(" ")
+    for word in words:
+        if len(line) + len(word) >= break_at:
+            lines.append(line.rstrip())
+            line = indent
+        line += word + " "
 
-	# Add the last line to the list of lines
-	lines.append(line)
+    # Add the last line to the list of lines
+    lines.append(line)
 
-	# Convert the list of lines to a string where each line has trailing whitespace removed ends with \n except for the last line
-	lines = "\n".join(lines)
+    # Convert the list of lines to a string where each line has trailing whitespace removed ends with \n except for the last line
+    lines = "\n".join(lines)
 
-	return lines
+    return lines
 
 def printCharStr(char, num, **kwargs):
     line = charStr(char, num, **kwargs)
@@ -72,28 +76,35 @@ def charStr(char, num, **kwargs):
 
     return line
 
+def get_terminal_width(max_width: int = 80) -> int:
+    try:
+        term_width = os.get_terminal_size().columns
+        return (term_width if term_width < max_width else max_width)
+    except OSError:
+        return max_width
+    
 # A function that accepts the prompt parameter, whether it is an error or info, and displays help, description, and examples
 def displayHelp(prompt, error):
 
-	spaces = 5
+    spaces = 5
 
-	prepend = "??? "
-	label = "INFO"
-	message = prompt["name"]
+    prepend = "??? "
+    label = "INFO"
+    message = prompt["name"]
 
-	if error:
-		prepend = ">>> "
-		label = "ERROR"
-		message = "MESSAGE: The value for parameter "+prompt["name"]+" is invalid.\n"+indent(spaces,prepend)+"Please try again."
+    if error:
+        prepend = ">>> "
+        label = "ERROR"
+        message = "MESSAGE: The value for parameter "+prompt["name"]+" is invalid.\n"+indent(spaces,prepend)+"Please try again."
 
-	indentStr = indent(spaces, prepend)
+    indentStr = indent(spaces, prepend)
 
-	print("\n"+prepend+"------ "+label+" ------")
-	print(prepend+message)
-	print(breakLines(prepend+"REQUIREMENT: "+prompt["help"], indentStr))
-	print(breakLines(prepend+"DESCRIPTION: "+prompt["description"], indentStr))
-	print(breakLines(prepend+"EXAMPLE(S): "+prompt["examples"], indentStr))
-	print("")
+    print("\n"+prepend+"------ "+label+" ------")
+    print(prepend+message)
+    print(break_lines(prepend+"REQUIREMENT: "+prompt["help"], indentStr))
+    print(break_lines(prepend+"DESCRIPTION: "+prompt["description"], indentStr))
+    print(break_lines(prepend+"EXAMPLE(S): "+prompt["examples"], indentStr))
+    print("")
 
 # generateRandomString(4)
 def generateRandomString(length):
