@@ -1,6 +1,6 @@
 
 AWSTemplateFormatVersion: "2010-09-09"
-Description: "Prefix-based IAM Role and Managed Policy for Atlantis Service Role to be assumed when deploying pipeline infrastructure - Deployed using SAM"
+Description: "Prefix-based IAM Role and Managed Policy for Atlantis Service Role to be assumed by developers when deploying a pipeline that manages an application stack - Deployed using SAM"
 
 # Atlantis for AWS SAM Deployments
 # Service Role Infrastructure Template 
@@ -98,19 +98,19 @@ Parameters:
     Type: CommaDelimitedList
     Description: "Optional. Friendly Name (not ARN) of an existing IAM Group to attach the managed policy to. If left empty, no group will be attached."
     Default: ""
-    AllowedPattern: "^[\\w+=,_.@-]+$|^$" # [\w_+=,.@-]+
+    AllowedPattern: "^[\\w+=,_.@\\-]+$|^$" # [\w_+=,.@-]+
     ConstraintDescription: "Must be empty or a comma delimited list of valid IAM Group names."
   RoleNames:
     Type: CommaDelimitedList
     Description: "Optional. Friendly Name (not ARN) of an existing IAM Role to attach the managed policy to. If left empty, no role will be attached."
     Default: ""
-    AllowedPattern: "^[\\w+=,_.@-]+$|^$" # [\w_+=,.@-]+
+    AllowedPattern: "^[\\w+=,_.@\\-]+$|^$" # [\w_+=,.@-]+
     ConstraintDescription: "Must be empty or a comma delimited list of valid IAM Role names."
   UserNames:
     Type: CommaDelimitedList
     Description: "Optional. Friendly Name (not ARN) of an existing IAM User to attach the managed policy to. If left empty, no user will be attached."
     Default: ""
-    AllowedPattern: "^[\\w+=,_.@-]+$|^$" # [\w_+=,.@-]+
+    AllowedPattern: "^[\\w+=,_.@\\-]+$|^$" # [\w_+=,.@-]+
     ConstraintDescription: "Must be empty or a comma delimited list of valid IAM User names."
 
 # =============================================================================

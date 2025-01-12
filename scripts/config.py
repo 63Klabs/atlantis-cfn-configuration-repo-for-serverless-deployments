@@ -31,7 +31,7 @@ VERSION = "v0.1.0/2025-01-12"
 #
 # =============================================================================
 
-# TODO: Test validation of prompts along with ? - ^
+# TODO: Apply consistent formatting for validation
 # TODO: Test deploy
 # TODO: Test read existing stack
 
@@ -598,9 +598,134 @@ class ConfigManager:
                 click.echo(formatted_info("Template selection cancelled"))
                 sys.exit(1)
 
-    def gather_global_parameters(self, infra_type: str, global_defaults: Dict) -> Dict:
-        """Gather global deployment parameters"""
+    # def gather_global_parameters(self, infra_type: str, global_defaults: Dict) -> Dict:
+    #     """Gather global deployment parameters with validation"""
+    #     print()
+    #     click.echo(formatted_divider())
+    #     click.echo(formatted_output_bold("Global Deployment Parameters:"))
+    #     print()
 
+    #     global_params = {}
+        
+    #     def display_help(param_name: str) -> None:
+    #         """Display help text for parameters"""
+    #         help_text = {
+    #             's3_bucket': "S3 bucket name for storing deployment artifacts.\n"
+    #                         "Must be 3-63 characters, lowercase, and contain only letters, numbers, or hyphens.",
+    #             'region': "AWS region where resources will be deployed.\n"
+    #                     "Example: us-east-1, us-west-2, eu-west-1",
+    #             'confirm_changeset': "Whether to confirm CloudFormation changesets before deployment.\n"
+    #                                 "Enter 'true' or 'false'",
+    #             'role_arn': "IAM role ARN used for deployments.\n"
+    #                     "Format: arn:aws:iam::account-id:role/role-name"
+    #         }
+    #         click.echo(formatted_info("\nHelp for " + param_name + ":"))
+    #         click.echo(formatted_info(help_text.get(param_name, "No help available")))
+    #         print()
+
+    #     def get_validated_input(prompt, default, validator_func, error_message, param_name):
+    #         while True:
+    #             value = formatted_prompt(prompt, default, str)
+                
+    #             # Handle special commands
+    #             if value == '?':
+    #                 display_help(param_name)
+    #                 continue
+    #             elif value == '-':
+    #                 return ''
+    #             elif value == '^':
+    #                 click.echo(formatted_warning("\nExiting script..."))
+    #                 sys.exit(0)
+                
+    #             # Handle empty input when default exists
+    #             if value == '' and default:
+    #                 value = default
+
+    #             # Validate input
+    #             if validator_func(value):
+    #                 return value
+                
+    #             click.echo(formatted_error(error_message))
+    #             click.echo(formatted_info("Enter ? for help, - to clear, ^ to exit"))
+
+    #     # Validation functions remain the same
+    #     def validate_s3_bucket(bucket):
+    #         if not bucket or bucket == "":
+    #             return False
+    #         if not 3 <= len(bucket) <= 63:
+    #             return False
+    #         if not bucket.islower():
+    #             return False
+    #         if not all(c.isalnum() or c == '-' for c in bucket):
+    #             return False
+    #         if bucket.startswith('-') or bucket.endswith('-'):
+    #             return False
+    #         return True
+
+    #     def validate_region(region):
+    #         valid_regions = {
+    #             'us-east-1', 'us-east-2', 'us-west-1', 'us-west-2',
+    #             'eu-west-1', 'eu-west-2', 'eu-central-1',
+    #             'ap-southeast-1', 'ap-southeast-2', 'ap-northeast-1'
+    #         }
+    #         return region in valid_regions
+
+    #     def validate_role_arn(arn):
+    #         if not arn:
+    #             return False
+    #         return (arn.startswith('arn:aws:iam::') and 
+    #                 ':role/' in arn and 
+    #                 len(arn.split(':')) == 6)
+
+    #     def validate_boolean(value):
+    #         return value.lower() in ('true', 'false')
+
+    #     try:
+    #         # Get S3 bucket with validation
+    #         global_params['s3_bucket'] = get_validated_input(
+    #             "S3 bucket for deployments",
+    #             global_defaults.get('s3_bucket', os.getenv('SAM_DEPLOY_BUCKET', '')),
+    #             validate_s3_bucket,
+    #             "Invalid S3 bucket name. Must be 3-63 characters, lowercase, and contain only letters, numbers, or hyphens",
+    #             's3_bucket'
+    #         )
+
+    #         # Get AWS region with validation
+    #         global_params['region'] = get_validated_input(
+    #             "AWS region",
+    #             global_defaults.get('region', os.getenv('AWS_REGION', 'us-east-1')),
+    #             validate_region,
+    #             "Invalid AWS region. Please enter a valid AWS region (e.g., us-east-1)",
+    #             'region'
+    #         )
+
+    #         # Confirm changeset prompt with validation
+    #         global_params['confirm_changeset'] = get_validated_input(
+    #             "Confirm changeset before deploy",
+    #             'true' if global_defaults.get('confirm_changeset', True) else 'false',
+    #             validate_boolean,
+    #             "Please enter 'true' or 'false'",
+    #             'confirm_changeset'
+    #         )
+
+    #         # Get role ARN if this is a pipeline deployment
+    #         if infra_type == 'pipeline':
+    #             global_params['role_arn'] = get_validated_input(
+    #                 "IAM role ARN for deployments",
+    #                 global_defaults.get('role_arn', os.getenv('SAM_DEPLOY_ROLE', '')),
+    #                 validate_role_arn,
+    #                 "Invalid role ARN. Must be in format: arn:aws:iam::account-id:role/role-name",
+    #                 'role_arn'
+    #             )
+            
+    #         return global_params
+
+    #     except KeyboardInterrupt:
+    #         click.echo(formatted_info("\nOperation cancelled by user"))
+    #         sys.exit(1)
+
+    def gather_global_parameters(self, infra_type: str, global_defaults: Dict) -> Dict:
+        """Gather global deployment parameters with validation"""
         print()
         click.echo(formatted_divider())
         click.echo(formatted_output_bold("Global Deployment Parameters:"))
@@ -608,36 +733,130 @@ class ConfigManager:
 
         global_params = {}
         
-        # Get S3 bucket for deployments
-        global_params['s3_bucket'] = formatted_prompt(
-            "S3 bucket for deployments",
-            global_defaults.get('s3_bucket', os.getenv('SAM_DEPLOY_BUCKET', '')),
-            str
-        )
+        def display_help(param_name: str) -> None:
+            """Display help text for parameters"""
+            help_text = {
+                's3_bucket': "S3 bucket name for storing deployment artifacts.\n"
+                            "Must be 3-63 characters, lowercase, and contain only letters, numbers, or hyphens.",
+                'region': "AWS region where resources will be deployed.\n"
+                        "Example: us-east-1, us-west-2, eu-west-1",
+                'confirm_changeset': "Whether to confirm CloudFormation changesets before deployment.\n"
+                                    "Enter 'true' or 'false'",
+                'role_arn': "IAM role ARN used for deployments.\n"
+                        "Format: arn:aws:iam::account-id:role/role-name"
+            }
+            click.echo(formatted_info("\nHelp for " + param_name + ":"))
+            click.echo(formatted_info(help_text.get(param_name, "No help available")))
+            print()
 
-        # Get AWS region
-        global_params['region'] = formatted_prompt(
-            "AWS region",
-            global_defaults.get('region', os.getenv('AWS_REGION', 'us-east-1')),
-            str
-        )
+        def get_validated_input(prompt, default, validator_func, error_message, param_name, required=False):
+            while True:
+                value = formatted_prompt(prompt, default, str)
+                
+                # Handle special commands
+                if value == '?':
+                    display_help(param_name)
+                    continue
+                elif value == '-':
+                    if required:
+                        click.echo(formatted_error("This field is required and cannot be cleared"))
+                        click.echo(formatted_info("Enter ? for help, ^ to exit"))
+                        continue
+                    return ''
+                elif value == '^':
+                    click.echo(formatted_info("\nExiting script..."))
+                    sys.exit(0)
+                
+                # Handle empty input when default exists
+                if value == '' and default:
+                    value = default
 
-        # Confirm changeset prompt
-        global_params['confirm_changeset'] = formatted_prompt(
-            "Confirm changeset before deploy",
-            'true' if global_defaults.get('confirm_changeset', True) else 'false',
-            str
-        )
+                # Validate input
+                if validator_func(value):
+                    return value
+                
+                click.echo(formatted_error(error_message))
+                click.echo(formatted_info("Enter ? for help, - to clear, ^ to exit"))
 
-        # Get role ARN if this is a pipeline deployment
-        if infra_type == 'pipeline':
-            global_params['role_arn'] = formatted_prompt(
-                "IAM role ARN for deployments",
-                global_defaults.get('role_arn', os.getenv('SAM_DEPLOY_ROLE', '')),
-                str
+        # Validation functions
+        def validate_s3_bucket(bucket):
+            if not bucket:
+                return False
+            if not 3 <= len(bucket) <= 63:
+                return False
+            if not bucket.islower():
+                return False
+            if not all(c.isalnum() or c == '-' for c in bucket):
+                return False
+            if bucket.startswith('-') or bucket.endswith('-'):
+                return False
+            return True
+
+        def validate_region(region):
+            valid_regions = {
+                'us-east-1', 'us-east-2', 'us-west-1', 'us-west-2',
+                'eu-west-1', 'eu-west-2', 'eu-central-1',
+                'ap-southeast-1', 'ap-southeast-2', 'ap-northeast-1'
+            }
+            return region in valid_regions
+
+        def validate_role_arn(arn):
+            if not arn:
+                return False
+            return (arn.startswith('arn:aws:iam::') and 
+                    ':role/' in arn and 
+                    len(arn.split(':')) == 6)
+
+        def validate_boolean(value):
+            return value.lower() in ('true', 'false')
+
+        try:
+            # Get S3 bucket with validation (required)
+            global_params['s3_bucket'] = get_validated_input(
+                "S3 bucket for deployments",
+                global_defaults.get('s3_bucket', os.getenv('SAM_DEPLOY_BUCKET', '')),
+                validate_s3_bucket,
+                "Invalid S3 bucket name. Must be 3-63 characters, lowercase, and contain only letters, numbers, or hyphens",
+                's3_bucket',
+                required=True
             )
-        
-        return global_params
+
+            # Get AWS region with validation (required)
+            global_params['region'] = get_validated_input(
+                "AWS region",
+                global_defaults.get('region', os.getenv('AWS_REGION', 'us-east-1')),
+                validate_region,
+                "Invalid AWS region. Please enter a valid AWS region (e.g., us-east-1)",
+                'region',
+                required=True
+            )
+
+            # Confirm changeset prompt with validation
+            global_params['confirm_changeset'] = get_validated_input(
+                "Confirm changeset before deploy",
+                'true' if global_defaults.get('confirm_changeset', True) else 'false',
+                validate_boolean,
+                "Please enter 'true' or 'false'",
+                'confirm_changeset',
+                required=True
+            )
+
+            # Get role ARN if this is a pipeline deployment
+            if infra_type == 'pipeline':
+                global_params['role_arn'] = get_validated_input(
+                    "IAM role ARN for deployments",
+                    global_defaults.get('role_arn', os.getenv('SAM_DEPLOY_ROLE', '')),
+                    validate_role_arn,
+                    "Invalid role ARN. Must be in format: arn:aws:iam::account-id:role/role-name",
+                    'role_arn',
+                    required=True
+                )
+            
+            return global_params
+
+        except KeyboardInterrupt:
+            click.echo(formatted_info("\nOperation cancelled by user"))
+            sys.exit(1)
 
     def build_config(self, infra_type: str, template_file: str, global_defaults: Dict, parameter_values: Dict, tag_defaults: List, local_config: Dict) -> Dict:
         """Build the complete config dictionary"""
@@ -715,7 +934,7 @@ class ConfigManager:
         - MinValue/MaxValue (for numeric types)
         """
 
-        if not value and param_def.get('Default'):
+        if not value and "Default" in param_def:#param_def.get('Default'):
             # Empty value with default defined is valid
             return {"reason": "Valid", "valid": True}
             
@@ -1061,9 +1280,9 @@ def formatted_info(response_text: str) -> str:
     """Format responses so that they are consistent"""
     return click.style(f"{response_text} ", fg=COLOR_INFO, bold=True)
 
-def formatted_divider(char: str = '-', num: int = 80, fg=COLOR_OUTPUT) -> str:
+def formatted_divider(char: str = '-', num: int = 80, *, fg=COLOR_OUTPUT) -> str:
     """Format dividers so that they are consistent"""
-    return click.style(f"{char * tools.get_terminal_width(num)}", fg=COLOR_OUTPUT, bold=True)
+    return click.style(f"{char * tools.get_terminal_width(num)}", fg=fg, bold=True)
 
 def formatted_box_info(sections: List[Dict], *, width=80) -> None:
     """Format responses so that they are consistent"""
@@ -1216,11 +1435,9 @@ def main(check_stack: bool, profile: str, infra_type: str, prefix: str,
     defaults = config_manager.load_defaults()
 
     print()
-    click.echo(formatted_divider("-"))
-    click.echo(formatted_output_bold("[Enter] to accept default"))
-    click.echo(formatted_output_bold("[-] to ignore default and leave blank"))
-    click.echo(formatted_output_bold("[?] to see description"))
-    click.echo(formatted_output_bold("[^] to cancel and exit"))
+
+    click.echo(formatted_divider("-", fg=COLOR_INFO))
+    click.echo(formatted_info("Enter to accept default, ? for help, - to clear, ^ to exit "))
 
     global_defaults = defaults.get('global', {})
     if local_config:
