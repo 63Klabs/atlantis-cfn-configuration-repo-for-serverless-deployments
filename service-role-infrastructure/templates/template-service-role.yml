@@ -122,9 +122,9 @@ Parameters:
 Conditions:
   UseS3BucketNameOrgPrefix: !Not [!Equals [!Ref S3BucketNameOrgPrefix, ""]]
   HasPermissionsBoundaryArn: !Not [!Equals [!Ref PermissionsBoundaryArn, ""]]
-  HasGroupNames: !Not [!Equals [!Join "", !Ref GroupNames, ""]]
-  HasRoleNames: !Not [!Equals [!Join "", !Ref RoleNames, ""]]
-  HasUserNames: !Not [!Equals [!Join "", !Ref UserNames, ""]]
+  HasGroupNames: !Not [!Equals [!Join ["", !Ref GroupNames], ""]]
+  HasRoleNames: !Not [!Equals [!Join ["", !Ref RoleNames], ""]]
+  HasUserNames: !Not [!Equals [!Join ["", !Ref UserNames], ""]]
 
 # =============================================================================
 # RESOURCES
@@ -176,7 +176,7 @@ Resources:
             - events:DeleteRule
             - events:DescribeRule
             - events:TagResource
-				    - events:UntagResource
+            - events:UntagResource
             Resource:
             - !Sub "arn:${AWS::Partition}:events:${AWS::Region}:${AWS::AccountId}:rule/${Prefix}-*"
 
@@ -197,16 +197,19 @@ Resources:
             Action:
             - s3:*
             Resource:
-            - !Join
-              - ""
-              - - !Sub "arn:${AWS::Partition}:s3:::"
-                - !If [UseS3BucketNameOrgPrefix, !Sub "${S3BucketNameOrgPrefix}-${Prefix}", !Sub "${Prefix}-${AWS::Region}-${AWS::AccountId}" ]
-                - !Sub "-*"
-            - !Join
-              - ""
-              - - !Sub "arn:${AWS::Partition}:s3:::"
-                - !If [UseS3BucketNameOrgPrefix, !Sub "${S3BucketNameOrgPrefix}-${Prefix}", !Sub "${Prefix}-${AWS::Region}-${AWS::AccountId}" ]
-                - !Sub "-*/*"
+            - !Sub
+              - "arn:${AWS::Partition}:s3:::${BucketPrefix}-*"
+              - BucketPrefix: !If 
+                - UseS3BucketNameOrgPrefix
+                - !Sub "${S3BucketNameOrgPrefix}-${Prefix}"
+                - !Sub "${Prefix}-${AWS::Region}-${AWS::AccountId}"
+            - !Sub
+              - "arn:${AWS::Partition}:s3:::${BucketPrefix}-*/*"
+              - BucketPrefix: !If 
+                - UseS3BucketNameOrgPrefix
+                - !Sub "${S3BucketNameOrgPrefix}-${Prefix}"
+                - !Sub "${Prefix}-${AWS::Region}-${AWS::AccountId}"
+
 
           - Sid: ManageLogsByResourcePrefix
             Effect: Allow
@@ -253,7 +256,7 @@ Resources:
             - iam:UntagRole
             - iam:TagRole
             - iam:UpdateRoleDescription
-            Resource: !Sub "arn:aws:iam::${AWS::AccountId}:role{RolePath}${Prefix}-Worker-*"
+            Resource: !Sub "arn:aws:iam::${AWS::AccountId}:role${RolePath}${Prefix}-Worker-*"
             Condition: 
               Fn::If:
                 - HasPermissionsBoundaryArn
