@@ -55,7 +55,6 @@ import os
 import shlex
 import click
 import hashlib
-import copy
 from pathlib import Path
 from typing import Dict, Optional, List
 from botocore.exceptions import ClientError
