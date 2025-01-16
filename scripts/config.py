@@ -31,11 +31,11 @@ VERSION = "v0.1.0/2025-01-12"
 #
 # =============================================================================
 
-# TODO: Fix samconfig - atlantis.deploy.parameters
 # TODO: Fix if user copies - ENV and branch
 # TODO: Multiple deploy environments detected. Do you want to apply the atlantis deploy parameters to ALL deployments? This will NOT update parameter_overrides or tags for those deployments.
 # TODO: Test deploy
 # TODO: Test read existing stack
+# TODO: Test profile flag
 
 # TODO: Validate Tag reads
 
@@ -1035,7 +1035,7 @@ class ConfigManager:
 
             header_pystr = f"{pystr}"
             if self.stage_id != 'default':
-                header_pystr += f" {self.stage_id}"
+                header_pystr += " <StageId>"
             # Create the header with version and comments
             header = (
                 'version = 0.1\n\n'
