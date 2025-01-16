@@ -5,7 +5,7 @@ Description: "CodePipeline for Automated Deployments from repository - Deployed 
 # Atlantis for AWS SAM Deployments
 # Pipeline Infrastructure Template
 # Author: Chad Kluck - chadkluck.me
-# Version: v2.0.12/2024-10-22
+# Version: v2.0.13/2025-01-15
 
 # Documentation, Issues/Feature Requests, Latest Updates, and Security Reports on GitHub:
 # https://github.com/chadkluck/atlantis-for-aws-sam-deployments/
@@ -66,21 +66,6 @@ Parameters:
 
   # ---------------------------------------------------------------------------
   # Application Resource Naming
-
-  # Most resource names are limited to 63 characters
-  # 000000000111111111122222222223333333333444444444455555555556666
-  # 123456789012345678901234567890123456789012345678901234567890123
-  # Prefix  |ProjectId           |StageId |ResourceIdentifier
-  # 12345678-12345678901234567890-12345678-123456789012345678901234
-  # myprefix-b2business-sales-api-mystagex-SomeResourceIdentity
-  # acme-home-product-sales-api-testf97-SalesDataTable
-  # ws-b2businesslonger-sales-api-t97-SalesDataTable
-  # 
-  # S3 Bucket names can get long as they need to be unique globally across accounts
-  # myprefix-us-east-2-123456789012-b2business-sales-api-mystagex-d
-  #
-  # S3 Org Prefixes can be used instead
-  # xyzorg-myprefix-b2business-sales-api-mystagex-scratchdata
   #
   # General Practice:
   # - Prefix max 8 characters
@@ -99,6 +84,7 @@ Parameters:
     MinLength: 2
     MaxLength: 8
     ConstraintDescription: "2 to 8 characters. Lower case alphanumeric and dashes. Must start with a letter and end with a letter or number. Length of Prefix + Project ID should not exceed 28 characters."
+
   ProjectId:
     Type: String
     Description: "This is the Project or Application Identifier. If you receive 'S3 bucket name too long' errors during stack creation, then you must shorten the Project ID or use an S3 Org Prefix. Due to resource naming length restrictions, length of Prefix + Project ID should not exceed 28 characters. Resources are named <Prefix>-<ProjectId>-<StageId>-<ResourceId>"
@@ -106,6 +92,7 @@ Parameters:
     MinLength: 2
     MaxLength: 26
     ConstraintDescription: "Minimum of 2 characters (suggested maximum of 20). Lower case alphanumeric and dashes. Must start with a letter and end with a letter or number. Length of Prefix + Project ID should not exceed 28 characters."
+
   StageId:
     Type: String
     Description: "This is an alias for the branch. It does not need to match CodeCommitBranch or DeployEnvironment. Due to resource naming restrictions you can use this to provide shorter names without special characters that are allowed in branch names. For example if you have a 'test/feature-98' branch, you could use 'tf98' as the StageId. Resources are named <Prefix>-<ProjectId>-<StageId>-<ResourceId>"
@@ -113,12 +100,14 @@ Parameters:
     MinLength: 2
     MaxLength: 8
     ConstraintDescription: "2 to 8 characters. Lower case alphanumeric and dashes. Must start with a letter and end with a letter or number."
+
   S3BucketNameOrgPrefix:
     Type: String
     Description: "By default, to enforce uniqueness, buckets include account and region in the bucket name. However, due to character limits, you can specify your own S3 prefix (like an org code). This will be used in addition to the Prefix entered above. Note that this length is shared with the recommended length of 20 characters for Resource Identifiers. So if you have a 10 character S3BucketNameOrgPrefix, you are limited to 10 characters for your bucket name identifier in your templates. Buckets are named <Prefix>-<Region>-<AccountId>-<ProjectId>-<StageId>-<ResourceId> or <S3OrgPrefix>-<Prefix>-<ProjectId>-<StageId>-<ResourceId>"
     Default: ""
     AllowedPattern: "^[a-z0-9][a-z0-9-]{0,18}[a-z0-9]$|^$"
     ConstraintDescription: "May be empty or 2 to 20 characters (8 or less recommended). Lower case alphanumeric and dashes. Must start and end with a letter or number."
+
   RolePath:
     Type: String
     Description: "Path to use for IAM Roles and Policies. You may wish to separate out your applications from users, or create seperate paths per prefix or application. Specific paths may required by permission boundaries. Ex: /ws-hello-world-test/ or /app_role/"
@@ -135,6 +124,7 @@ Parameters:
     Default: "PROD"
     AllowedValues: ["DEV", "TEST", "PROD"]
     ConstraintDescription: "Must specify DEV, TEST, or PROD."
+
   DeployBucket:
     Type: String
     Description: "An already existing S3 bucket name to save build artifacts to. If this is left blank one will be created specific to the pipeline. Must be in the same AWS account and region as the stack."
@@ -152,11 +142,13 @@ Parameters:
     Default: "/"
     AllowedPattern: "^\\/([a-zA-Z0-9_.\\-]*[\\/])*$|^$"
     ConstraintDescription: "Must only contain alpha-numeric, dashes, underscores, or slashes. Must be a single slash or begin and end with a slash. (/Finance/, /Finance/ops/, or /)"
+
   AlarmNotificationEmail:
     Type: String
     Description: "Email address to send notifications to when alarms are triggered. Be sure to check the inbox as you will need to confirm the subscription."
     AllowedPattern: "^[\\w\\-\\.]+@([\\w\\-]+\\.)+[\\w\\-]{2,4}$"
     ConstraintDescription: "A valid email address"
+
   PermissionsBoundaryArn:
     Type: String
     Description: "Permissions Boundary is a policy attached to a role to further restrict the permissions of the role. Your organization may or may not require boundaries. If left empty, no permissions boundary will be used."
@@ -174,12 +166,47 @@ Parameters:
     MinLength: 2
     AllowedPattern: "^[a-zA-Z0-9][a-zA-Z0-9_\\-]{0,62}[a-zA-Z0-9]$"
     ConstraintDescription: "Must be a valid CodeCommit repository name. Must be at least 2 characters long."
+
   CodeCommitBranch:
     Type: String
     Description: What branch of CodeCommit will be used? Typically this is the same name as the stage, but may be different if there are multiple deploys operating off the same branch.
     Default: "main"
     AllowedPattern: "^[a-zA-Z0-9][a-zA-Z0-9_\\-\\/]{0,14}[a-zA-Z0-9]$"
     ConstraintDescription: "Must be a valid CodeCommit branch name"
+
+# =============================================================================
+# MAPPINGS
+# -----------------------------------------------------------------------------
+# https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/mappings-section-structure.html
+#
+Mappings:
+  LambdaInsightsAccountId:
+    us-east-1:
+      AccountId: "580247275435"
+    us-east-2:
+      AccountId: "580247275435"
+    us-west-1:
+      AccountId: "580247275435"
+    us-west-2:
+      AccountId: "580247275435"
+    af-south-1:
+      AccountId: "012438385374"
+    # Add more regions as needed
+    # https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/Lambda-Insights-extension-versions.html
+
+  LambdaParamSecretsAccountId:
+    us-east-1:
+      AccountId: "177933569100"
+    us-east-2:
+      AccountId: "590474943231"
+    us-west-1:
+      AccountId: "997803712105"
+    us-west-2:
+      AccountId: "345057560386"
+    af-south-1:
+      AccountId: "317013901791"
+    # Add more regions as needed
+    # https://docs.aws.amazon.com/systems-manager/latest/userguide/ps-integration-lambda-extensions.html#ps-integration-lambda-extensions-add
 
 # =============================================================================
 # CONDITIONS
@@ -285,8 +312,11 @@ Resources:
             - codebuild:*
             Effect: Allow
             Resource: 
-            - !Sub "arn:${AWS::Partition}:codebuild:${AWS::Region}:${AWS::AccountId}:report-group/*" # TODO: Scope Down
+            - !Sub "arn:${AWS::Partition}:codebuild:${AWS::Region}:${AWS::AccountId}:report-group/*"
             - !Sub "arn:${AWS::Partition}:codebuild:${AWS::Region}:${AWS::AccountId}:project/${Prefix}-${ProjectId}-${StageId}-Build"
+            Condition:
+              StringEquals:
+                "aws:ResourceTag/atlantis:ApplicationDeploymentId": !Sub "${Prefix}-${ProjectId}-${StageId}"
 
           - Sid: DeployPhaseCloudFormation
             Action:
@@ -336,13 +366,13 @@ Resources:
           Version: "2012-10-17"
           Statement:
 
-          - Sid: "AllowCodeBuildToManageItsLogs" # TODO: Scope Down
+          - Sid: "AllowCodeBuildToManageItsLogs"
             Effect: Allow
             Action:
             - logs:*
-            Resource: "*"      
+            Resource: !Sub "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${Prefix}-${ProjectId}-${StageId}-Build:*v"
 
-          - Sid: "AllowCodeBuildToManageItsArtifacts" # TODO: Scope Down Actions
+          - Sid: "AllowCodeBuildToManageItsArtifacts"
             Effect: Allow
             Action:
             - s3:Get*
@@ -352,15 +382,15 @@ Resources:
             - !If [UseOwnS3DeployBucket, !GetAtt S3DeployBucket.Arn, !Sub "arn:${AWS::Partition}:s3:::${DeployBucket}"]
             - !If [UseOwnS3DeployBucket, !Join [ '/', [ !GetAtt S3DeployBucket.Arn, '*' ] ], !Sub "arn:${AWS::Partition}:s3:::${DeployBucket}/*"]
 
-          - Sid: "AllowCodeBuildToManageItsKeys" # TODO: Scope Down
-            Effect: Allow
-            Action:
-            - kms:GenerateDataKey*
-            - kms:Encrypt
-            - kms:Decrypt
-            Resource: '*'
+          # - Sid: "AllowCodeBuildToManageItsKeys" # TODO: Scope Down
+          #   Effect: Allow
+          #   Action:
+          #   - kms:GenerateDataKey*
+          #   - kms:Encrypt
+          #   - kms:Decrypt
+          #   Resource: '*'
 
-          - Sid: "SSMAccessDuringCodeBuild"
+          - Sid: "SsmAccessDuringCodeBuild"
             Action:
             - ssm:PutParameter # for generating tokens and keys
             - ssm:AddTagsToResource
@@ -489,10 +519,10 @@ Resources:
             Action:
             - cloudformation:*
             Effect: Allow
-            Resource: "*" # TODO Needs to be scoped down - tags?
-          #  Condition:
-          #    StringEquals: 
-          #      aws:ResourceTag/ProjectStackProjectStageID: !Sub "${AWS::Region}/${AWS::AccountId}/${Prefix}-${ProjectId}-${StageId}"
+            Resource: "*"
+            Condition:
+              StringEquals:
+                "aws:ResourceTag/atlantis:ApplicationDeploymentId": !Sub "${Prefix}-${ProjectId}-${StageId}"
 
           - Sid: "CodeDeployCRUDThisDeploymentOnly"
             Action:
@@ -501,10 +531,10 @@ Resources:
             Resource:
               - !Sub 'arn:${AWS::Partition}:codedeploy:${AWS::Region}:${AWS::AccountId}:application:${Prefix}-${ProjectId}-${StageId}-application-*'
               - !Sub 'arn:${AWS::Partition}:codedeploy:${AWS::Region}:${AWS::AccountId}:deploymentgroup:${Prefix}-${ProjectId}-${StageId}-*'
-              - !Sub 'arn:${AWS::Partition}:codedeploy:${AWS::Region}:${AWS::AccountId}:deploymentconfig:*' # TODO needs to be scoped down - tags?
-            # Condition:
-            #   StringEquals: 
-            #     aws:ResourceTag/ProjectStackProjectStageID: !Sub "${AWS::Region}/${AWS::AccountId}/${Prefix}-${ProjectId}-${StageId}"
+              - !Sub 'arn:${AWS::Partition}:codedeploy:${AWS::Region}:${AWS::AccountId}:deploymentconfig:*'
+            Condition:
+              StringEquals:
+                "aws:ResourceTag/atlantis:ApplicationDeploymentId": !Sub "${Prefix}-${ProjectId}-${StageId}"
 
           # ===================================================================
           # CRUD permissions for additional resources
@@ -537,7 +567,7 @@ Resources:
 
 
           # # == State Machines / Step Functions == If application infrastructure is managing a state machine with step functions
-          - Sid: "CreateUpdateDeleteStateMachine" # Statement Written by Q
+          - Sid: "CreateUpdateDeleteStateMachine"
             Action:  
             - states:CreateStateMachine
             - states:UpdateStateMachine
@@ -598,10 +628,9 @@ Resources:
             - lambda:GetLayerVersion
             Effect: Allow
             Resource:
-            - !Sub 'arn:${AWS::Partition}:lambda:${AWS::Region}:580247275435:layer:LambdaInsightsExtension:*' # update account
-            - !Sub 'arn:${AWS::Partition}:lambda:${AWS::Region}:580247275435:layer:LambdaInsightsExtension-Arm64:*' # update account
+              - !Sub 'arn:${AWS::Partition}:lambda:${AWS::Region}:${!FindInMap [LambdaInsightsAccountId, !Ref "AWS::Region", AccountId]}:layer:LambdaInsightsExtension:*'
+              - !Sub 'arn:${AWS::Partition}:lambda:${AWS::Region}:${!FindInMap [LambdaInsightsAccountId, !Ref "AWS::Region", AccountId]}:layer:LambdaInsightsExtension-Arm64:*'
             # https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/Lambda-Insights-extension-versions.html
-            # 580247275435 is used for all us-* regions. If you are using a different region you will need to list a different Acct
             # These accounts are owned by AWS so they can be trusted
 
           # == AWS Parameters and Secrets Lambda Extension == 
@@ -610,10 +639,9 @@ Resources:
             - lambda:GetLayerVersion
             Effect: Allow
             Resource:
-            - !Sub 'arn:${AWS::Partition}:lambda:${AWS::Region}:*:layer:AWS-Parameters-and-Secrets-Lambda-Extension:*' # update account
-            - !Sub 'arn:${AWS::Partition}:lambda:${AWS::Region}:*:layer:AWS-Parameters-and-Secrets-Lambda-Extension-Arm64:*' # update account
+              - !Sub 'arn:${AWS::Partition}:lambda:${AWS::Region}:${!FindInMap [LambdaParamSecretsAccountId, !Ref "AWS::Region", AccountId]}:layer:AWS-Parameters-and-Secrets-Lambda-Extension:*'
+              - !Sub 'arn:${AWS::Partition}:lambda:${AWS::Region}:${!FindInMap [LambdaParamSecretsAccountId, !Ref "AWS::Region", AccountId]}:layer:AWS-Parameters-and-Secrets-Lambda-Extension-Arm64:*'
             # https://docs.aws.amazon.com/systems-manager/latest/userguide/ps-integration-lambda-extensions.html#ps-integration-lambda-extensions-add
-            # Unfortunately, unlike LambdaInsightsExtension, the account # varies by region so either hard-code or use *
             # These accounts are owned by AWS so they can be trusted
 
           # == DynamoDb == If application infrastructure manages a DynamoDb resource
