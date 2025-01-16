@@ -1,5 +1,5 @@
 {
-	"global": {
+	"atlantis": {
 		"s3_bucket": "acmeco-sam-deploy-bucket",
 		"region": "us-east-2",
 		"confirm_changeset": true

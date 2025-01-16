@@ -212,7 +212,7 @@ version = 0.1
 # Using the script provides consistent parameter overrides and tags and ensures your changes are not overwritten!
 
 
-[global.deploy.parameters]
+[atlantis.deploy.parameters]
 s3_bucket = "$S3_BUCKET_FOR_DEPLOY_ARTIFACTS$"
 template_file = "$TEMPLATE_FILE$"
 region = "$REGION$"

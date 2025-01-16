@@ -31,6 +31,9 @@ VERSION = "v0.1.0/2025-01-12"
 #
 # =============================================================================
 
+# TODO: Fix samconfig - atlantis.deploy.parameters
+# TODO: Fix if user copies - ENV and branch
+# TODO: Multiple deploy environments detected. Do you want to apply the atlantis deploy parameters to ALL deployments? This will NOT update parameter_overrides or tags for those deployments.
 # TODO: Test deploy
 # TODO: Test read existing stack
 
@@ -52,6 +55,7 @@ import os
 import shlex
 import click
 import hashlib
+import copy
 from pathlib import Path
 from typing import Dict, Optional, List
 from botocore.exceptions import ClientError
@@ -129,16 +133,16 @@ class ConfigManager:
                 click.echo(formatted_output_with_value("Using samconfig file:", samconfig_path))
                 print()
 
-                samconfig_data = {'global': {}, 'deployments': {}}
+                samconfig_data = {'atlantis': {}, 'deployments': {}}
                 samconfig = toml.load(samconfig_path)
                 
-                # Handle global section
-                if 'global' in samconfig and isinstance(samconfig['global'], dict):
-                    samconfig_data['global'] = samconfig['global']
+                # Handle atlantis deploy parameters section
+                if 'atlantis' in samconfig and isinstance(samconfig['atlantis'], dict):
+                    samconfig_data['atlantis'] = samconfig['atlantis']
 
                 # Handle deployment sections
                 for key, value in samconfig.items():
-                    if key != 'global' and isinstance(value, dict):
+                    if key != 'atlantis' and isinstance(value, dict):
                         try:
                             deploy_params = value.get('deploy', {}).get('parameters', {})
                             if isinstance(deploy_params, dict):
@@ -601,14 +605,14 @@ class ConfigManager:
                 click.echo(formatted_info("Template selection cancelled"))
                 sys.exit(1)
 
-    def gather_global_parameters(self, infra_type: str, global_defaults: Dict) -> Dict:
-        """Gather global deployment parameters with validation"""
+    def gather_atlantis_deploy_parameters(self, infra_type: str, atlantis_deploy_parameter_defaults: Dict) -> Dict:
+        """Gather atlantis deployment parameters with validation"""
         print()
         click.echo(formatted_divider())
-        click.echo(formatted_output_bold("Global Deployment Parameters:"))
+        click.echo(formatted_output_bold("Deployment Parameters:"))
         print()
 
-        global_params = {}
+        atlantis_deploy_params = {}
         
         def display_help(param_name: str) -> None:
             """Display help text for parameters"""
@@ -698,9 +702,9 @@ class ConfigManager:
 
         try:
             # Get S3 bucket with validation (required)
-            global_params['s3_bucket'] = get_validated_input(
+            atlantis_deploy_params['s3_bucket'] = get_validated_input(
                 "S3 bucket for deployments",
-                global_defaults.get('s3_bucket', os.getenv('SAM_DEPLOY_BUCKET', '')),
+                atlantis_deploy_parameter_defaults.get('s3_bucket', os.getenv('SAM_DEPLOY_BUCKET', '')),
                 validate_s3_bucket,
                 "Invalid S3 bucket name. Must be 3-63 characters, lowercase, and contain only letters, numbers, or hyphens",
                 's3_bucket',
@@ -708,9 +712,9 @@ class ConfigManager:
             )
 
             # Get AWS region with validation (required)
-            global_params['region'] = get_validated_input(
+            atlantis_deploy_params['region'] = get_validated_input(
                 "AWS region",
-                global_defaults.get('region', os.getenv('AWS_REGION', 'us-east-1')),
+                atlantis_deploy_parameter_defaults.get('region', os.getenv('AWS_REGION', 'us-east-1')),
                 validate_region,
                 "Invalid AWS region. Please enter a valid AWS region (e.g., us-east-1)",
                 'region',
@@ -718,9 +722,9 @@ class ConfigManager:
             )
 
             # Confirm changeset prompt with validation
-            global_params['confirm_changeset'] = get_validated_input(
+            atlantis_deploy_params['confirm_changeset'] = get_validated_input(
                 "Confirm changeset before deploy",
-                'true' if global_defaults.get('confirm_changeset', True) else 'false',
+                'true' if atlantis_deploy_parameter_defaults.get('confirm_changeset', True) else 'false',
                 validate_boolean,
                 "Please enter 'true' or 'false'",
                 'confirm_changeset',
@@ -729,25 +733,25 @@ class ConfigManager:
 
             # Get role ARN if this is a pipeline deployment
             if infra_type == 'pipeline':
-                global_params['role_arn'] = get_validated_input(
+                atlantis_deploy_params['role_arn'] = get_validated_input(
                     "IAM role ARN for deployments",
-                    global_defaults.get('role_arn', os.getenv('SAM_DEPLOY_ROLE', '')),
+                    atlantis_deploy_parameter_defaults.get('role_arn', os.getenv('SAM_DEPLOY_ROLE', '')),
                     validate_role_arn,
                     "Invalid role ARN. Must be in format: arn:aws:iam::account-id:role/role-name",
                     'role_arn',
                     required=True
                 )
             
-            return global_params
+            return atlantis_deploy_params
 
         except KeyboardInterrupt:
             click.echo(formatted_info("\nOperation cancelled by user"))
             sys.exit(1)
 
-    def build_config(self, infra_type: str, template_file: str, global_defaults: Dict, parameter_values: Dict, tag_defaults: List, local_config: Dict) -> Dict:
+    def build_config(self, infra_type: str, template_file: str, atlantis_deploy_parameter_defaults: Dict, parameter_values: Dict, tag_defaults: List, local_config: Dict) -> Dict:
         """Build the complete config dictionary"""
-        # Get global parameters
-        global_params = self.gather_global_parameters(infra_type, global_defaults)
+        # Get atlantis deploy parameters used for all deployments of this application
+        atlantis_deploy_params = self.gather_atlantis_deploy_parameters(infra_type, atlantis_deploy_parameter_defaults)
 
         prefix = parameter_values.get('Prefix', '')
         project_id = parameter_values.get('ProjectId', '')
@@ -762,17 +766,27 @@ class ConfigManager:
         # Generate automated tags
         tags = self.generate_tags(parameter_values, tag_defaults)
 
-        deployment_parameters = {
+        atlantis_default_deploy_parameters = {
+            'template_file': template_file,
+            's3_bucket': atlantis_deploy_params['s3_bucket'],
+            'region': atlantis_deploy_params['region'],
+            'capabilities': 'CAPABILITY_NAMED_IAM',
+            'confirm_changeset': (atlantis_deploy_params['confirm_changeset'].lower() == 'true')
+        }
+
+        # we need to add the atlantis parameters to the deployment ourselves
+        deployment_parameters = atlantis_default_deploy_parameters.copy()
+        deployment_parameters.update({
             'stack_name': stack_name,
             's3_prefix': stack_name,
             'parameter_overrides': parameter_values,
             'tags': tags
-        }
+        })
 
         # if self.prefix or self.project_id is not equal to sys arg 2 and 3 
         # then deployments = {} else set to local_config deployments
         # Because that means we made a copy and are creating a fresh copy 
-        # with only global and current stage
+        # with only atlantis and current deploy environment
         if not isinstance(local_config, dict) or prefix != sys.argv[2] or (project_id and project_id != sys.argv[3]):
             deployments = {}
         else:
@@ -790,15 +804,9 @@ class ConfigManager:
 
         # Build the config structure
         config = {
-            'global': {
+            'atlantis': {
                 'deploy': {
-                    'parameters': {
-                        'template_file': template_file,
-                        's3_bucket': global_params['s3_bucket'],
-                        'region': global_params['region'],
-                        'capabilities': 'CAPABILITY_NAMED_IAM',
-                        'confirm_changeset': (global_params['confirm_changeset'].lower() == 'true')
-                    }
+                    'parameters': atlantis_default_deploy_parameters
                 }
             },
             'deployments': deployments
@@ -806,7 +814,7 @@ class ConfigManager:
         
         # Add role_arn if this is a pipeline deployment
         if infra_type == 'pipeline':
-            config['global']['deploy']['parameters']['role_arn'] = global_params['role_arn']
+            config['atlantis']['deploy']['parameters']['role_arn'] = atlantis_deploy_params['role_arn']
         
         return config
 
@@ -1038,27 +1046,27 @@ class ConfigManager:
                 'and ensures your changes are not overwritten!\n\n'
             )
 
-            global_section = {
-                'global': config.get('global', {})
+            atlantis_deploy_section = {
+                'atlantis': config.get('atlantis', {})
             }
 
-            non_global_sections = {}
+            non_atlantis_deploy_sections = {}
             # Reorder the deployments to place default first, then those starting with t, b, s, and finally p
             for stage_id in sorted(config.get('deployments', {}), key=lambda x: (x[0] != 'd', x[0] != 't', x[0] != 'b', x[0] != 's', x[0] != 'p')):
-                non_global_sections[stage_id] = config['deployments'][stage_id]
+                non_atlantis_deploy_sections[stage_id] = config['deployments'][stage_id]
                         
             # Write the config to samconfig.toml
             samconfig_path = self.generate_samconfig_path(prefix, project_id)
             
             with open(samconfig_path, 'w') as f:
                 f.write(header)
-                toml.dump(global_section, f)
+                toml.dump(atlantis_deploy_section, f)
 
                 fnstr = prefix
                 if project_id:
                     fnstr += f"-{project_id}"
                     
-                for section, section_config in non_global_sections.items():
+                for section, section_config in non_atlantis_deploy_sections.items():
 
                     section_pystr = f"{pystr}"
                     if section != 'default':
@@ -1309,7 +1317,7 @@ def main(check_stack: bool, profile: str, infra_type: str, prefix: str,
         templates = config_manager.discover_templates()
         template_file = config_manager.select_template(templates)
     else:
-        template_file_from_config = local_config.get('global', {}).get('deploy', {}).get('parameters', {}).get('template_file', '')
+        template_file_from_config = local_config.get('atlantis', {}).get('deploy', {}).get('parameters', {}).get('template_file', '')
         # if template file starts with s3://, use it as is, else parse
         if template_file_from_config and template_file_from_config.startswith('s3://'):
             template_file = template_file_from_config
@@ -1325,9 +1333,9 @@ def main(check_stack: bool, profile: str, infra_type: str, prefix: str,
     click.echo(formatted_divider("-", fg=COLOR_INFO))
     click.echo(formatted_info("Enter to accept default, ? for help, - to clear, ^ to exit "))
 
-    global_defaults = defaults.get('global', {})
+    atlantis_deploy_parameter_defaults = defaults.get('atlantis', {})
     if local_config:
-        global_defaults.update(local_config.get('global', {}).get('deploy', {}).get('parameters', {}))
+        atlantis_deploy_parameter_defaults.update(local_config.get('atlantis', {}).get('deploy', {}).get('parameters', {}))
 
     parameter_defaults = defaults.get('parameter_overrides', {})
     if local_config:
@@ -1341,7 +1349,7 @@ def main(check_stack: bool, profile: str, infra_type: str, prefix: str,
     parameter_values = config_manager.prompt_for_parameters(parameters, parameter_defaults)
     
     # Build the complete config
-    config = config_manager.build_config(infra_type, template_file, global_defaults, parameter_values, tag_defaults, local_config)
+    config = config_manager.build_config(infra_type, template_file, atlantis_deploy_parameter_defaults, parameter_values, tag_defaults, local_config)
     
     print()
     click.echo(formatted_divider())

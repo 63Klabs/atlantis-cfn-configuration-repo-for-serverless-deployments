@@ -1,5 +1,5 @@
 {
-	"global": {},
+	"atlantis": {},
 	"parameter_overrides": {
 		"AlarmNotificationEmail": "asdf@example.com",
 		"CodeCommitRepository": "acme-hello-world-api-webservice"
