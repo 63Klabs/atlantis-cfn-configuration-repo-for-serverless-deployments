@@ -759,6 +759,10 @@ class ConfigManager:
         else:
             stage_id = self.stage_id
 
+        # if template_file is not s3 it is local and use the local path
+        if not template_file.startswith('s3://'):
+            template_file = f'./templates/{template_file}'
+
         # Generate stack name
         stack_name = self.generate_stack_name(prefix, project_id, stage_id)
 
@@ -796,10 +800,6 @@ class ConfigManager:
                 'parameters': deployment_parameters
             }
         }
-
-        # if template_file is not s3 it is local and use the local path
-        if not template_file.startswith('s3://'):
-            template_file = f'./templates/{template_file}'
 
         # Build the config structure
         config = {

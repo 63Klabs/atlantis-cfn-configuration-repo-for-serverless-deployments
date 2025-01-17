@@ -178,7 +178,7 @@ Resources:
             - events:TagResource
             - events:UntagResource
             Resource:
-            - !Sub "arn:${AWS::Partition}:events:${AWS::Region}:${AWS::AccountId}:rule/${Prefix}-*"
+            - !Sub "arn:aws:events:${AWS::Region}:${AWS::AccountId}:rule/${Prefix}-*"
 
           - Sid: ManageCloudFormationStacksByResourcePrefix
             Effect: Allow
@@ -190,7 +190,7 @@ Resources:
             - cloudformation:DescribeChangeSet
             - cloudformation:GetTemplate
             - cloudformation:GetTemplateSummary
-            Resource: !Sub "arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${Prefix}-*"
+            Resource: !Sub "arn:aws:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${Prefix}-*"
 
           - Sid: ManageBucketsByResourcePrefix
             Effect: Allow
@@ -198,13 +198,13 @@ Resources:
             - s3:*
             Resource:
             - !Sub
-              - "arn:${AWS::Partition}:s3:::${BucketPrefix}-*"
+              - "arn:aws:s3:::${BucketPrefix}-*"
               - BucketPrefix: !If 
                 - UseS3BucketNameOrgPrefix
                 - !Sub "${S3BucketNameOrgPrefix}-${Prefix}"
                 - !Sub "${Prefix}-${AWS::Region}-${AWS::AccountId}"
             - !Sub
-              - "arn:${AWS::Partition}:s3:::${BucketPrefix}-*/*"
+              - "arn:aws:s3:::${BucketPrefix}-*/*"
               - BucketPrefix: !If 
                 - UseS3BucketNameOrgPrefix
                 - !Sub "${S3BucketNameOrgPrefix}-${Prefix}"
@@ -215,26 +215,26 @@ Resources:
             Effect: Allow
             Action:
             - logs:*
-            Resource: !Sub "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${Prefix}-*"
+            Resource: !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${Prefix}-*"
 
           - Sid: ManageCodePipelineByResourcePrefix
             Effect: Allow
             Action:
             - codepipeline:*
-            Resource: !Sub "arn:${AWS::Partition}:codepipeline:${AWS::Region}:${AWS::AccountId}:${Prefix}-*"
+            Resource: !Sub "arn:aws:codepipeline:${AWS::Region}:${AWS::AccountId}:${Prefix}-*"
 
           - Sid: ManageCodeBuildByResourcePrefix
             Effect: Allow
             Action:
             - codebuild:*
-            Resource: !Sub "arn:${AWS::Partition}:codebuild:${AWS::Region}:${AWS::AccountId}:project/${Prefix}-*"
+            Resource: !Sub "arn:aws:codebuild:${AWS::Region}:${AWS::AccountId}:project/${Prefix}-*"
 
           - Sid: PassAndDeleteWorkerRolesByResourcePrefix
             Effect: Allow
             Action:
             - iam:PassRole
             - iam:DeleteRole
-            Resource: !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role${RolePath}${Prefix}-Worker-*"
+            Resource: !Sub "arn:aws:iam::${AWS::AccountId}:role${RolePath}${Prefix}-Worker-*"
 
           - Sid: IAMReadOnly
             Effect: Allow
@@ -242,8 +242,8 @@ Resources:
             - iam:Get*
             - iam:List*
             Resource: 
-            - !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/*"
-            - !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:policy/*"
+            - !Sub "arn:aws:iam::${AWS::AccountId}:role/*"
+            - !Sub "arn:aws:iam::${AWS::AccountId}:policy/*"
 
           - Sid: ManageWorkerRolesByResourcePrefix
             Effect: Allow
@@ -268,7 +268,7 @@ Resources:
             Effect: Allow
             Action:
             - iam:ListAttachedRolePolicies
-            Resource: !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role${RolePath}${PrefixUpper}-CloudFormation-Service-Role"
+            Resource: !Sub "arn:aws:iam::${AWS::AccountId}:role${RolePath}${PrefixUpper}-CloudFormation-Service-Role"
 
   # ---------------------------------------------------------------------------
   # -- Prefix-based IAM Service Roles and Policy --
@@ -278,7 +278,6 @@ Resources:
     Type: AWS::IAM::ManagedPolicy
     Properties:
       Description: !Sub "Managed Policy to Create and Manage an AWS CodePipeline for application projects under prefix ${Prefix}. Can be attached to Roles, Groups, or Users."
-      ManagedPolicyName: !Sub "${PrefixUpper}-CloudFormation-Service-ManagedPolicy"
       Path: !Ref RolePath
       Groups: !If [HasGroupNames, !Ref GroupNames, !Ref 'AWS::NoValue' ]
       Roles: !If [HasRoleNames, !Ref RoleNames, !Ref 'AWS::NoValue' ]
@@ -291,7 +290,7 @@ Resources:
             Action:
               - iam:GetRole
               - iam:PassRole 
-            Resource: !Ref PrefixBasedCloudFormationServiceRole
+            Resource: !GetAtt PrefixBasedCloudFormationServiceRole.Arn
             Condition:
               StringEquals:
                 "iam:PassedToService": "cloudformation.amazonaws.com"
@@ -327,6 +326,6 @@ Outputs:
 
   PrefixBasedManagedPolicyName:
     Description: "The Name of the Prefix-based Managed Policy"
-    Value: !GetAtt PrefixBasedManagedPolicy.ManagedPolicyName
+    Value: !Ref PrefixBasedManagedPolicy
     Export:
       Name: !Sub "${PrefixUpper}-CloudFormation-Service-ManagedPolicy-Name"
