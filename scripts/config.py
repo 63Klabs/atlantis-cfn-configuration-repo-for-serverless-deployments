@@ -33,10 +33,13 @@ VERSION = "v0.1.0/2025-01-12"
 
 # TODO: Fix if user copies - ENV and branch
 # TODO: Multiple deploy environments detected. Do you want to apply the atlantis deploy parameters to ALL deployments? This will NOT update parameter_overrides or tags for those deployments.
-# TODO: Test deploy
+# TODO: If profile added then add profile to deploy
 # TODO: Test read existing stack
-# TODO: Test profile flag
 
+# TODO: Test IAM deploy
+# TODO: Test Storage Deploy
+# TODO: Test Pipeline deploy
+# TODO: Test Network Deploy
 # TODO: Validate Tag reads
 
 # Q's suggestions
@@ -256,7 +259,7 @@ class ConfigManager:
         try:
             response = self.cfn_client.describe_stacks(StackName=stack_name)
             stack = response['Stacks'][0]
-            
+
             # Get template file from tags
             template_file = None
             for tag in stack.get('Tags', []):
@@ -268,7 +271,10 @@ class ConfigManager:
                              for p in stack.get('Parameters', [])},
                 'template_file': template_file
             }
-        except ClientError:
+        except ClientError as e:
+            logging.error(f"Error getting configuration for stack {stack_name} : {e}")
+            click.echo(formatted_error(f"Error getting configuration for stack {stack_name}"))
+            click.echo(formatted_error(f"Stack '{stack_name} ' does not exist, incorrect profile used, or credentials expired."))
             return None
 
     def compare_configurations(self, local_config: Dict, stack_config: Dict) -> Dict:
@@ -1295,21 +1301,33 @@ def main(check_stack: bool, profile: str, infra_type: str, prefix: str,
     
     if check_stack:
 
-        stack_name = config_manager.generate_stack_name(config_manager.prefix, config_manager.project_id, config_manager.stage_id)
-        stack_config = config_manager.get_stack_config(stack_name)
-        
-        if stack_config and local_config:
-            differences = config_manager.compare_configurations(local_config, stack_config)
-            if differences:
-                click.echo(formatted_warning("Differences found between local and deployed configuration:"))
-                click.echo(formatted_warning(json.dumps(differences, indent=2)))
-                
-                choice = formatted_prompt("Choose configuration to use (local/deployed/cancel)", "", click.Choice(['local', 'deployed', 'cancel']))
-                
-                if choice == 'cancel':
-                    raise click.Abort()
-                elif choice == 'deployed':
-                    local_config = stack_config
+        if profile != None:
+
+            stack_name = config_manager.generate_stack_name(config_manager.prefix, config_manager.project_id, config_manager.stage_id)
+            stack_config = config_manager.get_stack_config(stack_name)
+            
+            if stack_config and local_config:
+                differences = config_manager.compare_configurations(local_config, stack_config)
+                if differences:
+                    click.echo(formatted_warning("Differences found between local and deployed configuration:"))
+                    click.echo(formatted_warning(json.dumps(differences, indent=2)))
+                    
+                    choice = formatted_prompt("Choose configuration to use (local/deployed/cancel)", "", click.Choice(['local', 'deployed', 'cancel']))
+                    
+                    if choice == 'cancel':
+                        print()
+                        click.echo(formatted_warning("Operation cancelled by user"))
+                        print()
+                        sys.exit(1)
+                    elif choice == 'deployed':
+                        local_config = stack_config
+
+                else:
+                    click.echo(formatted_prompt("No differences found between local and deployed configuration:"))
+                    click.echo(formatted_prompt(json.dumps(differences, indent=2)))
+        else:
+            click.echo(formatted_warning("--profile must be specified to check stack. Skipping stack configuration check."))
+
 
     # Handle template selection and parameter configuration
     if not local_config:
