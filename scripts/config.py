@@ -1,5 +1,5 @@
-VERSION = "v0.1.0/2025-01-12"
-# Written by Chad Kluck with AI assistance from Amazon Q Developer
+VERSION = "v0.1.0/2025-01-25"
+# Developed by Chad Kluck with AI assistance from Amazon Q Developer
 # GitHub Copilot assisted in color formats of output and prompts
 
 # =============================================================================
@@ -31,9 +31,6 @@ VERSION = "v0.1.0/2025-01-12"
 #
 # =============================================================================
 
-# TODO: Fix if user copies - ENV and branch
-# TODO: Multiple deploy environments detected. Do you want to apply the atlantis deploy parameters to ALL deployments? This will NOT update parameter_overrides or tags for those deployments.
-# TODO: If profile added then add profile to deploy
 # TODO: Test read existing stack
 
 # TODO: Test IAM deploy
@@ -76,13 +73,13 @@ logging.basicConfig(
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
 
-
 class ConfigManager:
-    def __init__(self, infra_type: str, prefix: str, project_id: str, stage_id: Optional[str] = 'default'):
+    def __init__(self, infra_type: str, prefix: str, project_id: str, stage_id: Optional[str] = None, *, profile = None):
         self.prefix = prefix
         self.infra_type = infra_type
         self.project_id = project_id
-        self.stage_id = stage_id
+        self.stage_id = 'default' if stage_id == None else stage_id
+        self.profile = 'default' if profile == None else profile # if None, set to 'default'
         self.cfn_client = boto3.client('cloudformation')
         self.templates_dir = Path('..') / f"{infra_type}-infrastructure/templates"
         self.samconfig_dir = Path('..') / f"{infra_type}-infrastructure"
@@ -95,6 +92,8 @@ class ConfigManager:
         # Validate inputs
         if infra_type != 'service-role' and project_id is None:
             raise ValueError("project_id is required for non-service-role infrastructure types")
+        
+        boto3.setup_default_session(profile_name=self.profile)
 
     def generate_stack_name(self, prefix: str, project_id: str, stage_id: str) -> str:
         """Generate the stack name based on the prefix, project, stage, and infra type"""
@@ -274,7 +273,7 @@ class ConfigManager:
         except ClientError as e:
             logging.error(f"Error getting configuration for stack {stack_name} : {e}")
             click.echo(formatted_error(f"Error getting configuration for stack {stack_name}"))
-            click.echo(formatted_error(f"Stack '{stack_name} ' does not exist, incorrect profile used, or credentials expired."))
+            click.echo(formatted_error(f"Stack '{stack_name} ' does not exist or incorrect / expired credentials for profile {self.profile}"))
             return None
 
     def compare_configurations(self, local_config: Dict, stack_config: Dict) -> Dict:
@@ -531,34 +530,17 @@ class ConfigManager:
                     if param_name == 'StageId':
                         self.stage_id = value
 
-                        # stage_id impacts the defaults of the 
-                        # DeployEnvironment, RepositoryBranch/CodeCommitBranch
-                        if 'DeployEnvironment' in parameters:
-                            # if value starts with t then 'TEST', d then 'DEV', otherwise 'PROD'
-                            envValue = 'PROD'
-                            if value.startswith('t'):
-                                envValue = 'TEST'
-                            elif value.startswith('d'):
-                                envValue = 'DEV'
-                            
-                            parameters['DeployEnvironment']['Default'] = envValue
+                        # if StageId was changed from default, then recalculate defaults for DeployEnvironment, Repository Branch
+                        if self.stage_id != defaults['StageId']:
+                            stage_defaults = self.calculate_stage_defaults(self.stage_id)
+                            if 'DeployEnvironment' in parameters:
+                                defaults['DeployEnvironment'] = stage_defaults['DeployEnvironment']
 
-                        if 'RepositoryBranch' in parameters:
-                            # if value is prod, then set RepositoryBranch
-                            # to 'main' otherwise set to value
-                            if value == 'prod':
-                                parameters['RepositoryBranch']['Default'] = 'main'
-                            else:
-                                parameters['RepositoryBranch']['Default'] = value  
+                            if 'RepositoryBranch' in parameters:
+                                defaults['RepositoryBranch'] = stage_defaults['RepositoryBranch']
 
-                        # CodeCommitBranch will be replaced by RepositoryBranch
-                        if 'CodeCommitBranch' in parameters:
-                            # if value is prod, then set CodeCommitBranch 
-                            # to 'main' otherwise set to value
-                            if value == 'prod':
-                                parameters['CodeCommitBranch']['Default'] = 'main'
-                            else:
-                                parameters['CodeCommitBranch']['Default'] = value                      
+                            if 'CodeCommitBranch' in parameters:
+                                defaults['CodeCommitBranch'] = stage_defaults['CodeCommitBranch']
 
                     break
                 else:
@@ -570,6 +552,33 @@ class ConfigManager:
 
                     
         return values
+    
+    def calculate_stage_defaults(self, stage_id: str) -> Dict:
+        """Calculate defaults for DeployEnvironment and Branch based on stage_id"""
+            
+        defaults = {}
+
+        # stage_id impacts the defaults of the 
+        # DeployEnvironment, RepositoryBranch/CodeCommitBranch
+
+        envValue = 'PROD'
+        if stage_id.startswith('t'):
+            envValue = 'TEST'
+        elif stage_id.startswith('d'):
+            envValue = 'DEV'
+        
+        defaults['DeployEnvironment'] = envValue
+
+        # if value is prod, then set RepositoryBranch
+        # to 'main' otherwise set to value
+        branch = stage_id
+        if stage_id == 'prod':
+            branch = 'main'
+
+        defaults['CodeCommitBranch'] = branch
+        defaults['RepositoryBranch'] = branch
+
+        return defaults                  
 
     def select_template(self, templates: List[str]) -> str:
         """Display numbered list of templates and let user select by number"""
@@ -765,6 +774,15 @@ class ConfigManager:
         else:
             stage_id = self.stage_id
 
+        # if self.prefix or self.project_id is not equal to sys arg 2 and 3 
+        # then deployments = {} else set to local_config deployments
+        # Because that means we made a copy and are creating a fresh copy 
+        # with only atlantis and current deploy environment
+        if not isinstance(local_config, dict) or prefix != sys.argv[2] or (project_id and project_id != sys.argv[3]):
+            deployments = {}
+        else:
+            deployments = local_config.get('deployments', {})
+
         # if template_file is not s3 it is local and use the local path
         if not template_file.startswith('s3://'):
             template_file = f'./templates/{template_file}'
@@ -783,7 +801,34 @@ class ConfigManager:
             'confirm_changeset': (atlantis_deploy_params['confirm_changeset'].lower() == 'true')
         }
 
-        # we need to add the atlantis parameters to the deployment ourselves
+        # If deployments has more than one key then inform the user that multiple deployments were detected, 
+        # would they like to update the atlantis deployment parameters across all?
+        if len(deployments) > 1:
+            print()
+            # Multiple deploy environments detected. Do you want to apply the atlantis deploy parameters to ALL deployments? This will NOT update parameter_overrides or tags for those deployments.
+            click.echo(formatted_output_with_value("Multiple deploy environments detected for ", f"{prefix}-{project_id}"))
+            click.echo(formatted_question(f"Do you want to apply the Deploy Parameters to ALL deployments?"))
+            click.echo(formatted_info(f"(This will NOT update Template Parameter Overrides or Tags for those deployments.)"))
+            click.echo(formatted_option("'Y' for Yes, 'N' for No"))
+            print()
+            choice = ""
+            # prompt until choice is either y or n
+            while choice.upper() not in ['Y', 'N', 'YES', 'NO']:
+                choice = formatted_prompt("Apply Deploy Parameters to All?", "Y", str)
+                if choice.upper() not in ['Y', 'N', 'YES', 'NO']:
+                    click.echo(formatted_error("Please enter 'Y' or 'N'"))
+            print()
+            if choice.upper() in ['Y', 'YES']:
+                click.echo(formatted_output_bold(f"Updating Deploy Parameters across all deployments of {prefix}-{project_id}..."))
+                for deployment in deployments:
+                    deployments[deployment]['deploy']['parameters'].update(atlantis_default_deploy_parameters)
+            else:
+                click.echo(formatted_output_bold(f"Updating Deploy Parameters only for {stage_id}..."))
+                # We do this below so we'll skip doing it here
+
+        # We will now apply the deploy parameters to the deployment
+        # We already applied the atlantis_defalt_deploy_parameters above but now
+        # we focus on just the curren stage
         deployment_parameters = atlantis_default_deploy_parameters.copy()
         deployment_parameters.update({
             'stack_name': stack_name,
@@ -791,15 +836,6 @@ class ConfigManager:
             'parameter_overrides': parameter_values,
             'tags': tags
         })
-
-        # if self.prefix or self.project_id is not equal to sys arg 2 and 3 
-        # then deployments = {} else set to local_config deployments
-        # Because that means we made a copy and are creating a fresh copy 
-        # with only atlantis and current deploy environment
-        if not isinstance(local_config, dict) or prefix != sys.argv[2] or (project_id and project_id != sys.argv[3]):
-            deployments = {}
-        else:
-            deployments = local_config.get('deployments', {})
 
         deployments[stage_id] = {
             'deploy': {
@@ -1041,6 +1077,8 @@ class ConfigManager:
             header_pystr = f"{pystr}"
             if self.stage_id != 'default':
                 header_pystr += " <StageId>"
+            if self.profile != 'default':
+                header_pystr += f" --profile {self.profile}"
             # Create the header with version and comments
             header = (
                 'version = 0.1\n\n'
@@ -1081,7 +1119,7 @@ class ConfigManager:
                         '# =====================================================\n'
                         f'# {section} Deployment Configuration\n\n'
                         '# Deploy command:\n'
-                        f'# sam deploy --config-env {section} --config-file samconfig-{fnstr}-{self.infra_type}.toml --profile default\n\n'
+                        f'# sam deploy --config-env {section} --config-file samconfig-{fnstr}-{self.infra_type}.toml --profile {self.profile}\n\n'
                         '# Do not update this file!\n'
                         '# To update parameter_overrides or tags for this deployment, use the generate script:\n'
                         f'# python {section_pystr}\n'
@@ -1270,8 +1308,8 @@ def main(check_stack: bool, profile: str, infra_type: str, prefix: str,
     # log script arguments
     logging.info(f"{sys.argv}")
 
-    if profile:
-        boto3.setup_default_session(profile_name=profile)
+    # if profile:
+    #     boto3.setup_default_session(profile_name=profile)
     
     # Validate infra_type
     if infra_type not in VALID_INFRA_TYPES:
@@ -1294,40 +1332,35 @@ def main(check_stack: bool, profile: str, infra_type: str, prefix: str,
     click.echo(formatted_divider("="))
     print()
         
-    config_manager = ConfigManager(infra_type, prefix, project_id, stage_id)
+    config_manager = ConfigManager(infra_type, prefix, project_id, stage_id, profile = profile)
     
     # Read existing configuration
     local_config = config_manager.read_samconfig()
     
     if check_stack:
 
-        if profile != None:
+        stack_name = config_manager.generate_stack_name(config_manager.prefix, config_manager.project_id, config_manager.stage_id)
+        stack_config = config_manager.get_stack_config(stack_name)
+        
+        if stack_config and local_config:
+            differences = config_manager.compare_configurations(local_config, stack_config)
+            if differences:
+                click.echo(formatted_warning("Differences found between local and deployed configuration:"))
+                click.echo(formatted_warning(json.dumps(differences, indent=2)))
+                
+                choice = formatted_prompt("Choose configuration to use (local/deployed/cancel)", "", click.Choice(['local', 'deployed', 'cancel']))
+                
+                if choice == 'cancel':
+                    print()
+                    click.echo(formatted_warning("Operation cancelled by user"))
+                    print()
+                    sys.exit(1)
+                elif choice == 'deployed':
+                    local_config = stack_config
 
-            stack_name = config_manager.generate_stack_name(config_manager.prefix, config_manager.project_id, config_manager.stage_id)
-            stack_config = config_manager.get_stack_config(stack_name)
-            
-            if stack_config and local_config:
-                differences = config_manager.compare_configurations(local_config, stack_config)
-                if differences:
-                    click.echo(formatted_warning("Differences found between local and deployed configuration:"))
-                    click.echo(formatted_warning(json.dumps(differences, indent=2)))
-                    
-                    choice = formatted_prompt("Choose configuration to use (local/deployed/cancel)", "", click.Choice(['local', 'deployed', 'cancel']))
-                    
-                    if choice == 'cancel':
-                        print()
-                        click.echo(formatted_warning("Operation cancelled by user"))
-                        print()
-                        sys.exit(1)
-                    elif choice == 'deployed':
-                        local_config = stack_config
-
-                else:
-                    click.echo(formatted_prompt("No differences found between local and deployed configuration:"))
-                    click.echo(formatted_prompt(json.dumps(differences, indent=2)))
-        else:
-            click.echo(formatted_warning("--profile must be specified to check stack. Skipping stack configuration check."))
-
+            else:
+                click.echo(formatted_prompt("No differences found between local and deployed configuration:"))
+                click.echo(formatted_prompt(json.dumps(differences, indent=2)))
 
     # Handle template selection and parameter configuration
     if not local_config:
@@ -1354,7 +1387,8 @@ def main(check_stack: bool, profile: str, infra_type: str, prefix: str,
     if local_config:
         atlantis_deploy_parameter_defaults.update(local_config.get('atlantis', {}).get('deploy', {}).get('parameters', {}))
 
-    parameter_defaults = defaults.get('parameter_overrides', {})
+    parameter_defaults = config_manager.calculate_stage_defaults(config_manager.stage_id)
+    parameter_defaults.update(defaults.get('parameter_overrides', {}))
     if local_config:
         parameter_defaults.update(local_config.get('deployments', {}).get(config_manager.stage_id, {}).get('deploy', {}).get('parameters', {}).get('parameter_overrides', {}))
 

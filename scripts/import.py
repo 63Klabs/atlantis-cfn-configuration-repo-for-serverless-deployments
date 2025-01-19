@@ -33,7 +33,8 @@ def get_stack_info(stack_name, region, profile=None):
             'parameters': parameters,
             'tags': tags,
             'capabilities': stack.get('Capabilities', []),
-            'region': stack['StackId'].split(':')[3]  # Extract region from stack ID
+            'region': stack['StackId'].split(':')[3],  # Extract region from stack ID
+            'profile': profile
         }
     
     except Exception as e:
@@ -105,8 +106,8 @@ def main():
     try:
         print(f"Fetching information for stack: {args.stack_name}")
         stack_info = get_stack_info(args.stack_name, args.region, args.profile)
-        
-        print("Generating samconfig.toml file...")
+
+        print(f"Generating samconfig-{args.stack_name}.toml file...")
         saved_file = create_sam_config(args.stack_name, stack_info)
         
         print(f"Successfully created {saved_file}")
