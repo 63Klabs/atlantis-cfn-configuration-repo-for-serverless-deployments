@@ -95,8 +95,18 @@ class ConfigManager:
         
         boto3.setup_default_session(profile_name=self.profile)
 
-    def generate_stack_name(self, prefix: str, project_id: str, stage_id: str) -> str:
+    def generate_stack_name(self, prefix: str = "", project_id: str = "", stage_id: str = "") -> str:
         """Generate the stack name based on the prefix, project, stage, and infra type"""
+
+        if not prefix:
+            prefix = self.prefix
+
+        if not project_id:
+            project_id = self.project_id
+
+        if not stage_id:
+            stage_id = self.stage_id
+
         stack_name = f"{prefix}-"
 
         if project_id:
@@ -252,42 +262,6 @@ class ConfigManager:
         ])
         
         return parameter_overrides_as_string
-
-    def get_stack_config(self, stack_name: str) -> Optional[Dict]:
-        """Get configuration from existing CloudFormation stack"""
-        try:
-            response = self.cfn_client.describe_stacks(StackName=stack_name)
-            stack = response['Stacks'][0]
-
-            # Get template file from tags
-            template_file = None
-            for tag in stack.get('Tags', []):
-                if tag['Key'] == 'atlantis:TemplateFile':
-                    template_file = tag['Value']
-                    
-            return {
-                'parameters': {p['ParameterKey']: p['ParameterValue'] 
-                             for p in stack.get('Parameters', [])},
-                'template_file': template_file
-            }
-        except ClientError as e:
-            logging.error(f"Error getting configuration for stack {stack_name} : {e}")
-            click.echo(formatted_error(f"Error getting configuration for stack {stack_name}"))
-            click.echo(formatted_error(f"Stack '{stack_name} ' does not exist or incorrect / expired credentials for profile {self.profile}"))
-            return None
-
-    def compare_configurations(self, local_config: Dict, stack_config: Dict) -> Dict:
-        """Compare local and deployed configurations"""
-        differences = {}
-        
-        for key, local_value in local_config.items():
-            stack_value = stack_config.get(key)
-            if stack_value != local_value:
-                differences[key] = {
-                    'local': local_value,
-                    'deployed': stack_value
-                }
-        return differences
 
     def get_template_parameters(self, template_path: str) -> Dict:
         """Get parameters from CloudFormation template"""
@@ -1155,6 +1129,69 @@ class ConfigManager:
             click.echo(formatted_error(f"Error saving configuration. Check logs for more info."))
             sys.exit(1)
 
+    def compare_against_stack(self, local_config: Dict):
+
+        stack_name = self.generate_stack_name()
+        stack_config = self.get_stack_config(stack_name)
+        
+        if stack_config and local_config:
+            differences = self.compare_configurations(local_config, stack_config)
+            if differences:
+                click.echo(formatted_warning("Differences found between local and deployed configuration:"))
+                click.echo(formatted_warning(json.dumps(differences, indent=2)))
+                
+                choice = formatted_prompt("Choose configuration to use (local/deployed/cancel)", "", click.Choice(['local', 'deployed', 'cancel']))
+                
+                if choice == 'cancel':
+                    print()
+                    click.echo(formatted_warning("Operation cancelled by user"))
+                    print()
+                    sys.exit(1)
+                elif choice == 'deployed':
+                    local_config = stack_config
+
+            else:
+                click.echo(formatted_prompt("No differences found between local and deployed configuration:"))
+                click.echo(formatted_prompt(json.dumps(differences, indent=2)))
+
+    def compare_configurations(self, local_config: Dict, stack_config: Dict) -> Dict:
+        """Compare local and deployed configurations"""
+        differences = {}
+        
+        for key, local_value in local_config.items():
+            stack_value = stack_config.get(key)
+            if stack_value != local_value:
+                differences[key] = {
+                    'local': local_value,
+                    'deployed': stack_value
+                }
+        return differences
+
+    def get_stack_config(self, stack_name: str) -> Optional[Dict]:
+        """Get configuration from existing CloudFormation stack"""
+        try:
+            response = self.cfn_client.describe_stacks(StackName=stack_name)
+            stack = response['Stacks'][0]
+
+            # Get template file from tags
+            template_file = None
+            for tag in stack.get('Tags', []):
+                if tag['Key'] == 'atlantis:TemplateFile':
+                    template_file = tag['Value']
+                    
+            return {
+                'parameters': {p['ParameterKey']: p['ParameterValue'] 
+                             for p in stack.get('Parameters', [])},
+                'template_file': template_file
+            }
+        except ClientError as e:
+            logging.error(f"Error getting configuration for stack {stack_name} : {e}")
+            click.echo(formatted_error(f"Error getting configuration for stack {stack_name}"))
+            click.echo(formatted_error(f"Stack '{stack_name} ' does not exist or incorrect / expired credentials for profile {self.profile}"))
+            click.echo(formatted_warning(f"Ensure you are currently logged in and using the correct profile."))
+            print()
+            sys.exit(1)
+
 # =============================================================================
 # ----- Helper functions ------------------------------------------------------
 # =============================================================================
@@ -1308,8 +1345,8 @@ def main(check_stack: bool, profile: str, infra_type: str, prefix: str,
     # log script arguments
     logging.info(f"{sys.argv}")
 
-    # if profile:
-    #     boto3.setup_default_session(profile_name=profile)
+    if profile:
+        boto3.setup_default_session(profile_name=profile)
     
     # Validate infra_type
     if infra_type not in VALID_INFRA_TYPES:
@@ -1338,29 +1375,7 @@ def main(check_stack: bool, profile: str, infra_type: str, prefix: str,
     local_config = config_manager.read_samconfig()
     
     if check_stack:
-
-        stack_name = config_manager.generate_stack_name(config_manager.prefix, config_manager.project_id, config_manager.stage_id)
-        stack_config = config_manager.get_stack_config(stack_name)
-        
-        if stack_config and local_config:
-            differences = config_manager.compare_configurations(local_config, stack_config)
-            if differences:
-                click.echo(formatted_warning("Differences found between local and deployed configuration:"))
-                click.echo(formatted_warning(json.dumps(differences, indent=2)))
-                
-                choice = formatted_prompt("Choose configuration to use (local/deployed/cancel)", "", click.Choice(['local', 'deployed', 'cancel']))
-                
-                if choice == 'cancel':
-                    print()
-                    click.echo(formatted_warning("Operation cancelled by user"))
-                    print()
-                    sys.exit(1)
-                elif choice == 'deployed':
-                    local_config = stack_config
-
-            else:
-                click.echo(formatted_prompt("No differences found between local and deployed configuration:"))
-                click.echo(formatted_prompt(json.dumps(differences, indent=2)))
+        config_manager.compare_against_stack(local_config)
 
     # Handle template selection and parameter configuration
     if not local_config:
