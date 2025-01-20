@@ -31,11 +31,11 @@ VERSION = "v0.1.0/2025-01-25"
 #
 # =============================================================================
 
-# TODO: Offer to save region and s3_bucket if no default or prefix default exists
 # TODO: Test IAM deploy
 # TODO: Test Storage Deploy
 # TODO: Test Pipeline deploy
 # TODO: Test Network Deploy
+
 # TODO: Validate Tag reads
 
 # Q's suggestions
@@ -58,17 +58,17 @@ from pathlib import Path
 from typing import Dict, Optional, List
 from botocore.exceptions import ClientError
 
-sys.path.append(os.path.join(os.path.dirname(__file__), 'lib'))
+sys.path.append(os.path.join(os.path.dirname(__file__), 'scripts/lib'))
 
 import tools
 
 # if logs directory does not exist, create it
-if not os.path.exists('logs'):
-    os.makedirs('logs')
+if not os.path.exists('scripts/logs'):
+    os.makedirs('scripts/logs')
     
 logging.basicConfig(
     level=logging.INFO,
-    filename='logs/script-config.log',
+    filename='scripts/logs/script-config.log',
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
 
@@ -80,9 +80,9 @@ class ConfigManager:
         self.stage_id = 'default' if stage_id == None else stage_id
         self.profile = 'default' if profile == None else profile # if None, set to 'default'
         self.cfn_client = boto3.client('cloudformation')
-        self.templates_dir = Path('..') / f"{infra_type}-infrastructure/templates"
-        self.samconfig_dir = Path('..') / f"{infra_type}-infrastructure"
-        self.settings_dir = Path("settings")
+        self.templates_dir = Path('infrastructure') / f"{infra_type}/templates"
+        self.samconfig_dir = Path('infrastructure') / f"{infra_type}"
+        self.settings_dir = Path("scripts") / "settings"
         self.template_version = 'No version found'
         self.template_hash = None
         self.template_hash_id = None
@@ -1135,9 +1135,12 @@ class ConfigManager:
             print()
             click.echo(formatted_output_with_value("Configuration saved to", samconfig_path))
             click.echo(formatted_output_bold("Open file for 'sam deploy' commands"))
-            click.echo(formatted_output_bold(f"You must be in the {self.infra_type}-infrastructure directory to run the command"))
-            click.echo(formatted_output(f"cd ../{self.infra_type}-infrastructure"))
+            click.echo(formatted_output_bold(f"You must be in the infrastructure/{self.infra_type} directory to run the command"))
+            click.echo(formatted_output(f"cd {self.samconfig_dir}"))
             print()
+
+            # Check if default.json and prefix.json exists
+            self.check_for_default_json(atlantis_deploy_section.get('atlantis', {}))
             
         except Exception as e:
             logging.error(f"Error saving configuration: {e}")
@@ -1348,6 +1351,119 @@ class ConfigManager:
             click.echo(formatted_warning("Please check your AWS configuration and try again"))
             print()
             sys.exit(1)
+
+    def check_for_default_json(self, atlantis: Dict) -> None:
+        """Check if settings/defaults.json and/or <prefix>-defaults.json exists.
+        If not, offer to save region to defaults.json
+        If user chooses no to region, save a blank file as a sample.
+        If prefix-defaults.json doesn't exist, offer to save s3_bucket (and region if not saved to defaults)"""
+
+        defaults_path = self.settings_dir / "defaults.json"
+        prefix_defaults_path = self.settings_dir / f"{self.prefix}-defaults.json"
+        
+        # Create settings directory if it doesn't exist
+        os.makedirs(self.settings_dir, exist_ok=True)
+        
+        # Initialize variables to track user choices
+        save_region = False
+        region = atlantis.get('deploy', {}).get('parameters', {}).get('region')
+        
+        # Check for defaults.json
+        if not os.path.exists(defaults_path) and region:
+            click.echo(formatted_divider())
+            click.echo(formatted_output_bold("Atlantis Configuration Defaults"))
+            click.echo(formatted_divider())
+            
+            click.echo(formatted_output_with_value("Current region:", region))
+            save_choice = click.confirm(
+                formatted_question("Would you like to save this region as the default?"),
+                default=True
+            )
+            
+            if save_choice:
+                save_region = True
+                defaults_data = {
+                    "atlantis": {
+                        "region": region
+                    }
+                }
+            else:
+                defaults_data = {
+                    "atlantis": {},
+                    "parameter_overrides": {},
+                    "tags": []
+                }
+                
+            # Save defaults.json
+            try:
+                with open(defaults_path, 'w') as f:
+                    json.dump(defaults_data, f, indent=2)
+                click.echo(formatted_output(f"Created {defaults_path}"))
+                print()
+                logging.info(f"Created {defaults_path}")
+            except Exception as e:
+                click.echo(formatted_error(f"Error creating {defaults_path}"))
+                logging.error(f"Error creating {defaults_path}: {str(e)}")
+                return
+        else:
+            # read in defaults.json and check for existence of atlantis.region
+            try:
+                with open(defaults_path, 'r') as f:
+                    defaults_data = json.load(f)
+                    if 'atlantis' in defaults_data and 'region' in defaults_data['atlantis']:
+                        save_region = True
+                        region = defaults_data['atlantis']['region']
+            except Exception as e:
+                click.echo(formatted_error(f"Error reading {defaults_path}"))
+                logging.error(f"Error reading {defaults_path}: {str(e)}")
+                return
+    
+        # Check for prefix-defaults.json
+        if not os.path.exists(prefix_defaults_path):
+            click.echo(formatted_divider())
+            click.echo(formatted_output_bold(f"Project Defaults ({self.prefix})"))
+            click.echo(formatted_divider())
+            
+            prefix_defaults_data = {
+                        "atlantis": {},
+	                    "parameter_overrides": {},
+	                    "tags": []
+                    }
+            
+            # Prompt for s3_bucket
+            s3_bucket = atlantis.get('deploy', {}).get('parameters', {}).get('s3_bucket')
+            if s3_bucket:
+                click.echo(formatted_output_with_value("Current S3 bucket:", s3_bucket))
+                save_bucket = click.confirm(
+                    formatted_question("Would you like to save this S3 bucket as the default for this prefix?"),
+                    default=True
+                )
+                
+                if save_bucket:
+                    prefix_defaults_data["atlantis"]["s3_bucket"] = s3_bucket
+            
+            # Prompt for region if not saved in defaults.json
+            if not save_region and region:
+                click.echo(formatted_output_with_value("Current region:", region))
+                save_region_prefix = click.confirm(
+                    formatted_question("Would you like to save this region as the default for this prefix?"),
+                    default=True
+                )
+                
+                if save_region_prefix:
+                    prefix_defaults_data["atlantis"]["region"] = region
+            
+            # Save prefix-defaults.json
+            try:
+                with open(prefix_defaults_path, 'w') as f:
+                    json.dump(prefix_defaults_data, f, indent=2)
+                click.echo(formatted_output(f"Created {prefix_defaults_path}"))
+                print()
+                logging.info(f"Created {prefix_defaults_path}")
+            except Exception as e:
+                click.echo(formatted_error(f"Error creating {prefix_defaults_path}"))
+                logging.error(f"Error creating {prefix_defaults_path}: {str(e)}")
+                return
 
 
 # =============================================================================

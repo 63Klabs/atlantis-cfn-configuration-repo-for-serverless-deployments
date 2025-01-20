@@ -107,10 +107,10 @@ def create_sam_config(stack_name, stack_info, file_name):
     config["default"] = default
     
 	# if imports folder does not exist, create it
-    if not os.path.exists("../imports"):
-        os.makedirs("../imports")
+    if not os.path.exists("imports"):
+        os.makedirs("imports")
 
-    samconfig_path = f"../imports/{file_name}"
+    samconfig_path = f"imports/{file_name}"
         
     # Write to samconfig.toml
     with open(samconfig_path, "w") as f:

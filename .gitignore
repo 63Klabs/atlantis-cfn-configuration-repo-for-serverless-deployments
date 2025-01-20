@@ -27,10 +27,10 @@ scripts/settings/storage/*
 scripts/settings/pipeline/*
 scripts/settings/network/*
 
-service-role-infrastructure/samconfig-*
-storage-infrastructure/samconfig-*
-pipeline-infrastructure/samconfig-*
-network-infrastructure/samconfig-*
+infrastructure/service-role/samconfig-*
+infrastructure/storage/samconfig-*
+infrastructure/pipeline/samconfig-*
+infrastructure/network/samconfig-*
 
 imports/*
 
