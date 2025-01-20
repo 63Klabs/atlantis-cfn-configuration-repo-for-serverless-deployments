@@ -1,0 +1,10 @@
+# Default color configuration for tools.py
+COLOR_PROMPT = "cyan"
+COLOR_OPTION = "magenta"
+COLOR_OUTPUT = "green"
+COLOR_OUTPUT_VALUE = "yellow"
+COLOR_SUCCESS = "green"
+COLOR_ERROR = "red"
+COLOR_WARNING = "yellow"
+COLOR_INFO = "blue"
+COLOR_BOX_TEXT = "white"

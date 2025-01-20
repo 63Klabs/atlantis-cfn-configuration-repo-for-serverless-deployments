@@ -140,7 +140,7 @@ class ConfigManager:
         if samconfig_path.exists():
             try:
                 print()
-                click.echo(formatted_output_with_value("Using samconfig file:", samconfig_path))
+                click.echo(tools.formatted_output_with_value("Using samconfig file:", samconfig_path))
                 print()
 
                 samconfig_data = {'atlantis': {}, 'deployments': {}}
@@ -170,7 +170,7 @@ class ConfigManager:
                 return samconfig_data
             except Exception as e:
                 logging.error(f"Error reading samconfig file {samconfig_path}: {e}")
-                click.echo(formatted_error("Error reading samconfig file. Check logs for more info."))
+                click.echo(tools.formatted_error("Error reading samconfig file. Check logs for more info."))
                 return None
         return None
 
@@ -298,10 +298,10 @@ class ConfigManager:
 
                     # let user know what template is being used
                     print()
-                    click.echo(formatted_output_with_value("Using template file:", template_path))
-                    click.echo(formatted_output_with_value("Template version:", self.template_version))
-                    click.echo(formatted_output_with_value("Template hash:", full_hash))
-                    click.echo(formatted_output_with_value("Template hash ID:", self.template_hash_id))
+                    click.echo(tools.formatted_output_with_value("Using template file:", template_path))
+                    click.echo(tools.formatted_output_with_value("Template version:", self.template_version))
+                    click.echo(tools.formatted_output_with_value("Template hash:", full_hash))
+                    click.echo(tools.formatted_output_with_value("Template hash ID:", self.template_hash_id))
                     print()
 
                     # Go back to start of file to process contents
@@ -331,7 +331,7 @@ class ConfigManager:
                     
             except Exception as e:
                 logging.error(f"Error parsing template file {template_path}: {e}")
-                click.echo(formatted_error("Error parsing template file. Check logs for more info."))
+                click.echo(tools.formatted_error("Error parsing template file. Check logs for more info."))
                 return {}
 
 
@@ -408,8 +408,8 @@ class ConfigManager:
         """Prompt user for parameter values"""
 
         print()
-        click.echo(formatted_divider())
-        click.echo(formatted_output_bold("Template Parameter Overrides:"))
+        click.echo(tools.formatted_divider())
+        click.echo(tools.formatted_output_bold("Template Parameter Overrides:"))
         print()
         
         values = {}
@@ -437,7 +437,7 @@ class ConfigManager:
 
             while True:
 
-                value = formatted_prompt(
+                value = tools.formatted_prompt(
                     param_name,
                     default_value,
                     str
@@ -476,7 +476,7 @@ class ConfigManager:
                         help.append({"header": None, "text": help_text[:-2]})
 
                     print()
-                    formatted_box_info(help)
+                    tools.formatted_box_info(help)
                     print()
 
                     continue
@@ -518,9 +518,9 @@ class ConfigManager:
                     break
                 else:
                     print()
-                    click.echo(formatted_error(f"Invalid value for {param_name}"))
-                    click.echo(formatted_error(validation_result.get("reason")))
-                    click.echo(formatted_info("Enter ? for help, ^ to exit"))
+                    click.echo(tools.formatted_error(f"Invalid value for {param_name}"))
+                    click.echo(tools.formatted_error(validation_result.get("reason")))
+                    click.echo(tools.formatted_info("Enter ? for help, ^ to exit"))
                     print()
 
                     
@@ -557,16 +557,16 @@ class ConfigManager:
         """Display numbered list of templates and let user select by number"""
         if not templates:
             logging.error("No templates found")
-            click.echo(formatted_error("No templates found"))
+            click.echo(tools.formatted_error("No templates found"))
             sys.exit(1)
         
         # Sort templates for consistent ordering
         templates.sort()
         
         # Display numbered list
-        click.echo(formatted_question("Available templates:"))
+        click.echo(tools.formatted_question("Available templates:"))
         for idx, template in enumerate(templates, 1):
-            click.echo(formatted_option(f"{idx}. {template}"))
+            click.echo(tools.formatted_option(f"{idx}. {template}"))
         
         print()
 
@@ -577,7 +577,7 @@ class ConfigManager:
                 if len(templates) == 1:
                     default = 1
 
-                choice = formatted_prompt("Enter template number", default, str)
+                choice = tools.formatted_prompt("Enter template number", default, str)
                 # Check if input is a number
                 template_idx = int(choice) - 1
                 
@@ -585,18 +585,18 @@ class ConfigManager:
                 if 0 <= template_idx < len(templates):
                     return templates[template_idx]
                 else:
-                    click.echo(formatted_error(f"Please enter a number between 1 and {len(templates)}"))
+                    click.echo(tools.formatted_error(f"Please enter a number between 1 and {len(templates)}"))
             except ValueError:
-                click.echo(formatted_error("Please enter a valid number"))
+                click.echo(tools.formatted_error("Please enter a valid number"))
             except KeyboardInterrupt:
-                click.echo(formatted_info("Template selection cancelled"))
+                click.echo(tools.formatted_info("Template selection cancelled"))
                 sys.exit(1)
 
     def gather_atlantis_deploy_parameters(self, infra_type: str, atlantis_deploy_parameter_defaults: Dict) -> Dict:
         """Gather atlantis deployment parameters with validation"""
         print()
-        click.echo(formatted_divider())
-        click.echo(formatted_output_bold("Deployment Parameters:"))
+        click.echo(tools.formatted_divider())
+        click.echo(tools.formatted_output_bold("Deployment Parameters:"))
         print()
 
         atlantis_deploy_params = {}
@@ -620,12 +620,12 @@ class ConfigManager:
                 help.append({"header": None, "text": line})
 
             print()
-            formatted_box_info(help)
+            tools.formatted_box_info(help)
             print()
 
         def get_validated_input(prompt, default, validator_func, error_message, param_name, required=False):
             while True:
-                value = formatted_prompt(prompt, default, str)
+                value = tools.formatted_prompt(prompt, default, str)
                 
                 # Handle special commands
                 if value == '?':
@@ -633,12 +633,12 @@ class ConfigManager:
                     continue
                 elif value == '-':
                     if required:
-                        click.echo(formatted_error("This field is required and cannot be cleared"))
-                        click.echo(formatted_info("Enter ? for help, ^ to exit"))
+                        click.echo(tools.formatted_error("This field is required and cannot be cleared"))
+                        click.echo(tools.formatted_info("Enter ? for help, ^ to exit"))
                         continue
                     return ''
                 elif value == '^':
-                    click.echo(formatted_info("\nExiting script..."))
+                    click.echo(tools.formatted_info("\nExiting script..."))
                     sys.exit(0)
                 
                 # Handle empty input when default exists
@@ -650,9 +650,9 @@ class ConfigManager:
                     return value
                 
                 print()
-                click.echo(formatted_error(f"Invalid value for {param_name}"))
-                click.echo(formatted_error(error_message))
-                click.echo(formatted_info("Enter ? for help, - to clear, ^ to exit"))
+                click.echo(tools.formatted_error(f"Invalid value for {param_name}"))
+                click.echo(tools.formatted_error(error_message))
+                click.echo(tools.formatted_info("Enter ? for help, - to clear, ^ to exit"))
                 print()
 
         # Validation functions
@@ -748,7 +748,7 @@ class ConfigManager:
             return atlantis_deploy_params
 
         except KeyboardInterrupt:
-            click.echo(formatted_info("\nOperation cancelled by user"))
+            click.echo(tools.formatted_info("\nOperation cancelled by user"))
             sys.exit(1)
 
     def build_config(self, infra_type: str, template_file: str, atlantis_deploy_parameter_defaults: Dict, parameter_values: Dict, tag_defaults: List, local_config: Dict) -> Dict:
@@ -795,24 +795,24 @@ class ConfigManager:
         if len(deployments) > 1:
             print()
             # Multiple deploy environments detected. Do you want to apply the atlantis deploy parameters to ALL deployments? This will NOT update parameter_overrides or tags for those deployments.
-            click.echo(formatted_output_with_value("Multiple deploy environments detected for ", f"{prefix}-{project_id}"))
-            click.echo(formatted_question(f"Do you want to apply the Deploy Parameters to ALL deployments?"))
-            click.echo(formatted_info(f"(This will NOT update Template Parameter Overrides or Tags for those deployments.)"))
-            click.echo(formatted_option("Yes or No"))
+            click.echo(tools.formatted_output_with_value("Multiple deploy environments detected for ", f"{prefix}-{project_id}"))
+            click.echo(tools.formatted_question(f"Do you want to apply the Deploy Parameters to ALL deployments?"))
+            click.echo(tools.formatted_info(f"(This will NOT update Template Parameter Overrides or Tags for those deployments.)"))
+            click.echo(tools.formatted_option("Yes or No"))
             print()
             choice = ""
             # prompt until choice is either y or n
             while choice.upper() not in ['Y', 'N', 'YES', 'NO']:
-                choice = formatted_prompt("Apply Deploy Parameters to All?", "Yes", str)
+                choice = tools.formatted_prompt("Apply Deploy Parameters to All?", "Yes", str)
                 if choice.upper() not in ['Y', 'N', 'YES', 'NO']:
-                    click.echo(formatted_error("Please enter 'Yes' or 'No'"))
+                    click.echo(tools.formatted_error("Please enter 'Yes' or 'No'"))
             print()
             if choice.upper() in ['Y', 'YES']:
-                click.echo(formatted_output_bold(f"Updating Deploy Parameters across all deployments of {prefix}-{project_id}..."))
+                click.echo(tools.formatted_output_bold(f"Updating Deploy Parameters across all deployments of {prefix}-{project_id}..."))
                 for deployment in deployments:
                     deployments[deployment]['deploy']['parameters'].update(atlantis_default_deploy_parameters)
             else:
-                click.echo(formatted_output_bold(f"Updating Deploy Parameters only for {stage_id}..."))
+                click.echo(tools.formatted_output_bold(f"Updating Deploy Parameters only for {stage_id}..."))
                 # We do this below so we'll skip doing it here
 
         # We will now apply the deploy parameters to the deployment
@@ -1133,10 +1133,10 @@ class ConfigManager:
             logging.info(f"Configuration saved to '{samconfig_path}'")
             
             print()
-            click.echo(formatted_output_with_value("Configuration saved to", samconfig_path))
-            click.echo(formatted_output_bold("Open file for 'sam deploy' commands"))
-            click.echo(formatted_output_bold(f"You must be in the infrastructure/{self.infra_type} directory to run the command"))
-            click.echo(formatted_output(f"cd {self.samconfig_dir}"))
+            click.echo(tools.formatted_output_with_value("Configuration saved to", samconfig_path))
+            click.echo(tools.formatted_output_bold("Open file for 'sam deploy' commands"))
+            click.echo(tools.formatted_output_bold(f"You must be in the infrastructure/{self.infra_type} directory to run the command"))
+            click.echo(tools.formatted_output(f"cd {self.samconfig_dir}"))
             print()
 
             # Check if default.json and prefix.json exists
@@ -1144,7 +1144,7 @@ class ConfigManager:
             
         except Exception as e:
             logging.error(f"Error saving configuration: {e}")
-            click.echo(formatted_error(f"Error saving configuration. Check logs for more info."))
+            click.echo(tools.formatted_error(f"Error saving configuration. Check logs for more info."))
             sys.exit(1)
 
     def compare_against_stack(self, local_config: Dict) -> Dict:
@@ -1155,27 +1155,27 @@ class ConfigManager:
         if stack_config and local_config:
             differences = self.compare_configurations(local_config, stack_config)
             if differences:
-                click.echo(formatted_warning(f"Differences found between local and deployed stack configuration for {stack_name}"))
+                click.echo(tools.formatted_warning(f"Differences found between local and deployed stack configuration for {stack_name}"))
                 
-                choice = formatted_prompt("Choose configuration to use", "", click.Choice(['Local', 'Deployed', 'Cancel'], False))
+                choice = tools.formatted_prompt("Choose configuration to use", "", click.Choice(['Local', 'Deployed', 'Cancel'], False))
                 
                 if choice.lower() == 'cancel':
                     print()
-                    click.echo(formatted_warning("Operation cancelled by user"))
+                    click.echo(tools.formatted_warning("Operation cancelled by user"))
                     print()
                     sys.exit(1)
                 elif choice.lower() == 'deployed':
                     local_config = stack_config
             else:
-                click.echo(formatted_output("No differences found between local and deployed configuration:"))
+                click.echo(tools.formatted_output("No differences found between local and deployed configuration:"))
         elif stack_config and not local_config:
-            click.echo(formatted_warning(f"No local configuration found for {stack_name}"))
-            click.echo(formatted_warning("However, a deployed stack was found."))
-            choice = formatted_prompt("Import deployed stack?", "", click.Choice(['Yes', 'No', 'Cancel'], False))
+            click.echo(tools.formatted_warning(f"No local configuration found for {stack_name}"))
+            click.echo(tools.formatted_warning("However, a deployed stack was found."))
+            choice = tools.formatted_prompt("Import deployed stack?", "", click.Choice(['Yes', 'No', 'Cancel'], False))
 
             if choice.lower() == 'cancel':
                 print()
-                click.echo(formatted_warning("Operation cancelled by user"))
+                click.echo(tools.formatted_warning("Operation cancelled by user"))
                 print()
                 sys.exit(1)
             elif choice.lower() == 'yes':
@@ -1198,9 +1198,9 @@ class ConfigManager:
             stack_str = format_value(stack_val)
             
             # Determine color based on whether values match
-            color = COLOR_SUCCESS if local_str == stack_str else COLOR_ERROR
+            color = tools.COLOR_SUCCESS if local_str == stack_str else tools.COLOR_ERROR
             
-            click.echo(formatted_output_bold(name))
+            click.echo(tools.formatted_output_bold(name))
             click.echo(click.style(f"  Local: {local_str}", fg=color))
             click.echo(click.style(f"  Stack: {stack_str}", fg=color))
             click.echo("")  # Empty line for spacing
@@ -1228,9 +1228,9 @@ class ConfigManager:
 
 
         # Print Parameter Overrides
-        click.echo(formatted_divider())
-        click.echo(formatted_output_bold("Parameter Overrides"))
-        click.echo(formatted_divider())
+        click.echo(tools.formatted_divider())
+        click.echo(tools.formatted_output_bold("Parameter Overrides"))
+        click.echo(tools.formatted_divider())
         
         all_param_keys = sorted(set(local_parameter_overrides.keys()) | set(stack_parameter_overrides.keys()))
         for key in all_param_keys:
@@ -1245,9 +1245,9 @@ class ConfigManager:
             )
 
         # Print Atlantis Deploy Parameters
-        click.echo(formatted_divider())
-        click.echo(formatted_output_bold("Deploy Parameters"))
-        click.echo(formatted_divider())
+        click.echo(tools.formatted_divider())
+        click.echo(tools.formatted_output_bold("Deploy Parameters"))
+        click.echo(tools.formatted_divider())
         
         all_atlantis_keys = sorted(set(local_atlantis_params.keys()) | set(stack_atlantis_params.keys()))
         for key in all_atlantis_keys:
@@ -1262,9 +1262,9 @@ class ConfigManager:
             )
 
         # Print Tags
-        click.echo(formatted_divider())
-        click.echo(formatted_output_bold("Tags"))
-        click.echo(formatted_divider())
+        click.echo(tools.formatted_divider())
+        click.echo(tools.formatted_output_bold("Tags"))
+        click.echo(tools.formatted_divider())
         
         all_tag_keys = sorted(set(local_tags_dict.keys()) | set(stack_tags_dict.keys()))
         for key in all_tag_keys:
@@ -1331,24 +1331,24 @@ class ConfigManager:
             logging.error(f"Error getting configuration for stack {stack_name}: {error_code} - {error_message}")
             
             if error_code == 'UnauthorizedException':
-                click.echo(formatted_error("Authentication Error"))
-                click.echo(formatted_error("Your session token is invalid or has expired"))
-                click.echo(formatted_warning("Please authenticate again with AWS and ensure you have the correct permissions"))
-                click.echo(formatted_info("You may need to run 'aws sso login' if using AWS SSO"))
+                click.echo(tools.formatted_error("Authentication Error"))
+                click.echo(tools.formatted_error("Your session token is invalid or has expired"))
+                click.echo(tools.formatted_warning("Please authenticate again with AWS and ensure you have the correct permissions"))
+                click.echo(tools.formatted_info("You may need to run 'aws sso login' if using AWS SSO"))
             elif error_code == 'ValidationError':
-                click.echo(formatted_error(f"Stack '{stack_name}' does not exist"))
+                click.echo(tools.formatted_error(f"Stack '{stack_name}' does not exist"))
             else:
-                click.echo(formatted_error(f"Error getting configuration for stack {stack_name}"))
-                click.echo(formatted_error(f"Error: {error_code} - {error_message}"))
-                click.echo(formatted_warning(f"Ensure you are currently logged in and using the correct profile ({self.profile})"))
+                click.echo(tools.formatted_error(f"Error getting configuration for stack {stack_name}"))
+                click.echo(tools.formatted_error(f"Error: {error_code} - {error_message}"))
+                click.echo(tools.formatted_warning(f"Ensure you are currently logged in and using the correct profile ({self.profile})"))
             
             print()
             sys.exit(1)
         except Exception as e:
             logging.error(f"Unexpected error getting configuration for stack {stack_name}: {e}")
-            click.echo(formatted_error(f"Unexpected error getting configuration for stack {stack_name}"))
-            click.echo(formatted_error(f"Error: {str(e)}"))
-            click.echo(formatted_warning("Please check your AWS configuration and try again"))
+            click.echo(tools.formatted_error(f"Unexpected error getting configuration for stack {stack_name}"))
+            click.echo(tools.formatted_error(f"Error: {str(e)}"))
+            click.echo(tools.formatted_warning("Please check your AWS configuration and try again"))
             print()
             sys.exit(1)
 
@@ -1370,13 +1370,13 @@ class ConfigManager:
         
         # Check for defaults.json
         if not os.path.exists(defaults_path) and region:
-            click.echo(formatted_divider())
-            click.echo(formatted_output_bold("Atlantis Configuration Defaults"))
-            click.echo(formatted_divider())
+            click.echo(tools.formatted_divider())
+            click.echo(tools.formatted_output_bold("Atlantis Configuration Defaults"))
+            click.echo(tools.formatted_divider())
             
-            click.echo(formatted_output_with_value("Current region:", region))
+            click.echo(tools.formatted_output_with_value("Current region:", region))
             save_choice = click.confirm(
-                formatted_question("Would you like to save this region as the default?"),
+                tools.formatted_question("Would you like to save this region as the default?"),
                 default=True
             )
             
@@ -1398,11 +1398,11 @@ class ConfigManager:
             try:
                 with open(defaults_path, 'w') as f:
                     json.dump(defaults_data, f, indent=2)
-                click.echo(formatted_output(f"Created {defaults_path}"))
+                click.echo(tools.formatted_output(f"Created {defaults_path}"))
                 print()
                 logging.info(f"Created {defaults_path}")
             except Exception as e:
-                click.echo(formatted_error(f"Error creating {defaults_path}"))
+                click.echo(tools.formatted_error(f"Error creating {defaults_path}"))
                 logging.error(f"Error creating {defaults_path}: {str(e)}")
                 return
         else:
@@ -1414,15 +1414,15 @@ class ConfigManager:
                         save_region = True
                         region = defaults_data['atlantis']['region']
             except Exception as e:
-                click.echo(formatted_error(f"Error reading {defaults_path}"))
+                click.echo(tools.formatted_error(f"Error reading {defaults_path}"))
                 logging.error(f"Error reading {defaults_path}: {str(e)}")
                 return
     
         # Check for prefix-defaults.json
         if not os.path.exists(prefix_defaults_path):
-            click.echo(formatted_divider())
-            click.echo(formatted_output_bold(f"Project Defaults ({self.prefix})"))
-            click.echo(formatted_divider())
+            click.echo(tools.formatted_divider())
+            click.echo(tools.formatted_output_bold(f"Project Defaults ({self.prefix})"))
+            click.echo(tools.formatted_divider())
             
             prefix_defaults_data = {
                         "atlantis": {},
@@ -1433,9 +1433,9 @@ class ConfigManager:
             # Prompt for s3_bucket
             s3_bucket = atlantis.get('deploy', {}).get('parameters', {}).get('s3_bucket')
             if s3_bucket:
-                click.echo(formatted_output_with_value("Current S3 bucket:", s3_bucket))
+                click.echo(tools.formatted_output_with_value("Current S3 bucket:", s3_bucket))
                 save_bucket = click.confirm(
-                    formatted_question("Would you like to save this S3 bucket as the default for this prefix?"),
+                    tools.formatted_question("Would you like to save this S3 bucket as the default for this prefix?"),
                     default=True
                 )
                 
@@ -1444,9 +1444,9 @@ class ConfigManager:
             
             # Prompt for region if not saved in defaults.json
             if not save_region and region:
-                click.echo(formatted_output_with_value("Current region:", region))
+                click.echo(tools.formatted_output_with_value("Current region:", region))
                 save_region_prefix = click.confirm(
-                    formatted_question("Would you like to save this region as the default for this prefix?"),
+                    tools.formatted_question("Would you like to save this region as the default for this prefix?"),
                     default=True
                 )
                 
@@ -1457,148 +1457,13 @@ class ConfigManager:
             try:
                 with open(prefix_defaults_path, 'w') as f:
                     json.dump(prefix_defaults_data, f, indent=2)
-                click.echo(formatted_output(f"Created {prefix_defaults_path}"))
+                click.echo(tools.formatted_output(f"Created {prefix_defaults_path}"))
                 print()
                 logging.info(f"Created {prefix_defaults_path}")
             except Exception as e:
-                click.echo(formatted_error(f"Error creating {prefix_defaults_path}"))
+                click.echo(tools.formatted_error(f"Error creating {prefix_defaults_path}"))
                 logging.error(f"Error creating {prefix_defaults_path}: {str(e)}")
                 return
-
-
-# =============================================================================
-# ----- Helper functions ------------------------------------------------------
-# =============================================================================
-
-# Prompt colors may be changable at a later date
-COLOR_PROMPT = 'cyan'
-COLOR_OPTION = 'magenta'
-COLOR_OUTPUT = 'green'
-COLOR_OUTPUT_VALUE = 'yellow'
-COLOR_SUCCESS = 'green'
-COLOR_ERROR = 'red'
-COLOR_WARNING = 'yellow'
-COLOR_INFO = 'blue'
-COLOR_BOX_TEXT = 'white'
-
-# This function was written by GitHub Copilot :)
-# GitHub Copilot also assisted in all coloring of output and prompts
-def formatted_prompt(prompt_text: str, default_value: str, value_type: type = str, show_default: bool = False) -> str:
-    """Format prompts so that they are consistent"""
-    formatted_text = ''
-    
-    if default_value != '':
-        formatted_text = click.style(f"{prompt_text} [", fg=COLOR_PROMPT, bold=True) + \
-                         click.style(f"{default_value}", fg=COLOR_OPTION) + \
-                         click.style("]", fg=COLOR_PROMPT, bold=True)
-    else:
-        formatted_text = click.style(f"{prompt_text}", fg=COLOR_PROMPT, bold=True)
-
-    return click.prompt(formatted_text, type=value_type, default=default_value, show_default=show_default)
-
-def formatted_question(question_text: str) -> str:
-    """Format questions so that they are consistent"""
-    return click.style(f"{question_text} ", fg=COLOR_PROMPT, bold=True)
-
-def formatted_option(option_text: str) -> str:
-    """Format options so that they are consistent"""
-    return click.style(f"{option_text} ", fg=COLOR_OPTION)
-
-def formatted_output_with_value(response_text: str, response_value: str) -> str:
-    """Format responses so that they are consistent"""
-    return click.style(f"{response_text.strip()} ", fg=COLOR_OUTPUT, bold=True) + \
-           click.style(f"{response_value}", fg=COLOR_OUTPUT_VALUE)
-
-def formatted_output_bold(response_text: str) -> str:
-    """Format responses so that they are consistent"""
-    return click.style(f"{response_text} ", fg=COLOR_OUTPUT, bold=True)
-
-def formatted_output(response_text: str) -> str:
-    """Format responses so that they are consistent"""
-    return click.style(f"{response_text} ", fg=COLOR_OUTPUT)
-
-def formatted_error(response_text: str) -> str:
-    """Format responses so that they are consistent"""
-    return click.style(f"{response_text} ", fg=COLOR_ERROR, bold=True)
-
-def formatted_warning(response_text: str) -> str:
-    """Format responses so that they are consistent"""
-    return click.style(f"{response_text} ", fg=COLOR_WARNING, bold=True)
-
-def formatted_info(response_text: str) -> str:
-    """Format responses so that they are consistent"""
-    return click.style(f"{response_text} ", fg=COLOR_INFO, bold=True)
-
-def formatted_divider(char: str = '-', num: int = 80, *, fg=COLOR_OUTPUT) -> str:
-    """Format dividers so that they are consistent"""
-    return click.style(f"{char * tools.get_terminal_width(num)}", fg=fg, bold=True)
-
-def formatted_box_info(sections: List[Dict], *, width=80) -> None:
-    """Format responses so that they are consistent"""
-    fg = COLOR_BOX_TEXT
-    bg = COLOR_INFO
-
-    formatted_box(sections, width=width, fg=fg, bg=bg)
-
-def formatted_box_warning(sections: List[Dict], *, width=80) -> None:
-    """Format responses so that they are consistent"""
-    # Switched due to contrast
-    fg = "black"
-    bg = COLOR_WARNING
-
-    formatted_box(sections, width=width, fg=fg, bg=bg)
-
-def formatted_box_error(sections: List[Dict], *, width=80) -> None:
-    """Format responses so that they are consistent"""
-    fg = COLOR_BOX_TEXT
-    bg = COLOR_ERROR
-
-    formatted_box(sections, width=width, fg=fg, bg=bg)
-
-def formatted_box_output(sections: List[Dict], *, width=80) -> None:
-    """Format responses so that they are consistent"""
-    # Switched due to contrast
-    fg = COLOR_OUTPUT
-    bg = COLOR_BOX_TEXT
-
-    formatted_box(sections, width=width, fg=fg, bg=bg)
-
-def formatted_box(sections: List[Dict], *, width=80, fg=COLOR_BOX_TEXT, bg=COLOR_INFO) -> None:
-    """Format responses so that they are consistent"""
-    width = tools.get_terminal_width(width)
-
-    i = 0
-
-    for section in sections:
-        i += 1
-        header = section.get("header", None)
-        if header:
-            if i > 1:
-                formatted_box_divider(' ', width=width, fg=fg, bg=bg)
-            formatted_box_header(header, width=width, fg=fg, bg=bg)
-        else:
-            formatted_box_divider('~', width=width, fg=fg, bg=bg)
-        text = section.get("text", "")
-        formatted_box_text(text, width=width, fg=fg, bg=bg)
-    formatted_box_divider('~', width=width, fg=fg, bg=bg)
-
-
-def formatted_box_header(heading_text: str, *, width=80, fg=COLOR_BOX_TEXT, bg=COLOR_INFO) -> None:
-    """Format responses so that they are consistent"""
-    width = tools.get_terminal_width(width)
-    text = f"~~~~~~ {heading_text} "
-    text += tools.charStr("~", (width - len(text)))
-    click.echo(click.style(text, fg=fg, bg=bg, bold=True))
-
-def formatted_box_divider(char: str = '~', *,  width=80, fg=COLOR_BOX_TEXT, bg=COLOR_INFO) -> None:
-    click.echo(click.style(f"{char * tools.get_terminal_width(width)}", fg=fg, bg=bg, bold=True))
-
-def formatted_box_text(text: str, *, width=80, fg=COLOR_BOX_TEXT, bg=COLOR_INFO) -> None:
-    """Format responses so that they are consistent"""
-    width = tools.get_terminal_width(width)
-    text_multi_line = tools.break_lines(text).split('\n', width)
-    for line in text_multi_line:
-        click.echo(click.style(f"{line.rstrip():<{width}}", fg=fg, bg=bg))
 
 
 # =============================================================================
@@ -1638,10 +1503,10 @@ def main(check_stack: bool, profile: str, infra_type: str, prefix: str,
     stage_id = stage_id if stage_id else 'default'
 
     print()
-    click.echo(formatted_divider("="))
-    click.echo(formatted_output_bold(f"Configuration Generator ({VERSION})"))
-    click.echo(formatted_output_with_value("Infra Type:", infra_type))
-    click.echo(formatted_divider("="))
+    click.echo(tools.formatted_divider("="))
+    click.echo(tools.formatted_output_bold(f"Configuration Generator ({VERSION})"))
+    click.echo(tools.formatted_output_with_value("Infra Type:", infra_type))
+    click.echo(tools.formatted_divider("="))
     print()
         
     config_manager = ConfigManager(infra_type, prefix, project_id, stage_id, profile = profile)
@@ -1670,8 +1535,8 @@ def main(check_stack: bool, profile: str, infra_type: str, prefix: str,
 
     print()
 
-    click.echo(formatted_divider("-", fg=COLOR_INFO))
-    click.echo(formatted_info("Enter to accept default, ? for help, - to clear, ^ to exit "))
+    click.echo(tools.formatted_divider("-", fg=tools.COLOR_INFO))
+    click.echo(tools.formatted_info("Enter to accept default, ? for help, - to clear, ^ to exit "))
 
     atlantis_deploy_parameter_defaults = defaults.get('atlantis', {})
     if local_config:
@@ -1693,12 +1558,12 @@ def main(check_stack: bool, profile: str, infra_type: str, prefix: str,
     config = config_manager.build_config(infra_type, template_file, atlantis_deploy_parameter_defaults, parameter_values, tag_defaults, local_config)
     
     print()
-    click.echo(formatted_divider())
+    click.echo(tools.formatted_divider())
 
     # Save the config
     config_manager.save_config(config)
 
-    click.echo(formatted_divider("="))
+    click.echo(tools.formatted_divider("="))
     print()
 
 

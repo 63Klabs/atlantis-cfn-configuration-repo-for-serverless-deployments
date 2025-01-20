@@ -25,7 +25,22 @@ import boto3
 import tomlkit
 import argparse
 import os
-from datetime import datetime
+import sys
+import logging
+
+sys.path.append(os.path.join(os.path.dirname(__file__), 'scripts/lib'))
+
+import tools
+
+# if logs directory does not exist, create it
+if not os.path.exists('scripts/logs'):
+    os.makedirs('scripts/logs')
+    
+logging.basicConfig(
+    level=logging.INFO,
+    filename='scripts/logs/script-config.log',
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
 
 def format_key_value_pair(key, value):
     """Format key-value pairs with escaped quotes"""
@@ -130,10 +145,7 @@ def main():
         print(f"Fetching information for stack: {args.stack_name}")
         stack_info = get_stack_info(args.stack_name, args.region, args.profile)
 
-        # formulate date string as YYYY-MM-DD
-        date_str = datetime.now().strftime("%Y-%m-%d")
-        time_str = datetime.now().strftime("%H%M%S")
-        file_name = f"samconfig-{args.stack_name}_{date_str}T{time_str}.toml"
+        file_name = f"samconfig-{args.stack_name}_{tools.get_date_stamp()}.toml"
         print(f"Generating {file_name} file...")
         saved_file = create_sam_config(args.stack_name, stack_info, file_name)
         

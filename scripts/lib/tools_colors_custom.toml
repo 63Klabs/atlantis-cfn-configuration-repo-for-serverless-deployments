@@ -1,0 +1,4 @@
+# Custom color overrides
+COLOR_PROMPT = "cyan"
+COLOR_SUCCESS = "green"
+# Only need to specify colors you want to override
