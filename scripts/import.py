@@ -1,8 +1,31 @@
+VERSION = "v0.1.0/2025-01-25"
+# Developed by Chad Kluck with AI assistance from Amazon Q Developer
+
+# =============================================================================
+# Usage:
+#
+# `python import.py --stack-name --region --profile`
+#
+# -----------------------------------------------------------------------------
+# Install:
+#
+# `sudo pip install boto3 tomlkit`
+# ---------- OR ----------
+# `sudo apt install python3-boto3 python3-tomlkit`
+#
+# -----------------------------------------------------------------------------
+# Full Documentation:
+#
+# Check local READMEs or GitHub repository:
+# https://github.com/chadkluck/atlantis-for-aws-sam-deployments/
+#
+# =============================================================================
+
 import boto3
 import tomlkit
 import argparse
-from datetime import datetime
 import os
+from datetime import datetime
 
 def format_key_value_pair(key, value):
     """Format key-value pairs with escaped quotes"""
@@ -41,7 +64,7 @@ def get_stack_info(stack_name, region, profile=None):
         print(f"Error getting stack information: {str(e)}")
         raise
 
-def create_sam_config(stack_name, stack_info):
+def create_sam_config(stack_name, stack_info, file_name):
     """Create SAM config file in TOML format"""
     config = tomlkit.document()
     
@@ -87,7 +110,7 @@ def create_sam_config(stack_name, stack_info):
     if not os.path.exists("../imports"):
         os.makedirs("../imports")
 
-    samconfig_path = f"../imports/samconfig-{stack_name}.toml"
+    samconfig_path = f"../imports/{file_name}"
         
     # Write to samconfig.toml
     with open(samconfig_path, "w") as f:
@@ -107,8 +130,12 @@ def main():
         print(f"Fetching information for stack: {args.stack_name}")
         stack_info = get_stack_info(args.stack_name, args.region, args.profile)
 
-        print(f"Generating samconfig-{args.stack_name}.toml file...")
-        saved_file = create_sam_config(args.stack_name, stack_info)
+        # formulate date string as YYYY-MM-DD
+        date_str = datetime.now().strftime("%Y-%m-%d")
+        time_str = datetime.now().strftime("%H%M%S")
+        file_name = f"samconfig-{args.stack_name}_{date_str}T{time_str}.toml"
+        print(f"Generating {file_name} file...")
+        saved_file = create_sam_config(args.stack_name, stack_info, file_name)
         
         print(f"Successfully created {saved_file}")
         
@@ -118,8 +145,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
-# ws-sam-api-chadkluck-prod-deploy
-# python script.py --stack-name your-stack-name --region your-region --profile your-profile-name
-# python3 toml-from-stack.py --stack-name ws-sam-api-chadkluck-prod-deploy --region us-east-2 --profile chadkluck

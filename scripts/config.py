@@ -31,13 +31,12 @@ VERSION = "v0.1.0/2025-01-25"
 #
 # =============================================================================
 
+# TODO: Offer to save region and s3_bucket if no default or prefix default exists
 # TODO: Test IAM deploy
 # TODO: Test Storage Deploy
 # TODO: Test Pipeline deploy
 # TODO: Test Network Deploy
 # TODO: Validate Tag reads
-
-# TODO: Test read existing stack
 
 # Q's suggestions
 # TODO: Better error handling
@@ -672,9 +671,25 @@ class ConfigManager:
 
         def validate_region(region):
             valid_regions = {
+                # https://awsregion.info/
+                # United States
                 'us-east-1', 'us-east-2', 'us-west-1', 'us-west-2',
-                'eu-west-1', 'eu-west-2', 'eu-central-1',
-                'ap-southeast-1', 'ap-southeast-2', 'ap-northeast-1'
+                # Canada
+                'ca-central-1', 'ca-west-1'
+                # Mexico
+                'mx-central-1',
+                # South America
+                'sa-east-1',
+                # Asia Pacific
+                'ap-south-1', 'ap-east-1', 'ap-northeast-1', 'ap-northeast-2', 'ap-northeast-3', 'ap-southeast-1', 'ap-southeast-2', 'ap-southeast-3',
+                # Middle East
+                'me-south-1', 'me-central-1',
+                # Israel
+                'il-central-1'
+                # South Africa
+                'af-south-1',
+                # Europe
+                'eu-north-1', 'eu-south-1', 'eu-south-2', 'eu-west-1', 'eu-west-2', 'eu-west-3', 'eu-central-1', 'eu-central-2'
             }
             return region in valid_regions
 
@@ -783,14 +798,14 @@ class ConfigManager:
             click.echo(formatted_output_with_value("Multiple deploy environments detected for ", f"{prefix}-{project_id}"))
             click.echo(formatted_question(f"Do you want to apply the Deploy Parameters to ALL deployments?"))
             click.echo(formatted_info(f"(This will NOT update Template Parameter Overrides or Tags for those deployments.)"))
-            click.echo(formatted_option("'Y' for Yes, 'N' for No"))
+            click.echo(formatted_option("Yes or No"))
             print()
             choice = ""
             # prompt until choice is either y or n
             while choice.upper() not in ['Y', 'N', 'YES', 'NO']:
-                choice = formatted_prompt("Apply Deploy Parameters to All?", "Y", str)
+                choice = formatted_prompt("Apply Deploy Parameters to All?", "Yes", str)
                 if choice.upper() not in ['Y', 'N', 'YES', 'NO']:
-                    click.echo(formatted_error("Please enter 'Y' or 'N'"))
+                    click.echo(formatted_error("Please enter 'Yes' or 'No'"))
             print()
             if choice.upper() in ['Y', 'YES']:
                 click.echo(formatted_output_bold(f"Updating Deploy Parameters across all deployments of {prefix}-{project_id}..."))
@@ -1137,35 +1152,33 @@ class ConfigManager:
         if stack_config and local_config:
             differences = self.compare_configurations(local_config, stack_config)
             if differences:
-                click.echo(formatted_warning("Differences found between local and deployed configuration."))
+                click.echo(formatted_warning(f"Differences found between local and deployed stack configuration for {stack_name}"))
                 
-                choice = formatted_prompt("Choose configuration to use", "", click.Choice(['local', 'deployed', 'cancel']))
+                choice = formatted_prompt("Choose configuration to use", "", click.Choice(['Local', 'Deployed', 'Cancel'], False))
                 
-                if choice == 'cancel':
+                if choice.lower() == 'cancel':
                     print()
                     click.echo(formatted_warning("Operation cancelled by user"))
                     print()
                     sys.exit(1)
-                elif choice == 'deployed':
+                elif choice.lower() == 'deployed':
                     local_config = stack_config
             else:
                 click.echo(formatted_output("No differences found between local and deployed configuration:"))
+        elif stack_config and not local_config:
+            click.echo(formatted_warning(f"No local configuration found for {stack_name}"))
+            click.echo(formatted_warning("However, a deployed stack was found."))
+            choice = formatted_prompt("Import deployed stack?", "", click.Choice(['Yes', 'No', 'Cancel'], False))
+
+            if choice.lower() == 'cancel':
+                print()
+                click.echo(formatted_warning("Operation cancelled by user"))
+                print()
+                sys.exit(1)
+            elif choice.lower() == 'yes':
+                local_config = stack_config
 
         return local_config
-
-
-    # def compare_configurations(self, local_config: Dict, stack_config: Dict) -> Dict:
-    #     """Compare local and deployed configurations"""
-    #     differences = {}
-        
-    #     for key, local_value in local_config.items():
-    #         stack_value = stack_config.get(key)
-    #         if stack_value != local_value:
-    #             differences[key] = {
-    #                 'local': local_value,
-    #                 'deployed': stack_value
-    #             }
-    #     return differences
 
     def compare_configurations(self, local_config: Dict, stack_config: Dict) -> bool:
         """Compare local and stack configurations in a list format with color coding"""
@@ -1205,8 +1218,6 @@ class ConfigManager:
             stack_atlantis_params['confirm_changeset'] = local_atlantis_params['confirm_changeset']
         if 's3_bucket' in local_atlantis_params:
             stack_atlantis_params['s3_bucket'] = local_atlantis_params['s3_bucket']
-        if 'region' in local_atlantis_params:
-            stack_atlantis_params['region'] = local_atlantis_params['region']
 
         # Convert tags to dictionaries for easier comparison
         local_tags_dict = {tag['Key']: tag['Value'] for tag in local_tags}
@@ -1279,7 +1290,10 @@ class ConfigManager:
             for param in stack.get('Parameters', []):
                 parameter_overrides[param['ParameterKey']] = param['ParameterValue']
 
+            print(stack['StackId'])
+
             atlantis_parameters['capabilities'] = ' '.join(stack.get('Capabilities', []))
+            atlantis_parameters['region'] = stack['StackId'].split(':')[3]  # Extract region from stack ID
 
             # Get template file from tags
             for tag in stack.get('Tags', []):
