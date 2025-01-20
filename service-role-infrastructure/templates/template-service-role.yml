@@ -5,7 +5,7 @@ Description: "Prefix-based IAM Role and Managed Policy for Atlantis Service Role
 # Atlantis for AWS SAM Deployments
 # Service Role Infrastructure Template 
 # Author: Chad Kluck - chadkluck.me
-# Version: v0.0.12/2024-10-22
+# Version: v0.0.13/2025-01-25
 
 # Documentation, Issues/Feature Requests, Latest Updates, and Security Reports on GitHub:
 # https://github.com/chadkluck/atlantis-for-aws-sam-deployments/
