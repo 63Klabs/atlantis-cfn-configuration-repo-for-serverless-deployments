@@ -31,13 +31,13 @@ VERSION = "v0.1.0/2025-01-25"
 #
 # =============================================================================
 
-# TODO: Test read existing stack
-
 # TODO: Test IAM deploy
 # TODO: Test Storage Deploy
 # TODO: Test Pipeline deploy
 # TODO: Test Network Deploy
 # TODO: Validate Tag reads
+
+# TODO: Test read existing stack
 
 # Q's suggestions
 # TODO: Better error handling
@@ -1129,7 +1129,7 @@ class ConfigManager:
             click.echo(formatted_error(f"Error saving configuration. Check logs for more info."))
             sys.exit(1)
 
-    def compare_against_stack(self, local_config: Dict):
+    def compare_against_stack(self, local_config: Dict) -> Dict:
 
         stack_name = self.generate_stack_name()
         stack_config = self.get_stack_config(stack_name)
@@ -1137,10 +1137,9 @@ class ConfigManager:
         if stack_config and local_config:
             differences = self.compare_configurations(local_config, stack_config)
             if differences:
-                click.echo(formatted_warning("Differences found between local and deployed configuration:"))
-                click.echo(formatted_warning(json.dumps(differences, indent=2)))
+                click.echo(formatted_warning("Differences found between local and deployed configuration."))
                 
-                choice = formatted_prompt("Choose configuration to use (local/deployed/cancel)", "", click.Choice(['local', 'deployed', 'cancel']))
+                choice = formatted_prompt("Choose configuration to use", "", click.Choice(['local', 'deployed', 'cancel']))
                 
                 if choice == 'cancel':
                     print()
@@ -1149,22 +1148,122 @@ class ConfigManager:
                     sys.exit(1)
                 elif choice == 'deployed':
                     local_config = stack_config
-
             else:
-                click.echo(formatted_prompt("No differences found between local and deployed configuration:"))
-                click.echo(formatted_prompt(json.dumps(differences, indent=2)))
+                click.echo(formatted_output("No differences found between local and deployed configuration:"))
 
-    def compare_configurations(self, local_config: Dict, stack_config: Dict) -> Dict:
-        """Compare local and deployed configurations"""
-        differences = {}
+        return local_config
+
+
+    # def compare_configurations(self, local_config: Dict, stack_config: Dict) -> Dict:
+    #     """Compare local and deployed configurations"""
+    #     differences = {}
         
-        for key, local_value in local_config.items():
-            stack_value = stack_config.get(key)
-            if stack_value != local_value:
-                differences[key] = {
-                    'local': local_value,
-                    'deployed': stack_value
-                }
+    #     for key, local_value in local_config.items():
+    #         stack_value = stack_config.get(key)
+    #         if stack_value != local_value:
+    #             differences[key] = {
+    #                 'local': local_value,
+    #                 'deployed': stack_value
+    #             }
+    #     return differences
+
+    def compare_configurations(self, local_config: Dict, stack_config: Dict) -> bool:
+        """Compare local and stack configurations in a list format with color coding"""
+        
+        differences = False
+
+        def format_value(value):
+            """Convert value to string, handling None/empty values"""
+            return str(value) if value is not None else 'None'
+        
+        def print_comparison(name: str, local_val: str, stack_val: str) -> None:
+            """Print a three-line comparison with color coding"""
+            local_str = format_value(local_val)
+            stack_str = format_value(stack_val)
+            
+            # Determine color based on whether values match
+            color = COLOR_SUCCESS if local_str == stack_str else COLOR_ERROR
+            
+            click.echo(formatted_output_bold(name))
+            click.echo(click.style(f"  Local: {local_str}", fg=color))
+            click.echo(click.style(f"  Stack: {stack_str}", fg=color))
+            click.echo("")  # Empty line for spacing
+
+        # Extract configurations
+        local_params = local_config.get('deployments', {}).get(self.stage_id, {}).get('deploy', {}).get('parameters', {})
+        local_parameter_overrides = local_params.get('parameter_overrides', {})
+        local_atlantis_params = local_config.get('atlantis', {}).get('deploy', {}).get('parameters', {})
+        local_tags = local_params.get('tags', [])
+
+        stack_params = stack_config.get('deployments', {}).get(self.stage_id, {}).get('deploy', {}).get('parameters', {})
+        stack_parameter_overrides = stack_params.get('parameter_overrides', {})
+        stack_atlantis_params = stack_config.get('atlantis', {}).get('deploy', {}).get('parameters', {})
+        stack_tags = stack_params.get('tags', [])
+
+        # copy non-essentials over so they aren't listed as not matching
+        if 'confirm_changeset' in local_atlantis_params:
+            stack_atlantis_params['confirm_changeset'] = local_atlantis_params['confirm_changeset']
+        if 's3_bucket' in local_atlantis_params:
+            stack_atlantis_params['s3_bucket'] = local_atlantis_params['s3_bucket']
+        if 'region' in local_atlantis_params:
+            stack_atlantis_params['region'] = local_atlantis_params['region']
+
+        # Convert tags to dictionaries for easier comparison
+        local_tags_dict = {tag['Key']: tag['Value'] for tag in local_tags}
+        stack_tags_dict = {tag['Key']: tag['Value'] for tag in stack_tags}
+
+
+        # Print Parameter Overrides
+        click.echo(formatted_divider())
+        click.echo(formatted_output_bold("Parameter Overrides"))
+        click.echo(formatted_divider())
+        
+        all_param_keys = sorted(set(local_parameter_overrides.keys()) | set(stack_parameter_overrides.keys()))
+        for key in all_param_keys:
+            local_value = local_parameter_overrides.get(key)
+            stack_value = stack_parameter_overrides.get(key)
+            if local_value != stack_value:
+                differences = True
+            print_comparison(
+                key,
+                local_value,
+                stack_value
+            )
+
+        # Print Atlantis Deploy Parameters
+        click.echo(formatted_divider())
+        click.echo(formatted_output_bold("Deploy Parameters"))
+        click.echo(formatted_divider())
+        
+        all_atlantis_keys = sorted(set(local_atlantis_params.keys()) | set(stack_atlantis_params.keys()))
+        for key in all_atlantis_keys:
+            local_value = local_atlantis_params.get(key)
+            stack_value = stack_atlantis_params.get(key)
+            if local_value != stack_value:
+                differences = True
+            print_comparison(
+                key,
+                local_value,
+                stack_value
+            )
+
+        # Print Tags
+        click.echo(formatted_divider())
+        click.echo(formatted_output_bold("Tags"))
+        click.echo(formatted_divider())
+        
+        all_tag_keys = sorted(set(local_tags_dict.keys()) | set(stack_tags_dict.keys()))
+        for key in all_tag_keys:
+            local_value = local_tags_dict.get(key)
+            stack_value = stack_tags_dict.get(key)
+            if local_value != stack_value:
+                differences = True
+            print_comparison(
+                key,
+                local_value,
+                stack_value
+            )
+
         return differences
 
     def get_stack_config(self, stack_name: str) -> Optional[Dict]:
@@ -1173,24 +1272,69 @@ class ConfigManager:
             response = self.cfn_client.describe_stacks(StackName=stack_name)
             stack = response['Stacks'][0]
 
+            parameter_overrides = {}
+            tags = stack.get('Tags', [])
+            atlantis_parameters = {}
+
+            for param in stack.get('Parameters', []):
+                parameter_overrides[param['ParameterKey']] = param['ParameterValue']
+
+            atlantis_parameters['capabilities'] = ' '.join(stack.get('Capabilities', []))
+
             # Get template file from tags
-            template_file = None
             for tag in stack.get('Tags', []):
                 if tag['Key'] == 'atlantis:TemplateFile':
                     template_file = tag['Value']
-                    
-            return {
-                'parameters': {p['ParameterKey']: p['ParameterValue'] 
-                             for p in stack.get('Parameters', [])},
-                'template_file': template_file
+                    # if template_file does not start with s3:// then prepend ./templates/
+                    if not template_file.startswith('s3://'):
+                        template_file = f"./templates/{template_file}"
+                    atlantis_parameters['template_file'] = template_file
+
+            # place into same format as local_config
+            stack_info = {
+                'deployments': {
+                    self.stage_id: {
+                        'deploy': {
+                            'parameters': {
+                                'parameter_overrides': parameter_overrides,
+                                'tags': tags,
+                            }
+                        }
+                    }
+                },
+                'atlantis': { "deploy": { "parameters": atlantis_parameters }}                
             }
+                    
+            return stack_info
+        
         except ClientError as e:
-            logging.error(f"Error getting configuration for stack {stack_name} : {e}")
-            click.echo(formatted_error(f"Error getting configuration for stack {stack_name}"))
-            click.echo(formatted_error(f"Stack '{stack_name} ' does not exist or incorrect / expired credentials for profile {self.profile}"))
-            click.echo(formatted_warning(f"Ensure you are currently logged in and using the correct profile."))
+            error_code = e.response['Error']['Code']
+            error_message = e.response['Error']['Message']
+            
+            logging.error(f"Error getting configuration for stack {stack_name}: {error_code} - {error_message}")
+            
+            if error_code == 'UnauthorizedException':
+                click.echo(formatted_error("Authentication Error"))
+                click.echo(formatted_error("Your session token is invalid or has expired"))
+                click.echo(formatted_warning("Please authenticate again with AWS and ensure you have the correct permissions"))
+                click.echo(formatted_info("You may need to run 'aws sso login' if using AWS SSO"))
+            elif error_code == 'ValidationError':
+                click.echo(formatted_error(f"Stack '{stack_name}' does not exist"))
+            else:
+                click.echo(formatted_error(f"Error getting configuration for stack {stack_name}"))
+                click.echo(formatted_error(f"Error: {error_code} - {error_message}"))
+                click.echo(formatted_warning(f"Ensure you are currently logged in and using the correct profile ({self.profile})"))
+            
             print()
             sys.exit(1)
+        except Exception as e:
+            logging.error(f"Unexpected error getting configuration for stack {stack_name}: {e}")
+            click.echo(formatted_error(f"Unexpected error getting configuration for stack {stack_name}"))
+            click.echo(formatted_error(f"Error: {str(e)}"))
+            click.echo(formatted_warning("Please check your AWS configuration and try again"))
+            print()
+            sys.exit(1)
+
 
 # =============================================================================
 # ----- Helper functions ------------------------------------------------------
@@ -1201,6 +1345,7 @@ COLOR_PROMPT = 'cyan'
 COLOR_OPTION = 'magenta'
 COLOR_OUTPUT = 'green'
 COLOR_OUTPUT_VALUE = 'yellow'
+COLOR_SUCCESS = 'green'
 COLOR_ERROR = 'red'
 COLOR_WARNING = 'yellow'
 COLOR_INFO = 'blue'
@@ -1375,7 +1520,7 @@ def main(check_stack: bool, profile: str, infra_type: str, prefix: str,
     local_config = config_manager.read_samconfig()
     
     if check_stack:
-        config_manager.compare_against_stack(local_config)
+        local_config = config_manager.compare_against_stack(local_config)
 
     # Handle template selection and parameter configuration
     if not local_config:
