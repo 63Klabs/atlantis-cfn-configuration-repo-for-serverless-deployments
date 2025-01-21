@@ -12,6 +12,7 @@ VERSION = "v0.1.2/2025-01-25"
 # `sudo pip install click`
 # ---------- OR ----------
 # `sudo apt install python3-tomli python3-click`
+#
 
 import os
 import click
@@ -251,6 +252,10 @@ def formatted_output_bold(response_text: str) -> str:
 def formatted_output(response_text: str) -> str:
     """Format output text with consistent styling"""
     return click.style(f"{response_text} ", fg=COLOR_OUTPUT)
+
+def formatted_success(response_text: str) -> str:
+    """Format success message text with consistent styling"""
+    return click.style(f"{response_text} ", fg=COLOR_SUCCESS)
 
 def formatted_error(response_text: str) -> str:
     """Format error message with consistent styling"""

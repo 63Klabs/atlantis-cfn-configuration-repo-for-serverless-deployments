@@ -2,27 +2,33 @@ VERSION = "v0.1.0/2025-01-25"
 # Developed by Chad Kluck with AI assistance from Amazon Q Developer
 # GitHub Copilot assisted in color formats of output and prompts
 
-# =============================================================================
-# Usage:
-#
-# `python config.py <infra_type> <prefix> [<project_id>] [<stage_id>] [--check-stack true] [--profile default]`
-#
-# Create/Update a service-role with prefix acme
-# `python config.py service-role acme`
-#
-# Create/Update a pipeline with prefix acme, project_id widget-ws, and stage_id test
-# `python config.py pipeline acme widget-ws test`
-#
-# Import/Check existing stack using local AWS credential profile devuser
-# `python config.py network acme widget-ws test --check-stack true --profile devuser`
-#
-# -----------------------------------------------------------------------------
-# Install:
-#
-# `sudo pip install boto3 toml click`
-# ---------- OR ----------
-# `sudo apt install python3-boto3 python3-toml python3-click`
-#
+"""
+AWS Infrastructure Configuration Management Tool
+
+This module provides a command-line interface for managing AWS CloudFormation/SAM 
+deployments across different infrastructure types (pipeline, network, service-role).
+It handles configuration management, stack naming conventions, and deployment parameters.
+
+Usage Examples:
+    Create/Update a pipeline:
+        python config.py pipeline acme widget-ws test
+
+    Import/Check existing stack:
+        python config.py network acme widget-ws test --check-stack --profile devuser
+
+Dependencies:
+    - boto3: AWS SDK for Python
+    - toml: TOML file parser
+    - click: Command-line interface creation kit
+    
+Environment Setup:
+    Install required packages:
+        pip install boto3 toml click
+        or
+        apt install python3-boto3 python3-toml python3-click
+
+"""
+
 # -----------------------------------------------------------------------------
 # Full Documentation:
 #
@@ -73,30 +79,85 @@ logging.basicConfig(
 )
 
 class ConfigManager:
+    """
+    Manages AWS CloudFormation/SAM deployment configurations.
+
+    This class handles the creation and management of AWS infrastructure deployments,
+    including stack naming conventions, configuration file management, and parameter processing.
+
+    Attributes:
+        prefix (str): The prefix to use for stack names and resources
+        infra_type (str): Type of infrastructure (e.g., 'service-role', 'pipeline', 'network')
+        project_id (str): Identifier for the project
+        stage_id (str): Deployment stage identifier (default: 'default')
+        profile (str): AWS credential profile name
+        templates_dir (Path): Directory containing CloudFormation/SAM templates
+        samconfig_dir (Path): Directory containing SAM configuration files
+        settings_dir (Path): Directory containing additional settings
+        template_version (str): Version of the template being used
+        template_hash (str): Hash of the template content
+        template_hash_id (str): Identifier based on template hash
+        template_file (str): Name of the template file being used
+    """
     def __init__(self, infra_type: str, prefix: str, project_id: str, stage_id: Optional[str] = None, *, profile = None):
+        """
+        Initialize a new ConfigManager instance.
+
+        Args:
+            infra_type (str): Type of infrastructure to deploy
+            prefix (str): Prefix for stack names and resources
+            project_id (str): Project identifier
+            stage_id (Optional[str]): Stage identifier (default: None)
+            profile (Optional[str]): AWS credential profile (default: None)
+
+        Raises:
+            ValueError: If project_id is None for non-service-role infrastructure types
+        """
+
+        # Initialize basic attributes
         self.prefix = prefix
         self.infra_type = infra_type
         self.project_id = project_id
-        self.stage_id = 'default' if stage_id == None else stage_id
-        self.profile = 'default' if profile == None else profile # if None, set to 'default'
+        self.stage_id = 'default' if stage_id is None else stage_id
+        self.profile = 'default' if profile is None else profile
+
+        # Set up AWS client and paths
         self.cfn_client = boto3.client('cloudformation')
         self.templates_dir = Path('infrastructure') / f"{infra_type}/templates"
         self.samconfig_dir = Path('infrastructure') / f"{infra_type}"
         self.settings_dir = Path("scripts") / "settings"
+
+        # Initialize template-related attributes
         self.template_version = 'No version found'
-        self.template_hash = None
-        self.template_hash_id = None
-        self.template_file = None
+        self.template_hash: Optional[str] = None
+        self.template_hash_id: Optional[str] = None
+        self.template_file: Optional[str] = None
 
         # Validate inputs
         if infra_type != 'service-role' and project_id is None:
             raise ValueError("project_id is required for non-service-role infrastructure types")
         
+        # Set up AWS session with specified profile
         boto3.setup_default_session(profile_name=self.profile)
 
-    def generate_stack_name(self, prefix: str = "", project_id: str = "", stage_id: str = "") -> str:
-        """Generate the stack name based on the prefix, project, stage, and infra type"""
 
+    def generate_stack_name(self, prefix: str = "", project_id: str = "", stage_id: str = "") -> str:
+        """
+        Generate a standardized CloudFormation stack name.
+
+        Combines prefix, project_id, stage_id, and infra_type to create a consistent
+        stack naming convention. If no parameters are provided, uses instance values.
+
+        Args:
+            prefix (str): Resource prefix (default: instance prefix)
+            project_id (str): Project identifier (default: instance project_id)
+            stage_id (str): Stage identifier (default: instance stage_id)
+
+        Returns:
+            str: Generated stack name following the pattern:
+                 {prefix}-{project_id}-{stage_id}-{infra_type}
+                 Note: project_id and stage_id are optional in the pattern
+        """
         if not prefix:
             prefix = self.prefix
 
@@ -119,22 +180,52 @@ class ConfigManager:
         return stack_name
     
     def generate_samconfig_path(self, prefix: str, project_id: str) -> Path:
-        """Generate the samconfig path based on the prefix, project, stage, and infra type
-        		
-		Naming convention: samconfig-Prefix-ProjectId-InfraType.toml
-		For service-role: samconfig-Prefix-service-role.toml
         """
-        if self.infra_type == 'service-role':
-            # For service-role, we don't include project_id in the filename
-            samconfig_path = self.samconfig_dir / f"samconfig-{prefix}-service-role.toml"
-        else:
-            # For all other infrastructure types, include project_id
-            samconfig_path = self.samconfig_dir / f"samconfig-{prefix}-{project_id}-{self.infra_type}.toml"
+        Generate the path for the SAM configuration file.
 
-        return samconfig_path
+        Args:
+            prefix: Resource prefix
+            project_id: Project identifier
+
+        Returns:
+            Path object pointing to the SAM configuration file
+        """
+        # Handle service-role differently (no project_id in filename)
+        if self.infra_type == 'service-role':
+            filename = f"samconfig-{prefix}-service-role.toml"
+        else:
+            filename = f"samconfig-{prefix}-{project_id}-{self.infra_type}.toml"
+        
+        return self.samconfig_dir / filename
     
     def read_samconfig(self) -> Optional[Dict]:
-        """Read existing samconfig.toml if it exists"""
+        """
+        Read and parse a SAM configuration file.
+
+        Loads the appropriate samconfig.toml file based on the current configuration
+        and parses its contents into a structured dictionary. Handles both atlantis
+        configuration and deployment parameters.
+
+        Returns:
+            Optional[Dict]: Dictionary containing parsed configuration data with structure:
+                          {
+                              'atlantis': {configuration settings},
+                              'deployments': {
+                                  'stage_name': {
+                                      'deploy': {
+                                          'parameters': {
+                                              'parameter_overrides': {...},
+                                              'tags': {...}
+                                          }
+                                      }
+                                  }
+                              }
+                          }
+                          Returns None if file doesn't exist or on error
+
+        Raises:
+            Logs errors but doesn't raise exceptions
+        """
         samconfig_path = self.generate_samconfig_path(self.prefix, self.project_id)
         
         if samconfig_path.exists():
@@ -174,84 +265,113 @@ class ConfigManager:
                 return None
         return None
 
-    def parse_parameter_overrides(self, parameter_overrides_as_string: str) -> Dict:
-        """Parse parameter overrides string into a dictionary"""
-        if not parameter_overrides_as_string:
-            return {}
+    def parse_parameter_overrides(self, parameter_string: str) -> Dict:
+        """
+        Parse parameter overrides from a string into a dictionary.
+
+        Converts a space-separated string of key=value pairs into a dictionary.
+        Handles quoted values and escaping properly.
+
+        Args:
+            parameter_string: Space-separated string of key=value pairs
+
+        Returns:
+            Dictionary of parameter names and values
+
+        Example:
+            Input: 'ParameterKey1=value1 ParameterKey2="value 2"'
+            Output: {'ParameterKey1': 'value1', 'ParameterKey2': 'value 2'}
+        """
+ 
+        parameters: Dict[str, str] = {}
         
-        parameters = {}
-        current_key = None
-        current_value = []
-        
-        # Split the string while preserving quoted strings
-        tokens = shlex.split(parameter_overrides_as_string)
-        
-        for token in tokens:
-            if '=' in token:
-                # If we have a previous key-value pair, add it to parameters
-                if current_key is not None:
-                    parameters[current_key] = ' '.join(current_value)
-                    current_value = []
-                
-                # Start new key-value pair
-                key, value = token.split('=', 1)
-                current_key = key.strip('"')
-                current_value = [value.strip('"')]
-            else:
-                # Continuation of previous value
-                if current_key is not None:
-                    current_value.append(token.strip('"'))
-        
-        # Add the last key-value pair
-        if current_key is not None:
-            parameters[current_key] = ' '.join(current_value)
-        
+        if not parameter_string:
+            return parameters
+
+        try:
+            # Split the string while preserving quoted values
+            parts = shlex.split(parameter_string)
+            
+            for part in parts:
+                if '=' in part:
+                    key, value = part.split('=', 1)
+                    parameters[key.strip()] = value.strip()
+                else:
+                    logging.warning(f"Skipping invalid parameter format: {part}")
+                    
+        except Exception as e:
+            logging.error(f"Error parsing parameter overrides: {str(e)}")
+            
         return parameters
 
-    def parse_tags(self, tags_as_string: str) -> List[Dict[str, str]]:
-        """Parse tags string into a list of Key-Value dictionaries
+    def parse_tags(self, tag_string: str) -> List[Dict[str, str]]:
+        """Convert a string of key-value tag pairs into AWS tag format.
         
-        Example input: '"atlantis"="pipeline" "Stage"="test"'
-        Returns: [{'Key': 'atlantis', 'Value': 'pipeline'}, {'Key': 'Stage', 'Value': 'test'}]
+        Uses shlex to properly handle quoted strings, spaces, and special characters
+        in both keys and values. Supports both single and double quotes.
+        
+        Args:
+            tag_string: A string containing space-separated key=value pairs.
+                    Examples:
+                    - 'atlantis="pipeline" Stage="test"'
+                    - 'Name="My App Server" Environment="Prod 2.0"'
+                    - 'Owner="John Doe" Cost Center="123 456"'
+        
+        Returns:
+            List[Dict[str, str]]: List of AWS format tags.
+            Example: [{'Key': 'atlantis', 'Value': 'pipeline'},
+                    {'Key': 'Stage', 'Value': 'test'}]
+        
+        Raises:
+            ValueError: If tag_string format is invalid, missing required parts,
+                    or contains malformed quotes
         """
-        if not tags_as_string:
+        if not tag_string:
             return []
         
-        tags_list = []
-        current_key = None
-        current_value = []
+        tags = []
+        lexer = shlex.shlex(tag_string, posix=True)
+        lexer.whitespace_split = True
+        lexer.commenters = ''
+        lexer.wordchars += '=.-/@'  # Allow these chars in unquoted strings
         
-        # Split the string while preserving quoted strings
-        tokens = shlex.split(tags_as_string)
-        
-        for token in tokens:
-            if '=' in token:
-                # If we have a previous key-value pair, add it to tags_list
-                if current_key is not None:
-                    tags_list.append({
-                        'Key': current_key,
-                        'Value': ' '.join(current_value)
-                    })
-                    current_value = []
+        try:
+            # Convert iterator to list to handle pairs
+            tokens = list(lexer)
+            
+            # Process tokens in pairs
+            for i in range(0, len(tokens), 1):
+                if not tokens[i]:
+                    continue
+                    
+                # Split on first = only
+                try:
+                    key, value = tokens[i].split('=', 1)
+                except ValueError:
+                    raise ValueError(
+                        f"Invalid tag format. Each tag must be in 'key=value' format: {tokens[i]}"
+                    )
                 
-                # Start new key-value pair
-                key, value = token.split('=', 1)
-                current_key = key.strip('"')
-                current_value = [value.strip('"')]
-            else:
-                # Continuation of previous value
-                if current_key is not None:
-                    current_value.append(token.strip('"'))
-        
-        # Add the last key-value pair
-        if current_key is not None:
-            tags_list.append({
-                'Key': current_key,
-                'Value': ' '.join(current_value)
-            })
-        
-        return tags_list
-
+                # Remove any remaining quotes
+                key = key.strip().strip('"\'')
+                value = value.strip().strip('"\'')
+                
+                if not key or not value:
+                    raise ValueError(
+                        f"Empty key or value not allowed: {tokens[i]}"
+                    )
+                
+                tags.append({
+                    'Key': key,
+                    'Value': value
+                })
+                
+        except ValueError as e:
+            raise ValueError(f"Error parsing tags: {str(e)}")
+        except shlex.Error as e:
+            raise ValueError(f"Error parsing quoted strings: {str(e)}")
+            
+        return tags
 
     def stringify_parameter_overrides(self, parameter_overrides_as_dict: Dict) -> str:
         """Convert parameter overrides from dictionary to string"""
@@ -333,7 +453,6 @@ class ConfigManager:
                 logging.error(f"Error parsing template file {template_path}: {e}")
                 click.echo(tools.formatted_error("Error parsing template file. Check logs for more info."))
                 return {}
-
 
     def discover_templates(self) -> List[str]:
         """Discover available templates in the infrastructure type directory"""
@@ -1062,7 +1181,6 @@ class ConfigManager:
             if project_id:
                 pystr += f" {project_id}"
 
-
             header_pystr = f"{pystr}"
             if self.stage_id != 'default':
                 header_pystr += " <StageId>"
@@ -1140,7 +1258,7 @@ class ConfigManager:
             print()
 
             # Check if default.json and prefix.json exists
-            self.check_for_default_json(atlantis_deploy_section.get('atlantis', {}))
+            self.check_for_default_json(atlantis_deploy_section.get('atlantis', {}), parameter_values)
             
         except Exception as e:
             logging.error(f"Error saving configuration: {e}")
@@ -1352,7 +1470,7 @@ class ConfigManager:
             print()
             sys.exit(1)
 
-    def check_for_default_json(self, atlantis: Dict) -> None:
+    def check_for_default_json(self, atlantis: Dict, parameter_overrides: Dict) -> None:
         """Check if settings/defaults.json and/or <prefix>-defaults.json exists.
         If not, offer to save region to defaults.json
         If user chooses no to region, save a blank file as a sample.
@@ -1371,8 +1489,8 @@ class ConfigManager:
         # Check for defaults.json
         if not os.path.exists(defaults_path) and region:
             click.echo(tools.formatted_divider())
-            click.echo(tools.formatted_output_bold("Atlantis Configuration Defaults"))
-            click.echo(tools.formatted_divider())
+            click.echo(tools.formatted_output_bold("Atlantis Configuration Defaults:"))
+            print()
             
             click.echo(tools.formatted_output_with_value("Current region:", region))
             save_choice = click.confirm(
@@ -1421,8 +1539,8 @@ class ConfigManager:
         # Check for prefix-defaults.json
         if not os.path.exists(prefix_defaults_path):
             click.echo(tools.formatted_divider())
-            click.echo(tools.formatted_output_bold(f"Project Defaults ({self.prefix})"))
-            click.echo(tools.formatted_divider())
+            click.echo(tools.formatted_output_bold(f"Prefix Defaults ({self.prefix}):"))
+            print()
             
             prefix_defaults_data = {
                         "atlantis": {},
@@ -1452,6 +1570,20 @@ class ConfigManager:
                 
                 if save_region_prefix:
                     prefix_defaults_data["atlantis"]["region"] = region
+
+            # Prompt for specific parameter overrides such as RolePath, PermissionsBoundaryArn, S3BucketNameOrgPrefix, ParameterStoreHierarchy
+            possible_defaults = ['RolePath', 'PermissionsBoundaryArn', 'S3BucketNameOrgPrefix', 'ParameterStoreHierarchy']
+            for param in possible_defaults:
+                if param in parameter_overrides:
+                    print()
+                    click.echo(tools.formatted_output_with_value(f"Current {param}:", parameter_overrides[param]))
+                    save_param = click.confirm(
+                        tools.formatted_question(f"Would you like to save this '{param}' value as the default for the '{self.prefix}' prefix?"),
+                        default=True
+                    )
+
+                    if save_param:
+                        prefix_defaults_data["parameter_overrides"][param] = parameter_overrides[param]
             
             # Save prefix-defaults.json
             try:
