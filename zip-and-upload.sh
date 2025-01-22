@@ -2,8 +2,17 @@
 
 # This script will zip and upload each of the application-infrastructure-examples 
 # to an s3 bucket for use in the download-and-unzip command.
-# Usage: ./zip-and-upload.sh <s3-bucket-name>
+#
+# Usage: ./zip-and-upload.sh <s3-bucket-name> <aws-profile>
+#
+# You can add your own starter code to this repo, upload to your own bucket, and grant
+# your developers access to download into their repositories.
 # 
+# For example, a dev can download and extract into their empty repo:
+# aws s3 cp s3://63klabs/app-starters/00-basic-apigw-lambda-nodejs.zip temp.zip --profile default && unzip temp.zip && rm temp.zip
+# 
+# You can also create repositories from the command line and seed it with a zip file from S3
+#
 # Important Notes:
 # - Make this script executable: chmod +x zip-and-upload.sh
 # - Ensure you have the AWS CLI installed and configured with appropriate permissions
