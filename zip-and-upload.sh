@@ -35,7 +35,8 @@ fi
 
 BUCKET_NAME="$1"
 AWS_PROFILE="$2"
-BASE_DIR="application-infrastructure-examples"
+BASE_DIR="application-starters"
+S3_PREFIX="app-starter"
 
 # Check if aws-cli is installed
 if ! command -v aws &> /dev/null; then
@@ -86,7 +87,7 @@ for dir in */; do
     
     # Upload to S3 with specified profile
     echo "Uploading $dir_name.zip to S3..."
-    aws s3 cp "$TEMP_DIR/$dir_name.zip" "s3://$BUCKET_NAME/starter-app/$dir_name.zip" --profile $AWS_PROFILE
+    aws s3 cp "$TEMP_DIR/$dir_name.zip" "s3://$BUCKET_NAME/$S3_PREFIX/$dir_name.zip" --profile $AWS_PROFILE
     
     # Check if upload was successful
     if [ $? -eq 0 ]; then
