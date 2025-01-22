@@ -1056,6 +1056,54 @@ Resources:
           OutputArtifacts: []
           RunOrder: 2
 
+  # ---------------------------------------------------------------------------
+  # -- Pipeline Notifications --
+  # Using the AlarmNotificationEmail parameter, send pipeline execution updates
+
+  # Create SNS Topic for Pipeline notifications
+  PipelineNotificationTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub ${AWS::StackName}-pipeline-notifications
+      Subscription:
+        - Protocol: email
+          Endpoint: !Ref AlarmNotificationEmail
+
+  # Create notification rule for pipeline events
+  PipelineNotificationRule:
+    Type: AWS::CodeStarNotifications::NotificationRule
+    Properties:
+      Name: !Sub ${AWS::StackName}-pipeline-notifications
+      DetailType: FULL
+      EventTypeIds: 
+        - codepipeline-pipeline-pipeline-execution-started
+        - codepipeline-pipeline-pipeline-execution-succeeded
+        - codepipeline-pipeline-pipeline-execution-failed
+      Resource: !Sub arn:aws:codepipeline:${AWS::Region}:${AWS::AccountId}:${Pipeline}
+      Targets:
+        - TargetType: SNS
+          TargetAddress: !Ref PipelineNotificationTopic
+
+  # Add required SNS topic policy to allow CodeStar Notifications to publish
+  PipelineNotificationTopicPolicy:
+    Type: AWS::SNS::TopicPolicy
+    Properties:
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AllowCodeStarNotificationsToPublishEvents
+            Effect: Allow
+            Principal:
+              Service: codestar-notifications.amazonaws.com
+            Action: sns:Publish
+            Resource: !Ref PipelineNotificationTopic
+            Condition:
+              StringEquals:
+                aws:SourceAccount: !Ref 'AWS::AccountId'
+      Topics:
+        - !Ref PipelineNotificationTopic
+
+
 # =============================================================================
 # OUTPUTS
 # -----------------------------------------------------------------------------
