@@ -9,7 +9,7 @@
 # your developers access to download into their repositories.
 # 
 # For example, a dev can download and extract into their empty repo:
-# aws s3 cp s3://63klabs/app-starters/00-basic-apigw-lambda-nodejs.zip temp.zip --profile default && unzip temp.zip && rm temp.zip
+# aws s3 cp s3://63klabs/atlantis/v2/app-starters/00-basic-apigw-lambda-nodejs.zip temp.zip --profile default && unzip temp.zip && rm temp.zip
 # 
 # You can also create repositories from the command line and seed it with a zip file from S3
 #
@@ -25,7 +25,6 @@ if ! command -v aws &> /dev/null; then
     echo "Error: aws-cli is not installed. Please install it and configure your credentials."
     exit 1
 fi
-#!/bin/bash
 
 # Check if bucket name and profile are provided
 if [ -z "$1" ] || [ -z "$2" ]; then
@@ -36,7 +35,7 @@ fi
 BUCKET_NAME="$1"
 AWS_PROFILE="$2"
 BASE_DIR="application-starters"
-S3_PREFIX="app-starter"
+S3_PREFIX="atlantis/v2/app-starter"
 
 # Check if aws-cli is installed
 if ! command -v aws &> /dev/null; then
