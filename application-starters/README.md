@@ -1,12 +1,10 @@
 # Application Infrastructure Starter Examples
 
-> Note: This repository of examples is still being developed. If you have specific questions please reach out to me.
+The Atlantis starter templates can be used to deploy many serverless solutions.
 
-The Atlantis Pipeline template for AWS CodePipeline can be used to deploy many serverless solutions.
+> For your first deployment using Atlantis, it is recommend you use the [00 Basic API Gateway Lambda Node.js](./00-basic-apigw-lambda-nodejs/) application starter.
 
-> For your first deployment using Atlantis, it is recommend you use the [Basic API Gateway Lambda Node.js](./00-basic-apigw-lambda-nodejs/) application template.
-
-It is recommended you deploy the templates and applications AS-IS. After a successful deployment, you may then modify the code as needed.
+Deploy the templates and applications AS-IS. After a successful deployment, you may then modify the code as needed.
 
 Once you have explored the basic application, you can proceed to use the starter applications listed below. Each utilize the [@chadkluck/cache-data npm package](https://www.npmjs.com/package/@chadkluck/cache-data) written and maintained by the same developer of this repository. The Cache-Data package includes functions to quickly implement routing, logging, monitoring, endpoint caching, and more.
 
@@ -22,38 +20,4 @@ Then try the near production-ready starter applications (recommended order):
 2. [02 API Gateway, Lambda Node.js with Cache-Data](./02-apigw-lambda-nodejs-cache-data/)
 3. [03 Event Bridge, Lambda, Step Function](./03-event-lambda-nodejs-stepfunc/)
 4. [04 API Gateway, Lambda, S3 static content](./04-apigw-lambda-s3-static/)
-5. Video Processing using Event Bridge, Lambda, Step Functions, Media Convert, Transcribe (someday, but reach out to me if you are interested!)
-
-### Step 1: Create Repository and Seed It With the Application Starter Code
-
-This can be done one of two ways, create the repository and download the code manually, or run a script that automatically creates the repo and seeds it with the application from the command line.
-
-#### Create Repository Manually
-
-1. Create a repository for your application project. (Currently only CodeCommit is supported for use with Atlantis starter CodePipeline).
-2. Clone the repository to your local machine and `cd` into it.
-3. Use the following one-line bash command to download, unzip, and extract your preferred application starter into your repository. Replace <profile> with the aws profile to use. Also, replace `00-basic-apigw-lambda-nodejs` with the directory name of the app starter you wish to use.
-
-```bash
-aws s3 cp s3://63klabs/app-starter/00-basic-apigw-lambda-nodejs.zip temp.zip --profile default && unzip temp.zip && rm temp.zip
-```
-
-#### Create Repository via Script
-
-Use the python script in the root of this repository. Pass it the repository name, location of code in S3, and the AWS credential profile to use.
-
-```bash
-python3 create_repo.py my-new-repository s3://63klabs/app-starter/00-basic-apigw-lambda-nodejs.zip default
-```
-
-It will then output the clone URL.
-
-## Step 2: Create dev Branch
-
-When you view your repository, you should see the application-infrastructure directory at the root. It is recommended you put your READMEs, CHANGELOGs, etc, in the root of your repository as well. It is important you do not re-name the application-infrastructure directory because that is where CodePipeline will look for it.
-
-Create a dev branch. This will be where you make all your iterative changes.
-
-When you are ready to create a test deployment pipeline, create a test branch from your dev branch. Then follow the steps for creating a pipeline.
-
-> Note: If you wish to provision storage separate from your application infrastructure (perhaps an S3 bucket or DynamoDb shared across your stacks) be sure to deploy that first.
+5. Video Processing using Event Bridge, Lambda, Step Functions, Media Convert, Transcribe (I can develop this, but reach out to me if you are interested!)
