@@ -42,6 +42,7 @@ Metadata:
         Parameters:
           - DeployEnvironment
           - DeployBucket
+          - CodeBuildEnvironmentImage
       -
         Label:
           default: "External Resources and Alarm Notifications"
@@ -131,6 +132,18 @@ Parameters:
     Default: ""
     AllowedPattern: "^[a-z0-9][a-z0-9-]{0,62}[a-z0-9]$|^$"
     ConstraintDescription: "May only contain alphanumeric characters, dashes, and must begin and end with a letter or number."
+
+  # ComputeType, Type, Image and the Build Runtime versions all rely on each other
+  # ComputeType and Environment Type: https://docs.aws.amazon.com/codebuild/latest/userguide/build-env-ref-compute-types.html
+  # Build runtime versions: https://docs.aws.amazon.com/codebuild/latest/userguide/runtime-versions.html
+  #                         https://docs.aws.amazon.com/codebuild/latest/userguide/ec2-compute-images.html
+  #                         https://docs.aws.amazon.com/codebuild/latest/userguide/available-runtimes.html
+  CodeBuildEnvironmentImage:
+    Type: String
+    Description: "What image will be used for the build environment?"
+    Default: "aws/codebuild/amazonlinux-x86_64-standard:5.0"
+    AllowedPattern: "^aws\\/codebuild\\/[a-zA-Z0-9-_]+:[0-9]+\\.[0-9]+$|^$"
+    ConstraintDescription: "Must be a valid AWS CodeBuild image. For example: aws/codebuild/amazonlinux-x86_64-standard:5.0"
 
 
   # ---------------------------------------------------------------------------
@@ -791,8 +804,7 @@ Resources:
         #                         https://docs.aws.amazon.com/codebuild/latest/userguide/available-runtimes.html
         ComputeType: BUILD_GENERAL1_SMALL
         Type: LINUX_CONTAINER
-        Image: aws/codebuild/amazonlinux2-x86_64-standard:5.0 # Node 20 / Python 3.12
-        # Image: aws/codebuild/java:openjdk-11 # java
+        Image: !Ref CodeBuildEnvironmentImage
 
         # BUILD ENVIRONMENT VARIABLES : You can specify any other environment variables your buildspec.yml is looking for.
         EnvironmentVariables:
