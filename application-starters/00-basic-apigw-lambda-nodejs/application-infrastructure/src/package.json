@@ -1,9 +1,0 @@
-{
-  "name": "8ball",
-  "version": "1.0.0",
-  "description": "Simple 8Ball Web Service",
-  "main": "index.js",
-  "repository": "https://github.com/chadkluck/serverless-deploy-pipeline-atlantis",
-  "author": "Chad Kluck",
-  "license": "MIT"
-}

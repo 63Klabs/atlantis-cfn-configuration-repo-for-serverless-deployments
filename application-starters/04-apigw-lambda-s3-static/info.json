@@ -1,6 +1,0 @@
-{
-	"id": "04-apigw-lambda-s3-static",
-	"name": "API Gateway with Lambda and S3 Static",
-	"github": "",
-	"s3": ""
-}

@@ -1,7 +1,6 @@
 # Ignore the git and zip files we use
 .*
 *.zip
-x_samconfig*.toml
 
 # Ignore program and OS files
 .vscode
@@ -13,28 +12,8 @@ x_samconfig*.toml
 
 # Ignore 
 node_modules/
-scripts/logs/*
-
-# ----------------------------------------
-# UPDATE FOR PRODUCTION USE!
-# Comment out these lines when saving generated files to a private repository!
-
-scripts/settings/defaults.json
-scripts/settings/*-defaults.json
-
-scripts/settings/service-role/*
-scripts/settings/storage/*
-scripts/settings/pipeline/*
-scripts/settings/network/*
-
-infrastructure/service-role/samconfig-*
-infrastructure/storage/samconfig-*
-infrastructure/pipeline/samconfig-*
-infrastructure/network/samconfig-*
-
-imports/*
-
-# ----------------------------------------
+__pycache__/
+*.py[cod]
 
 !sample-*
 !sample.*

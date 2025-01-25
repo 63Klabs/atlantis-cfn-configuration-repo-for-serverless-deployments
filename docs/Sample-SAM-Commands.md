@@ -1,1 +1,0 @@
-sam list stack-outputs --stack-name test-stack --output table
