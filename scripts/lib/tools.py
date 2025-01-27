@@ -18,7 +18,7 @@ import os
 import click
 from typing import Dict, Optional, List, Any
 
-from scripts.lib.tools_colors import (
+from lib.tools_colors import (
     COLOR_PROMPT,
     COLOR_OPTION,
     COLOR_OUTPUT,

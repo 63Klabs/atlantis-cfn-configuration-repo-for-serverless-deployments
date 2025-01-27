@@ -1,6 +1,7 @@
 {
 	"atlantis": {
-		"s3_bucket": "acmeco-sam-deploy-bucket",
+		"s3_bucket": "cf-acmeco-deployments",
+		"s3_template_files": "s3://63klabs/atlantis/templates",
 		"region": "us-east-2",
 		"confirm_changeset": true
 	},

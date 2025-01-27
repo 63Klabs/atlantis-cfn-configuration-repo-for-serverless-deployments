@@ -66,7 +66,7 @@ from botocore.exceptions import ClientError
 
 sys.path.append(os.path.join(os.path.dirname(__file__), 'scripts/lib'))
 
-import tools
+from lib import tools
 
 # if logs directory does not exist, create it
 if not os.path.exists('scripts/logs'):
@@ -123,9 +123,9 @@ class ConfigManager:
 
         # Set up AWS client and paths
         self.cfn_client = boto3.client('cloudformation')
-        self.templates_dir = Path('infrastructure') / f"{infra_type}/templates"
-        self.samconfig_dir = Path('infrastructure') / f"{infra_type}"
-        self.settings_dir = Path("scripts") / "settings"
+        self.templates_dir = Path('templates') / f"{infra_type}"
+        self.samconfig_dir = Path('samconfigs')
+        self.settings_dir = Path("defaults")
 
         # Initialize template-related attributes
         self.template_version = 'No version found'
@@ -192,9 +192,9 @@ class ConfigManager:
         """
         # Handle service-role differently (no project_id in filename)
         if self.infra_type == 'service-role':
-            filename = f"samconfig-{prefix}-service-role.toml"
+            filename = Path(prefix) / f"samconfig-{prefix}-service-role.toml"
         else:
-            filename = f"samconfig-{prefix}-{project_id}-{self.infra_type}.toml"
+            filename = Path(prefix) / f"{project_id}" / f"samconfig-{prefix}-{project_id}-{self.infra_type}.toml"
         
         return self.samconfig_dir / filename
     
@@ -1207,6 +1207,9 @@ class ConfigManager:
                         
             # Write the config to samconfig.toml
             samconfig_path = self.generate_samconfig_path(prefix, project_id)
+
+            # Create the samconfig directory if it doesn't exist
+            os.makedirs(os.path.dirname(samconfig_path), exist_ok=True)
             
             with open(samconfig_path, 'w') as f:
                 f.write(header)

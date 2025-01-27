@@ -30,7 +30,7 @@ import logging
 
 sys.path.append(os.path.join(os.path.dirname(__file__), 'scripts/lib'))
 
-import tools
+from lib import tools
 
 # if logs directory does not exist, create it
 if not os.path.exists('scripts/logs'):

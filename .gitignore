@@ -10,11 +10,28 @@
 # If you need to remove .DS_Store
 # find . -name .DS_Store -print0 | xargs -0 git rm -f --ignore-unmatch
 
-# Ignore 
+# Ignore packages and re-creatable items
 node_modules/
 __pycache__/
 *.py[cod]
 
+# -- Items below may be adjusted ----------------------------------------------
+
+imports
+scripts/logs
+
+# Comment out/remove these lines if you are storing templates in this repo - NOT RECOMMENDED
+templates/**/*.yml
+templates/**/*.yaml
+templates/**/*.json
+
+# Comment out/remove these lines if you want to save your work - RECOMMENDED
+defaults/*
+samconfigs/*
+
+# -- Items above may be adjusted ----------------------------------------------
+
+# Leave this lines
 !sample-*
 !sample.*
 !README.md
