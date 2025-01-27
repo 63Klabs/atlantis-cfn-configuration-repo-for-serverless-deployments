@@ -64,8 +64,6 @@ from pathlib import Path
 from typing import Dict, Optional, List
 from botocore.exceptions import ClientError
 
-sys.path.append(os.path.join(os.path.dirname(__file__), 'scripts/lib'))
-
 from lib import tools
 
 # if logs directory does not exist, create it
@@ -382,81 +380,227 @@ class ConfigManager:
         
         return parameter_overrides_as_string
 
-    def get_template_parameters(self, template_path: str) -> Dict:
-        """Get parameters from CloudFormation template"""
+    # def get_template_parameters(self, template_path: str) -> Dict:
+    #     """Get parameters from CloudFormation template"""
 
+    #     self.template_file = str(template_path)
+    #     logging.info(f"Using template file: '{self.template_file}'")
+
+    #     if template_path.startswith('s3://'):
+    #         # Handle S3 template
+    #         pass
+    #     else:
+    #         # Handle local template
+    #         template_path = self.templates_dir / template_path
+            
+    #         try:
+
+    #             # Read the file content
+    #             with open(template_path, "rb") as f:
+
+    #                 # get SHA256 hash of template file
+    #                 sha256_hash = hashlib.sha256()
+    #                 for byte_block in iter(lambda: f.read(4096), b""):
+    #                     sha256_hash.update(byte_block)
+    #                 full_hash = sha256_hash.hexdigest()
+    #                 self.template_hash = full_hash
+    #                 self.template_hash_id = full_hash[-6:]
+
+    #                 # get version from template file
+    #                 f.seek(0)
+    #                 for line in f:
+    #                     line = line.decode('utf-8')  # Decode each line to process as text
+    #                     if line.startswith('# Version:'):
+    #                         self.template_version = line.split(':', 1)[1].strip()
+    #                         break
+
+    #                 # let user know what template is being used
+    #                 print()
+    #                 click.echo(tools.formatted_output_with_value("Using template file:", template_path))
+    #                 click.echo(tools.formatted_output_with_value("Template version:", self.template_version))
+    #                 click.echo(tools.formatted_output_with_value("Template hash:", full_hash))
+    #                 click.echo(tools.formatted_output_with_value("Template hash ID:", self.template_hash_id))
+    #                 print()
+
+    #                 # Go back to start of file to process contents
+    #                 f.seek(0)
+
+    #                 # Look for the Parameters section
+    #                 parameters_section = ""
+    #                 in_parameters = False
+                    
+    #                 for line in f:
+    #                     line = line.decode('utf-8')  # Decode each line to process as text
+    #                     if line.startswith('Parameters:'):
+    #                         in_parameters = True
+    #                         parameters_section = line
+    #                     elif in_parameters:
+    #                         # Check if we've moved to a new top-level section
+    #                         if line.strip() and not line.startswith(' ') and line.strip().endswith(':'):
+    #                             break
+    #                         parameters_section += line
+                    
+    #                 # Parse just the Parameters section
+    #                 if parameters_section:
+    #                     # Add a dummy root to ensure valid YAML
+    #                     yaml_content = yaml.safe_load(parameters_section)
+    #                     return yaml_content.get('Parameters', {})
+    #                 return {}
+                    
+    #         except Exception as e:
+    #             logging.error(f"Error parsing template file {template_path}: {e}")
+    #             click.echo(tools.formatted_error("Error parsing template file. Check logs for more info."))
+    #             return {}
+
+    # -------------------------------------------------------------------------
+    # - Read and Process Templates
+    # -------------------------------------------------------------------------
+
+    def read_template_file(self, template_path: str) -> tuple[bytes, str]:
+        """
+        Read template file content from either S3 or local filesystem.
+        
+        Args:
+            template_path (str): Path to template (s3:// or local path)
+            
+        Returns:
+            tuple: (file_content as bytes, template_source_path as string)
+        
+        Raises:
+            Exception: If template cannot be read
+        """
+        try:
+            if template_path.startswith('s3://'):
+                # Parse S3 URL
+                bucket_name = template_path.split('/')[2]
+                key = '/'.join(template_path.split('/')[3:])
+                
+                # Create S3 client using existing profile/credentials
+                s3_client = boto3.client('s3')
+                
+                # Get object from S3
+                response = s3_client.get_object(Bucket=bucket_name, Key=key)
+                content = response['Body'].read()
+                return content, template_path
+            else:
+                # Handle local template
+                template_path = self.templates_dir / template_path
+                with open(template_path, "rb") as f:
+                    content = f.read()
+                return content, str(template_path)
+                
+        except (ClientError, FileNotFoundError) as e:
+            logging.error(f"Error reading template file {template_path}: {e}")
+            raise
+            
+    def process_template_content(self, content: bytes, template_path: str) -> None:
+        """
+        Process template content to extract version and calculate hash.
+        
+        Args:
+            content (bytes): Template file content
+            template_path (str): Original template path for logging
+        """
+        # Calculate template hash
+        sha256_hash = hashlib.sha256()
+        sha256_hash.update(content)
+        full_hash = sha256_hash.hexdigest()
+        self.template_hash = full_hash
+        self.template_hash_id = full_hash[-6:]
+        
+        # Extract version from content
+        content_str = content.decode('utf-8')
+        for line in content_str.splitlines():
+            if line.startswith('# Version:'):
+                self.template_version = line.split(':', 1)[1].strip()
+                break
+        else:
+            self.template_version = 'No version found'
+        
+        # Log template info
+        print()
+        click.echo(tools.formatted_output_with_value("Using template file:", template_path))
+        click.echo(tools.formatted_output_with_value("Template version:", self.template_version))
+        click.echo(tools.formatted_output_with_value("Template hash:", full_hash))
+        click.echo(tools.formatted_output_with_value("Template hash ID:", self.template_hash_id))
+        print()
+
+    def extract_parameters(self, content: bytes) -> Dict:
+        """
+        Extract parameters section from template content.
+        
+        Args:
+            content (bytes): Template file content
+            
+        Returns:
+            Dict: Parameters section from template
+        """
+        try:
+            content_str = content.decode('utf-8')
+            parameters_section = ""
+            in_parameters = False
+            
+            for line in content_str.splitlines():
+                if line.startswith('Parameters:'):
+                    in_parameters = True
+                    parameters_section = line
+                elif in_parameters:
+                    # Check if we've moved to a new top-level section
+                    if line.strip() and not line.startswith(' ') and line.strip().endswith(':'):
+                        break
+                    parameters_section += '\n' + line
+            
+            # Parse just the Parameters section
+            if parameters_section:
+                yaml_content = yaml.safe_load(parameters_section)
+                return yaml_content.get('Parameters', {})
+            return {}
+            
+        except Exception as e:
+            logging.error(f"Error parsing parameters section: {e}")
+            return {}
+
+    def get_template_parameters(self, template_path: str) -> Dict:
+        """
+        Get parameters from CloudFormation template.
+        
+        Args:
+            template_path (str): Path to template (s3:// or local path)
+            
+        Returns:
+            Dict: Template parameters
+        """
         self.template_file = str(template_path)
         logging.info(f"Using template file: '{self.template_file}'")
 
-        if template_path.startswith('s3://'):
-            # Handle S3 template
-            pass
-        else:
-            # Handle local template
-            template_path = self.templates_dir / template_path
+        try:
+            # Read template content
+            content, actual_path = self.read_template_file(template_path)
             
-            try:
+            # Process template metadata (version, hash etc)
+            self.process_template_content(content, actual_path)
+            
+            # Extract and return parameters
+            return self.extract_parameters(content)
+            
+        except Exception as e:
+            logging.error(f"Error processing template file {template_path}: {e}")
+            click.echo(tools.formatted_error("Error processing template file. Check logs for more info."))
+            return {}
 
-                # Read the file content
-                with open(template_path, "rb") as f:
-
-                    # get SHA256 hash of template file
-                    sha256_hash = hashlib.sha256()
-                    for byte_block in iter(lambda: f.read(4096), b""):
-                        sha256_hash.update(byte_block)
-                    full_hash = sha256_hash.hexdigest()
-                    self.template_hash = full_hash
-                    self.template_hash_id = full_hash[-6:]
-
-                    # get version from template file
-                    f.seek(0)
-                    for line in f:
-                        line = line.decode('utf-8')  # Decode each line to process as text
-                        if line.startswith('# Version:'):
-                            self.template_version = line.split(':', 1)[1].strip()
-                            break
-
-                    # let user know what template is being used
-                    print()
-                    click.echo(tools.formatted_output_with_value("Using template file:", template_path))
-                    click.echo(tools.formatted_output_with_value("Template version:", self.template_version))
-                    click.echo(tools.formatted_output_with_value("Template hash:", full_hash))
-                    click.echo(tools.formatted_output_with_value("Template hash ID:", self.template_hash_id))
-                    print()
-
-                    # Go back to start of file to process contents
-                    f.seek(0)
-
-                    # Look for the Parameters section
-                    parameters_section = ""
-                    in_parameters = False
-                    
-                    for line in f:
-                        line = line.decode('utf-8')  # Decode each line to process as text
-                        if line.startswith('Parameters:'):
-                            in_parameters = True
-                            parameters_section = line
-                        elif in_parameters:
-                            # Check if we've moved to a new top-level section
-                            if line.strip() and not line.startswith(' ') and line.strip().endswith(':'):
-                                break
-                            parameters_section += line
-                    
-                    # Parse just the Parameters section
-                    if parameters_section:
-                        # Add a dummy root to ensure valid YAML
-                        yaml_content = yaml.safe_load(parameters_section)
-                        return yaml_content.get('Parameters', {})
-                    return {}
-                    
-            except Exception as e:
-                logging.error(f"Error parsing template file {template_path}: {e}")
-                click.echo(tools.formatted_error("Error parsing template file. Check logs for more info."))
-                return {}
-
-    def discover_templates(self) -> List[str]:
+    def discover_local_templates(self) -> List[str]:
         """Discover available templates in the infrastructure type directory"""
         return [f.name for f in self.templates_dir.glob('*.yml')]
+
+    # -------------------------------------------------------------------------
+    # - Read and Process samconfig
+    # -------------------------------------------------------------------------
+
+
+
+    # -------------------------------------------------------------------------
+    # - Internal Utilities
+    # -------------------------------------------------------------------------
 
     def deep_update(self, original: Dict, update: Dict) -> Dict:
         """
@@ -472,6 +616,10 @@ class ConfigManager:
                 original[key] = value
 
         return original
+
+    # -------------------------------------------------------------------------
+    # - 
+    # -------------------------------------------------------------------------
 
     def load_defaults(self) -> Dict:
         """Load and merge configuration files in sequence
@@ -893,7 +1041,10 @@ class ConfigManager:
 
         # if template_file is not s3 it is local and use the local path
         if not template_file.startswith('s3://'):
-            template_file = f'./templates/{template_file}'
+            template_file = f'../../templates/{self.infra_type}/{template_file}'
+            if self.infra_type != "service-role":
+                template_file = "../" + template_file
+
 
         # Generate stack name
         stack_name = self.generate_stack_name(prefix, project_id, stage_id)
@@ -1252,12 +1403,15 @@ class ConfigManager:
                     toml.dump({section: section_config}, f)
                 
             logging.info(f"Configuration saved to '{samconfig_path}'")
+
+            # get only the directory path from samconfig_path
+            saved_dir = os.path.dirname(samconfig_path)
             
             print()
             click.echo(tools.formatted_output_with_value("Configuration saved to", samconfig_path))
             click.echo(tools.formatted_output_bold("Open file for 'sam deploy' commands"))
-            click.echo(tools.formatted_output_bold(f"You must be in the infrastructure/{self.infra_type} directory to run the command"))
-            click.echo(tools.formatted_output(f"cd {self.samconfig_dir}"))
+            click.echo(tools.formatted_output_bold(f"You must be in the {saved_dir} directory to run the command"))
+            click.echo(tools.formatted_output(f"cd {saved_dir}"))
             print()
 
             # Check if default.json and prefix.json exists
@@ -1654,7 +1808,7 @@ def main(check_stack: bool, profile: str, infra_type: str, prefix: str,
 
     # Handle template selection and parameter configuration
     if not local_config:
-        templates = config_manager.discover_templates()
+        templates = config_manager.discover_local_templates()
         template_file = config_manager.select_template(templates)
     else:
         template_file_from_config = local_config.get('atlantis', {}).get('deploy', {}).get('parameters', {}).get('template_file', '')
