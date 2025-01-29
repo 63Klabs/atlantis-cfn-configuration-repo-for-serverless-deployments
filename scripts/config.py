@@ -39,7 +39,7 @@ Environment Setup:
 #
 # =============================================================================
 
-# TODO: Add infra type to service-role
+# TODO: Add infra type to service-role, including stack name and s3_prefix
 # TODO: Add remote S3 templates
 
 # TODO: Test IAM deploy

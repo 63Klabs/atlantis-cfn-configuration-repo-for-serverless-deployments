@@ -176,103 +176,116 @@ class TemplateDeployer:
                 self.logger.error(f"Error accessing S3: {str(e)}")
             return False
 
-    def deploy_with_temp_template(self, s3_template_url: str, config_file: str) -> int:
+    def deploy_with_temp_template(self, template_path: str, config_file: str) -> int:
         """
-        Download template to temp file and deploy using SAM.
+        Deploy template from either S3 or local file.
         
         Args:
-            s3_template_url: Full S3 URL to template (can include versionId)
+            template_path: Either S3 URL (s3://) or local file path
             config_file: Path to samconfig.toml
             
         Returns:
             int: Return code from sam deploy
         """
         try:
-            # Parse S3 URL
-            bucket, key, version_id = self.parse_s3_url(s3_template_url)
-            
-            # Verify template exists
-            if not self.verify_s3_object_exists(bucket, key, version_id):
-                return 1
-                
             # Ensure config file exists
             config_path = self.config_dir / config_file
             if not config_path.exists():
                 self.logger.error(f"Config file not found: {config_path}")
                 return 1
-                
-            # Create temp directory that will be automatically cleaned up
-            with tempfile.TemporaryDirectory() as temp_dir:
-                # Use os.path.join or Path for proper path handling
-                temp_path = Path(temp_dir) / "template.yml"
-                
-                self.logger.info(f"Downloading template from s3://{bucket}/{key}" +
-                            (f"?versionId={version_id}" if version_id else ""))
-                
-                try:
-                    # Download template to temp file using get_object
-                    get_args = {
-                        'Bucket': bucket,
-                        'Key': key
-                    }
-                    if version_id:
-                        get_args['VersionId'] = version_id
 
-                    response = self.s3_client.get_object(**get_args)
-                    with open(temp_path, 'wb') as f:
-                        f.write(response['Body'].read())
+            if template_path.startswith('s3://'):
+                # Handle S3 template
+                bucket, key, version_id = self.parse_s3_url(template_path)
+                
+                # Verify template exists
+                if not self.verify_s3_object_exists(bucket, key, version_id):
+                    return 1
 
-                except ClientError as e:
-                    if 'ExpiredToken' in str(e):
-                        self.logger.info("Token expired, refreshing credentials...")
-                        self.refresh_credentials()
-                        # Retry download after refresh
+                # Create temp directory for S3 download
+                with tempfile.TemporaryDirectory() as temp_dir:
+                    temp_path = Path(temp_dir) / "template.yml"
+                    
+                    self.logger.info(f"Downloading template from s3://{bucket}/{key}" +
+                                (f"?versionId={version_id}" if version_id else ""))
+                    
+                    try:
+                        get_args = {
+                            'Bucket': bucket,
+                            'Key': key
+                        }
+                        if version_id:
+                            get_args['VersionId'] = version_id
+
                         response = self.s3_client.get_object(**get_args)
                         with open(temp_path, 'wb') as f:
                             f.write(response['Body'].read())
-                    else:
-                        self.logger.error(f"Failed to download template: {str(e)}")
-                        return 1
-                
-                if not temp_path.exists():
-                    self.logger.error("Failed to download template file")
+
+                    except ClientError as e:
+                        if 'ExpiredToken' in str(e):
+                            self.logger.info("Token expired, refreshing credentials...")
+                            self.refresh_credentials()
+                            response = self.s3_client.get_object(**get_args)
+                            with open(temp_path, 'wb') as f:
+                                f.write(response['Body'].read())
+                        else:
+                            self.logger.error(f"Failed to download template: {str(e)}")
+                            return 1
+
+                    return self._run_sam_deploy(temp_path, config_path)
+            else:
+                # Handle local template
+                local_template_path = self.config_dir / template_path
+                if not local_template_path.exists():
+                    self.logger.error(f"Local template file not found: {local_template_path}")
                     return 1
-                
-                # Construct sam deploy command with profile
-                sam_cmd = [
-                    "sam.cmd" if os.name == 'nt' else "sam",  # Use sam.cmd on Windows
-                    "deploy",
-                    "--template-file", str(temp_path),
-                    "--config-file", str(config_path),
-                    "--no-fail-on-empty-changeset"
-                ]
-                
-                if self.profile:
-                    sam_cmd.extend(["--profile", self.profile])
-                
-                self.logger.info(f"Executing: {' '.join(sam_cmd)}")
-                
-                # Execute sam deploy with color output
-                result = subprocess.run(
-                    sam_cmd,
-                    cwd=self.config_dir,
-                    check=False,
-                    stdout=None,
-                    stderr=None,
-                    shell=True if os.name == 'nt' else False,  # Use shell on Windows
-                    env={
-                        **os.environ,
-                        'FORCE_COLOR': '1',
-                        # Use appropriate TERM for Windows
-                        'TERM': 'xterm-256color' if os.name != 'nt' else os.environ.get('TERM', '')
-                    }
-                )
-                
-                return result.returncode
-                
+                    
+                self.logger.info(f"Using local template: {local_template_path}")
+                return self._run_sam_deploy(local_template_path, config_path)
+
         except Exception as e:
             self.logger.error(f"Deployment failed: {str(e)}")
             raise
+
+    def _run_sam_deploy(self, template_path: Path, config_path: Path) -> int:
+        """
+        Execute the SAM deploy command.
+        
+        Args:
+            template_path: Path to the template file
+            config_path: Path to the config file
+            
+        Returns:
+            int: Return code from sam deploy
+        """
+        sam_cmd = [
+            "sam.cmd" if os.name == 'nt' else "sam",
+            "deploy",
+            "--template-file", str(template_path),
+            "--config-file", str(config_path),
+            "--no-fail-on-empty-changeset"
+        ]
+        
+        if self.profile:
+            sam_cmd.extend(["--profile", self.profile])
+        
+        self.logger.info(f"Executing: {' '.join(sam_cmd)}")
+        
+        result = subprocess.run(
+            sam_cmd,
+            cwd=self.config_dir,
+            check=False,
+            stdout=None,
+            stderr=None,
+            shell=True if os.name == 'nt' else False,
+            env={
+                **os.environ,
+                'FORCE_COLOR': '1',
+                'TERM': 'xterm-256color' if os.name != 'nt' else os.environ.get('TERM', '')
+            }
+        )
+        
+        return result.returncode
 
 # def parse_args() -> argparse.Namespace:
 #     # Get the script's directory
