@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 VERSION = "v0.1.0/2025-01-25"
 # Developed by Chad Kluck with AI assistance from Amazon Q Developer
 # GitHub Copilot assisted in color formats of output and prompts
@@ -112,12 +114,16 @@ class ConfigManager:
             ValueError: If project_id is None for non-service-role infrastructure types
         """
 
+
         # Initialize basic attributes
         self.prefix = prefix
         self.infra_type = infra_type
         self.project_id = project_id
         self.stage_id = 'default' if stage_id is None else stage_id
         self.profile = 'default' if profile is None else profile
+
+        # Set up AWS session with specified profile
+        boto3.setup_default_session(profile_name=self.profile)
 
         # Set up AWS client and paths
         self.cfn_client = boto3.client('cloudformation')
@@ -134,10 +140,6 @@ class ConfigManager:
         # Validate inputs
         if infra_type != 'service-role' and project_id is None:
             raise ValueError("project_id is required for non-service-role infrastructure types")
-        
-        # Set up AWS session with specified profile
-        boto3.setup_default_session(profile_name=self.profile)
-
 
     def generate_stack_name(self, prefix: str = "", project_id: str = "", stage_id: str = "") -> str:
         """
@@ -490,6 +492,7 @@ class ConfigManager:
                 return content, str(template_path)
                 
         except (ClientError, FileNotFoundError) as e:
+            click.echo(tools.formatted_error(f"Error reading template file {template_path}. Check logs for more info."))
             logging.error(f"Error reading template file {template_path}: {e}")
             raise
             
@@ -501,29 +504,35 @@ class ConfigManager:
             content (bytes): Template file content
             template_path (str): Original template path for logging
         """
-        # Calculate template hash
-        sha256_hash = hashlib.sha256()
-        sha256_hash.update(content)
-        full_hash = sha256_hash.hexdigest()
-        self.template_hash = full_hash
-        self.template_hash_id = full_hash[-6:]
-        
-        # Extract version from content
-        content_str = content.decode('utf-8')
-        for line in content_str.splitlines():
-            if line.startswith('# Version:'):
-                self.template_version = line.split(':', 1)[1].strip()
-                break
-        else:
-            self.template_version = 'No version found'
-        
-        # Log template info
-        print()
-        click.echo(tools.formatted_output_with_value("Using template file:", template_path))
-        click.echo(tools.formatted_output_with_value("Template version:", self.template_version))
-        click.echo(tools.formatted_output_with_value("Template hash:", full_hash))
-        click.echo(tools.formatted_output_with_value("Template hash ID:", self.template_hash_id))
-        print()
+
+        try:
+            # Calculate template hash
+            sha256_hash = hashlib.sha256()
+            sha256_hash.update(content)
+            full_hash = sha256_hash.hexdigest()
+            self.template_hash = full_hash
+            self.template_hash_id = full_hash[-6:]
+            
+            # Extract version from content
+            content_str = content.decode('utf-8')
+            for line in content_str.splitlines():
+                if line.startswith('# Version:'):
+                    self.template_version = line.split(':', 1)[1].strip()
+                    break
+            else:
+                self.template_version = 'No version found'
+            
+            # Log template info
+            print()
+            click.echo(tools.formatted_output_with_value("Using template file:", template_path))
+            click.echo(tools.formatted_output_with_value("Template version:", self.template_version))
+            click.echo(tools.formatted_output_with_value("Template hash:", full_hash))
+            click.echo(tools.formatted_output_with_value("Template hash ID:", self.template_hash_id))
+            print()
+        except(Exception) as e:
+            logging.error(f"Error processing template content: {e}")
+            click.echo(tools.formatted_error("Error processing template content. Check logs for more info."))
+            raise
 
     def extract_parameters(self, content: bytes) -> Dict:
         """
@@ -558,6 +567,7 @@ class ConfigManager:
             
         except Exception as e:
             logging.error(f"Error parsing parameters section: {e}")
+            click.echo(tools.formatted_error("Error parsing parameters section. Check logs for more info."))
             return {}
 
     def get_template_parameters(self, template_path: str) -> Dict:
