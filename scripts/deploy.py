@@ -57,12 +57,14 @@ class TemplateDeployer:
     def _refresh_sso_login(self) -> None:
         """Execute AWS SSO login command"""
         try:
+            # Use shell=True on Windows to find aws.exe in PATH
             self.logger.info(f"Running: aws sso login --profile {self.profile}")
             result = subprocess.run(
-                ["aws", "sso", "login", "--profile", self.profile],
+                f"aws sso login --profile {self.profile}",
                 check=True,
                 capture_output=True,
-                text=True
+                text=True,
+                shell=True if os.name == 'nt' else False  # Use shell on Windows
             )
             if result.stdout:
                 self.logger.info(result.stdout)
@@ -197,6 +199,7 @@ class TemplateDeployer:
                 
             # Create temp directory that will be automatically cleaned up
             with tempfile.TemporaryDirectory() as temp_dir:
+                # Use os.path.join or Path for proper path handling
                 temp_path = Path(temp_dir) / "template.yml"
                 
                 self.logger.info(f"Downloading template from s3://{bucket}/{key}" +
@@ -233,13 +236,13 @@ class TemplateDeployer:
                 
                 # Construct sam deploy command with profile
                 sam_cmd = [
-                    "sam", "deploy",
+                    "sam.cmd" if os.name == 'nt' else "sam",  # Use sam.cmd on Windows
+                    "deploy",
                     "--template-file", str(temp_path),
                     "--config-file", str(config_path),
                     "--no-fail-on-empty-changeset"
                 ]
                 
-                # Add profile to sam deploy if specified
                 if self.profile:
                     sam_cmd.extend(["--profile", self.profile])
                 
@@ -252,10 +255,12 @@ class TemplateDeployer:
                     check=False,
                     stdout=None,
                     stderr=None,
+                    shell=True if os.name == 'nt' else False,  # Use shell on Windows
                     env={
                         **os.environ,
                         'FORCE_COLOR': '1',
-                        'TERM': os.environ.get('TERM', 'xterm-256color')
+                        # Use appropriate TERM for Windows
+                        'TERM': 'xterm-256color' if os.name != 'nt' else os.environ.get('TERM', '')
                     }
                 )
                 
@@ -265,8 +270,13 @@ class TemplateDeployer:
             self.logger.error(f"Deployment failed: {str(e)}")
             raise
 
+# def parse_args() -> argparse.Namespace:
+#     # Get the script's directory
+#     script_dir = Path(__file__).resolve().parent
+#     samconfigs_dir = script_dir.parent / "samconfigs"
+
 def parse_args() -> argparse.Namespace:
-    # Get the script's directory
+    # Get the script's directory in a cross-platform way
     script_dir = Path(__file__).resolve().parent
     samconfigs_dir = script_dir.parent / "samconfigs"
 
@@ -274,23 +284,23 @@ def parse_args() -> argparse.Namespace:
         description='Deploy CloudFormation template from S3',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
-Examples:
-    # Deploy service-role for acme prefix and project
-    deploy.py service-role acme project123
+        Examples:
+            # Deploy service-role for acme prefix and project
+            deploy.py service-role acme project123
 
-    # Deploy service-role for specific project and stage
-    deploy.py service-role acme project123 dev
+            # Deploy pipeline for specific project and stage
+            deploy.py pipeline acme project123 dev
 
-    # With different AWS profile
-    deploy.py service-role acme project123 --profile myprofile
-        """
+            # With different AWS profile
+            deploy.py service-role acme project123 --profile myprofile
+                """
     )
     
     # Positional arguments
     parser.add_argument('infra_type',
-                       help='Type of infrastructure to deploy (e.g., service-role)')
+                       help='Type of infrastructure to deploy (e.g., pipeline)')
     parser.add_argument('prefix',
-                       help='Prefix/customer name (e.g., acme)')
+                       help='Prefix/org unit (e.g., acme)')
     parser.add_argument('project_id',
                        help='Project ID')
     parser.add_argument('stage_id',
