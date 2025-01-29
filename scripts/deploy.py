@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
 
+# TODO: Add local file deploy
+# TODO: Add additional error logging
+# TODO: Update user messages
+
 import sys
 
 if sys.version_info[0] < 3:

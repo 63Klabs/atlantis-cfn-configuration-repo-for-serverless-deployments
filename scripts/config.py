@@ -39,6 +39,9 @@ Environment Setup:
 #
 # =============================================================================
 
+# TODO: Add infra type to service-role
+# TODO: Add remote S3 templates
+
 # TODO: Test IAM deploy
 # TODO: Test Storage Deploy
 # TODO: Test Pipeline deploy

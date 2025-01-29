@@ -3,6 +3,8 @@
 VERSION = "v0.1.0/2025-01-25"
 # Developed by Chad Kluck with AI assistance from Amazon Q Developer
 
+# TODO: Add tags
+
 import boto3
 import tempfile
 import zipfile
