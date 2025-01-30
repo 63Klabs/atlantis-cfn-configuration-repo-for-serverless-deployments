@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-# TODO: Ensure Non-SEO works
+# TODO: Ensure Non-SSO works
 
 import sys
 import os
