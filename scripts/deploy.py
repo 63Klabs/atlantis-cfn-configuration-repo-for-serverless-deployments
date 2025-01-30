@@ -298,8 +298,8 @@ class TemplateDeployer:
 
                 # Create temp directory for S3 download
                 with tempfile.TemporaryDirectory() as temp_dir:
+                    log_info(f"Created temporary directory: {temp_dir}")
                     temp_path = Path(temp_dir) / "template.yml"
-                    
                     log_info(f"Downloading template from s3://{bucket}/{key}" +
                                 (f"?versionId={version_id}" if version_id else ""))
                     
