@@ -5,7 +5,7 @@ VERSION = "v0.1.0/2025-02-22"
 
 # Usage Example:
 
-# from lib.logger import ScriptLogger, log_info, log_warn, log_error
+# from lib.logger import ScriptLogger, ConsoleAndLog
 
 # # Setup logger at the start of your script
 # ScriptLogger.setup('your-script-name')
