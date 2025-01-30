@@ -16,7 +16,7 @@ VERSION = "v0.1.2/2025-01-25"
 
 import os
 import click
-from typing import Dict, Optional, List, Any
+from typing import Dict, List
 
 from lib.tools_colors import (
     COLOR_PROMPT,
