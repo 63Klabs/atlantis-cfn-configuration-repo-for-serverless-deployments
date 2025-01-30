@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 VERSION = "v0.1.0/2025-01-25"
 # Developed by Chad Kluck with AI assistance from Amazon Q Developer
