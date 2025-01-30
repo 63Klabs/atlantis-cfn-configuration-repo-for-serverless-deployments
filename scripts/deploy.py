@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 
-# TODO: Add additional error logging
-# TODO: Update user messages
+# TODO: Ensure Non-SEO works
 
 import sys
 import os
@@ -423,7 +422,7 @@ def parse_args() -> argparse.Namespace:
     # Optional arguments
     parser.add_argument('--profile', 
                        help='AWS profile name to use',
-                       default="release")
+                       default="default")
     
     args = parser.parse_args()
     
@@ -434,11 +433,11 @@ def parse_args() -> argparse.Namespace:
     return args
 
 def main() -> int:
-    # Set up logging
-    logging.basicConfig(level=log_info)
     
     # Parse command line arguments
     args = parse_args()
+
+    log_info(f"DEPLOY: Infrastructure: {args.infra_type} | {args.prefix} {args.project_id} {args.stage_id} | Profile: {args.profile}")
     
     # Log the constructed paths
     log_info(f"Config directory: {args.config_dir}")
@@ -460,7 +459,7 @@ def main() -> int:
         
         exit_code = deployer.deploy_with_temp_template(template_url, args.config_file)
         if exit_code == 0:
-            log_info("Deployment script completed successfully")
+            log_info("Deployment script completed without errors.")
         else:
             log_error(f"Deployment script failed with exit code {exit_code}")
         return exit_code
