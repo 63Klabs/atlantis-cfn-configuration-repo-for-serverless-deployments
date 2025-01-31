@@ -14,7 +14,7 @@ from typing import Optional
 from botocore.exceptions import ClientError
 
 from lib.aws_session import AWSSessionManager
-from lib.logger import ScriptLogger, ConsoleAndLog
+from lib.logger import ScriptLogger, ConsoleAndLog, Log
 
 if sys.version_info[0] < 3:
     sys.stderr.write("Error: Python 3 is required\n")
@@ -300,7 +300,8 @@ def main() -> int:
     # Parse command line arguments
     args = parse_args()
 
-    ConsoleAndLog.info(f"DEPLOY: Infrastructure: {args.infra_type} | {args.prefix} {args.project_id} {args.stage_id} | Profile: {args.profile}")
+    # log script arguments
+    Log.info(f"{sys.argv}")
     
     # Log the constructed paths
     ConsoleAndLog.info(f"Config directory: {args.config_dir}")

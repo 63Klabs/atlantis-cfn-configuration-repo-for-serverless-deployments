@@ -77,6 +77,58 @@ class ScriptLogger:
         """Get the configured logger instance"""
         return cls._instance
 
+class Log:
+    @classmethod
+    def _get_file_only_logger(cls) -> logging.Logger:
+        """Get a logger instance that only writes to file"""
+        logger = ScriptLogger.get_logger()
+        if not logger:
+            raise RuntimeError(ScriptLogger._ERROR_MSG)
+        
+        # Create a new logger for file-only logging
+        file_only_logger = logging.getLogger(f"{logger.name}_file_only")
+        
+        # If handlers already exist, return the logger
+        if file_only_logger.handlers:
+            return file_only_logger
+            
+        # Copy the file handler from the main logger
+        for handler in logger.handlers:
+            if isinstance(handler, logging.FileHandler):
+                # Create a new file handler with the same configuration
+                file_handler = logging.FileHandler(handler.baseFilename)
+                file_handler.setLevel(handler.level)
+                file_handler.setFormatter(handler.formatter)
+                file_only_logger.addHandler(file_handler)
+                break
+        
+        file_only_logger.setLevel(logging.INFO)
+        return file_only_logger
+
+    @classmethod
+    def info(cls, message: str) -> None:
+        """Log an info message to file only"""
+        logger = cls._get_file_only_logger()
+        logger.info(message)
+
+    @classmethod
+    def warning(cls, message: str, e: Optional[Exception] = None) -> None:
+        """Log a warning message to file only"""
+        logger = cls._get_file_only_logger()
+        if e:
+            logger.warning(f"{message} ERR: {str(e)}")
+        else:
+            logger.warning(message)
+
+    @classmethod
+    def error(cls, message: str, e: Optional[Exception] = None) -> None:
+        """Log an error message to file only"""
+        logger = cls._get_file_only_logger()
+        if e:
+            logger.error(f"{message} ERR: {str(e)}")
+        else:
+            logger.error(message)
+
 class ConsoleAndLog:
     @staticmethod
     def _log_message(level_func: Callable, message: str, e: Optional[Exception] = None) -> None:
