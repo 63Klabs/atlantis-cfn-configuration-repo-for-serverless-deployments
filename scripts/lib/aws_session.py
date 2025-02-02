@@ -26,10 +26,10 @@ from botocore.exceptions import ClientError, TokenRetrievalError
 from lib.logger import ConsoleAndLog
 
 class AWSSessionManager:
-    def __init__(self, profile: Optional[str] = None) -> None:
+    def __init__(self, profile: Optional[str] = None, region: Optional[str] = None) -> None:
         self.profile = profile
+        self.region = region
         self.session = None
-        self.s3_client = None
         self.refresh_credentials()
 
     def refresh_credentials(self) -> None:
@@ -50,12 +50,11 @@ class AWSSessionManager:
                 if not credentials:
                     raise TokenRetrievalError("No credentials found in profile")
                 
-                # Test if credentials are valid
+                # Test if credentials are valid using STS
                 sts = self.session.client('sts')
                 try:
                     sts.get_caller_identity()
                     # If we get here, credentials are valid
-                    self.s3_client = self.session.client('s3')
                     ConsoleAndLog.info("Using existing valid credentials")
                     return
                 except ClientError as e:
@@ -71,9 +70,8 @@ class AWSSessionManager:
                     else:
                         raise
                 
-                # Create new session and verify after potential refresh
+                # Create new session after potential refresh
                 self.session = boto3.Session(profile_name=self.profile)
-                self.s3_client = self.session.client('s3')
                 return
                 
             except Exception as e:
@@ -85,6 +83,7 @@ class AWSSessionManager:
                     raise
                 
                 time.sleep(2)
+
 
     def _is_sso_profile(self) -> bool:
         """Check if the current profile is configured for SSO"""
@@ -142,8 +141,10 @@ class AWSSessionManager:
         """Get the current boto3 session"""
         return self.session
 
-    def get_client(self, service_name: str) -> Any:
+    def get_client(self, service_name: str, region: Optional[str] = None) -> Any:
         """Get a boto3 client for the specified service"""
         if not self.session:
             raise ValueError("No valid session available")
-        return self.session.client(service_name)
+        if not region:
+            region = self.region
+        return self.session.client(service_name, region)

@@ -39,7 +39,7 @@ Environment Setup:
 #
 # =============================================================================
 
-# TODO: Add infra type to service-role, including stack name and s3_prefix
+# TODO: Add aws_session
 # TODO: Add remote S3 templates
 
 # TODO: Test IAM deploy
@@ -128,7 +128,7 @@ class ConfigManager:
 
         # Set up AWS client and paths
         self.cfn_client = boto3.client('cloudformation')
-        self.templates_dir = Path('templates') / f"{infra_type}"
+        self.templates_dir = Path('local-templates') / f"{infra_type}"
         self.samconfig_dir = Path('samconfigs')
         self.settings_dir = Path("defaults")
 
@@ -191,11 +191,7 @@ class ConfigManager:
         Returns:
             Path object pointing to the SAM configuration file
         """
-        # Handle service-role differently (no project_id in filename)
-        if self.infra_type == 'service-role':
-            filename = Path(prefix) / f"samconfig-{prefix}-service-role.toml"
-        else:
-            filename = Path(prefix) / f"{project_id}" / f"samconfig-{prefix}-{project_id}-{self.infra_type}.toml"
+        filename = Path(prefix) / f"{project_id}" / f"samconfig-{prefix}-{project_id}-{self.infra_type}.toml"
         
         return self.samconfig_dir / filename
     
@@ -421,7 +417,7 @@ class ConfigManager:
                 return content, str(template_path)
                 
         except (ClientError, FileNotFoundError) as e:
-            click.echo(Colorize.error(f"Error reading template file {template_path}. Check logs for more info."))
+            click.echo(Colorize.error(f"Error reading template file {template_path}"))
             Log.error(f"Error reading template file {template_path}: {e}")
             raise
             
@@ -590,10 +586,9 @@ class ConfigManager:
         config_files.append(self.settings_dir / f"{self.infra_type}" / f"{self.prefix}-defaults.json")
         
         # Add project_id specific files in infra_type directory
-        if self.project_id:
-            config_files.append(
-                self.settings_dir / f"{self.infra_type}" / f"{self.prefix}-{self.project_id}-defaults.json"
-            )
+        config_files.append(
+            self.settings_dir / f"{self.infra_type}" / f"{self.prefix}-{self.project_id}-defaults.json"
+        )
         
         # Load each config file in sequence if it exists
         for config_file in config_files:
@@ -980,10 +975,7 @@ class ConfigManager:
 
         # if template_file is not s3 it is local and use the local path
         if not template_file.startswith('s3://'):
-            template_file = f'../../templates/{self.infra_type}/{template_file}'
-            if self.infra_type != "service-role":
-                template_file = "../" + template_file
-
+            template_file = f'../../{self.templates_dir}/{template_file}'
 
         # Generate stack name
         stack_name = self.generate_stack_name(prefix, project_id, stage_id)
@@ -1705,7 +1697,7 @@ VALID_INFRA_TYPES = ['service-role', 'pipeline', 'storage', 'network']
 @click.option('--profile', help='AWS profile name')
 @click.argument('infra_type')
 @click.argument('prefix')
-@click.argument('project_id', required=False)
+@click.argument('project_id', required=True)
 @click.argument('stage_id', required=False)
 def main(check_stack: bool, profile: str, infra_type: str, prefix: str, 
         project_id: Optional[str], stage_id: Optional[str]):
@@ -1721,11 +1713,18 @@ def main(check_stack: bool, profile: str, infra_type: str, prefix: str,
         raise click.UsageError(f"Invalid infra_type. Must be one of {VALID_INFRA_TYPES}")
 
     # Validate project_id requirement
-    if infra_type != 'service-role' and not project_id:
-        raise click.UsageError("project_id is required for non-service-role infrastructure types")
+    if not project_id:
+        raise click.UsageError("project_id is required")
+    
+    # infra_type service-role requires a project id equal to one of VALID_INFRA_TYPES (except 'service-role')
+    # create temp variable to store VALID_INFRA_TYPES without 'service-role'
+    temp_valid_infra_types = VALID_INFRA_TYPES.copy()
+    temp_valid_infra_types.remove('service-role')
+    if infra_type == 'service-role' and project_id not in temp_valid_infra_types:
+        raise click.UsageError(f"project_id must be one of {temp_valid_infra_types}")
     
     # Validate stage_id requirement
-    if infra_type != 'service-role' and infra_type != 'storage' and not stage_id:
+    if not stage_id and infra_type != 'service-role' and infra_type != 'storage':
         raise click.UsageError(f"stage_id is required for infrastructure type: {infra_type}")
     
     stage_id = stage_id if stage_id else 'default'

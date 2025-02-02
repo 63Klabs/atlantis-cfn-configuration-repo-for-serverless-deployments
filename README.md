@@ -1,4 +1,4 @@
-# Atlantis Configuration Repository for Serverless Deployment using AWS SAM
+# Atlantis Configuration Repository for Serverless Deployments using AWS SAM
 
 ## Prerequisites
 

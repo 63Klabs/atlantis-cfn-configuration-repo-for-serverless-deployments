@@ -17,17 +17,24 @@ __pycache__/
 
 # -- Items below may be adjusted ----------------------------------------------
 
-imports
+
+# Comment out/remove these lines if you want to save your default settings across projects - RECOMMENDED
+defaults/*
+samconfigs/*
+
+# Comment out/remove these lines if you want your configuration imports and script log files in the repo - NOT RECOMMENDED
+# Why? - You can use imports for temporary storage as you work on converting to proper configurations. 
+#        Logs can easily conflict and provide no usable info across developers.
+local-imports
 scripts/logs
 
 # Comment out/remove these lines if you are storing templates in this repo - NOT RECOMMENDED
-templates/**/*.yml
-templates/**/*.yaml
-templates/**/*.json
+# Why? - You should really apply versioning to your templates so deploys are consistent.
+#        Check out the Atlantis Template Repository for developing and releasing templates to a versioned S3 bucket.
+local-templates/**/*.yml
+local-templates/**/*.yaml
+local-templates/**/*.json
 
-# Comment out/remove these lines if you want to save your work - RECOMMENDED
-defaults/*
-samconfigs/*
 
 # -- Items above may be adjusted ----------------------------------------------
 

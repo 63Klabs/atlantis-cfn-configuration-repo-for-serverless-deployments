@@ -20,13 +20,15 @@ if sys.version_info[0] < 3:
     sys.stderr.write("Error: Python 3 is required\n")
     sys.exit(1)
 
+CONFIG_DIR = "local-imports"
+
 # Initialize logger for this script
 ScriptLogger.setup('deploy')
 
 class TemplateDeployer:
     def __init__(self, config_dir: str, profile: Optional[str] = None) -> None:
         self.config_dir = Path(config_dir)
-        self.profile = profile  # Add this line to store the profile
+        self.profile = profile
         self.aws_session = AWSSessionManager(profile)
         self.s3_client = self.aws_session.get_client('s3')
 
@@ -239,10 +241,9 @@ class TemplateDeployer:
         
         return result.returncode
 
-# def parse_args() -> argparse.Namespace:
-#     # Get the script's directory
-#     script_dir = Path(__file__).resolve().parent
-#     samconfigs_dir = script_dir.parent / "samconfigs"
+# =============================================================================
+# ----- Main function ---------------------------------------------------------
+# =============================================================================
 
 def parse_args() -> argparse.Namespace:
     # Get the script's directory in a cross-platform way
