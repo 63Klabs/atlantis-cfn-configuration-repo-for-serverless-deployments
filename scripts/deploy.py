@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 VERSION = "v0.1.0/2025-02-22"
-# Developed by Chad Kluck with AI assistance from Amazon Q Developer
+# Created by Chad Kluck with AI assistance from Amazon Q Developer
 
 import sys
 import os
@@ -20,25 +20,26 @@ if sys.version_info[0] < 3:
     sys.stderr.write("Error: Python 3 is required\n")
     sys.exit(1)
 
-CONFIG_DIR = "local-imports"
 
 # Initialize logger for this script
 ScriptLogger.setup('deploy')
 
+SAMCONFIG_DIR = "samconfigs"
+
 class TemplateDeployer:
-    def __init__(self, config_dir: str, profile: Optional[str] = None) -> None:
-        self.config_dir = Path(config_dir)
+    def __init__(self, infra_type: str, prefix: str, project_id: str, stage_id: str, profile: Optional[str] = None) -> None:
+        self.infra_type = infra_type
+        self.prefix = prefix
+        self.project_id = project_id
+        self.stage_id = stage_id
         self.profile = profile
+
         self.aws_session = AWSSessionManager(profile)
         self.s3_client = self.aws_session.get_client('s3')
 
-    def get_template_from_config(self, config_file: str, stage_id: str) -> str:
+    def get_template_from_config(self) -> str:
         """
         Read template URL from samconfig.toml file.
-        
-        Args:
-            config_file: Path to samconfig.toml
-            stage_id: Stage ID to look up parameters
             
         Returns:
             str: Template URL from config file
@@ -46,20 +47,29 @@ class TemplateDeployer:
         Raises:
             ValueError: If template parameter is not found in config
         """
-        config_path = self.config_dir / config_file
+
+        # Log the constructed paths
+        ConsoleAndLog.info(f"Config directory: {self.get_samconfig_dir()}")
+        ConsoleAndLog.info(f"Config file: {self.get_samconfig_file_name()}")
+        # Verify config directory exists
+        config_path = self.get_samconfig_dir()
+        if not config_path.exists():
+            ConsoleAndLog.error(f"SAM Config directory not found: {self.get_samconfig_dir()}")
+            return 1
+        
         try:
             with open(config_path, 'rb') as f:
                 config = tomli.load(f)
             
             # Look for template parameter in stage-specific section
             template_param = config.get('default', {}).get('deploy', {}).get('parameters', {}).get('template_file')
-            stage_template = config.get(stage_id, {}).get('deploy', {}).get('parameters', {}).get('template_file')
+            stage_template = config.get(self.stage_id, {}).get('deploy', {}).get('parameters', {}).get('template_file')
             
             # Use stage-specific template if available, otherwise fall back to default
             template_url = stage_template or template_param
             
             if not template_url:
-                raise ValueError(f"Template parameter not found in config file for stage '{stage_id}'")
+                raise ValueError(f"Template parameter not found in config file for stage '{self.stage_id}'")
                 
             return template_url
             
@@ -130,20 +140,19 @@ class TemplateDeployer:
                 ConsoleAndLog.error(f"Error accessing S3: {str(e)}")
             return False
 
-    def deploy_with_temp_template(self, template_path: str, config_file: str) -> int:
+    def deploy_with_temp_template(self, template_path: str) -> int:
         """
         Deploy template from either S3 or local file.
         
         Args:
             template_path: Either S3 URL (s3://) or local file path
-            config_file: Path to samconfig.toml
             
         Returns:
             int: Return code from sam deploy
         """
         try:
             # Ensure config file exists
-            config_path = self.config_dir / config_file
+            config_path = self.get_samconfig_file_path()
             if not config_path.exists():
                 ConsoleAndLog.error(f"Config file not found: {config_path}")
                 return 1
@@ -241,6 +250,24 @@ class TemplateDeployer:
         
         return result.returncode
 
+    # -------------------------------------------------------------------------
+    # - File Locations and Names
+    # -------------------------------------------------------------------------
+
+    def get_samconfig_dir(self) -> Path:
+        """Get the samconfig directory path"""
+        # Get the script's directory in a cross-platform way
+        script_dir = Path(__file__).resolve().parent
+        return script_dir.parent / SAMCONFIG_DIR / self.prefix / self.project_id 
+    
+    def get_samconfig_file_name(self) -> str:
+        """Get the samconfig file name"""
+        return f"samconfig-{self.prefix}-{self.project_id}-{self.infra_type}.toml"
+    
+    def get_samconfig_file_path(self) -> Path:
+        """Get the samconfig file path"""
+        return self.get_samconfig_dir() / self.get_samconfig_file_name()
+
 # =============================================================================
 # ----- Main function ---------------------------------------------------------
 # =============================================================================
@@ -248,7 +275,6 @@ class TemplateDeployer:
 def parse_args() -> argparse.Namespace:
     # Get the script's directory in a cross-platform way
     script_dir = Path(__file__).resolve().parent
-    samconfigs_dir = script_dir.parent / "samconfigs"
 
     parser = argparse.ArgumentParser(
         description='Deploy CloudFormation template from S3',
@@ -286,43 +312,29 @@ def parse_args() -> argparse.Namespace:
     # Optional arguments
     parser.add_argument('--profile', 
                        help='AWS profile name to use',
-                       default="default")
+                       default=None)
     
     args = parser.parse_args()
-    
-    # Construct config directory and file paths using relative path
-    args.config_dir = str(samconfigs_dir / args.prefix / args.project_id)
-    args.config_file = f"samconfig-{args.prefix}-{args.project_id}-{args.infra_type}.toml"
     
     return args
 
 def main() -> int:
     
-    # Parse command line arguments
     args = parse_args()
-
-    # log script arguments
     Log.info(f"{sys.argv}")
-    
-    # Log the constructed paths
-    ConsoleAndLog.info(f"Config directory: {args.config_dir}")
-    ConsoleAndLog.info(f"Config file: {args.config_file}")
-    
-    # Verify config directory exists
-    if not Path(args.config_dir).exists():
-        ConsoleAndLog.error(f"Config directory not found: {args.config_dir}")
-        return 1
-    
+    Log.info(f"Version: {VERSION}")
+
     # Initialize deployer with profile if specified
-    deployer = TemplateDeployer(args.config_dir, args.profile)
+    deployer = TemplateDeployer(args.infra_type, args.prefix, args.project_id, args.stage_id, args.profile)
     
     # Run deployment
     try:
         # Get template URL from config file
-        template_url = deployer.get_template_from_config(args.config_file, args.stage_id)
+        template_url = deployer.get_template_from_config()
         ConsoleAndLog.info(f"Template URL from config: {template_url}")
         
-        exit_code = deployer.deploy_with_temp_template(template_url, args.config_file)
+        exit_code = deployer.deploy_with_temp_template(template_url)
+
         if exit_code == 0:
             ConsoleAndLog.info("Deployment script completed without errors.")
         else:

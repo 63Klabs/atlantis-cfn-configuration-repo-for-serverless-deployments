@@ -21,9 +21,14 @@ import configparser
 import time
 import boto3
 from typing import Optional, Any
+import botocore.credentials
 from botocore.exceptions import ClientError, TokenRetrievalError
 
 from lib.logger import ConsoleAndLog
+
+class TokenRetrievalError(Exception):
+    """Custom exception for AWS token retrieval failures"""
+    pass
 
 class AWSSessionManager:
     def __init__(self, profile: Optional[str] = None, region: Optional[str] = None) -> None:
@@ -45,23 +50,28 @@ class AWSSessionManager:
             try:
                 # First try to create a session with existing credentials
                 self.session = boto3.Session(profile_name=self.profile)
-                credentials = self.session.get_credentials()
-                
-                if not credentials:
-                    raise TokenRetrievalError("No credentials found in profile")
                 
                 # Test if credentials are valid using STS
-                sts = self.session.client('sts')
                 try:
+                    sts = self.session.client('sts')
                     sts.get_caller_identity()
-                    # If we get here, credentials are valid
                     ConsoleAndLog.info("Using existing valid credentials")
                     return
                 except ClientError as e:
-                    if 'ExpiredToken' in str(e) or 'InvalidClientTokenId' in str(e):
-                        # Check if this is an SSO profile
+                    error_message = str(e)
+                    if ("ExpiredToken" in error_message or 
+                        "InvalidClientTokenId" in error_message or 
+                        "Token has expired" in error_message):
                         if self._is_sso_profile():
+                            ConsoleAndLog.info("Token expired. Initiating SSO login...")
                             self._refresh_sso_login()
+                            # Create new session after SSO login
+                            self.session = boto3.Session(profile_name=self.profile)
+                            # Verify the new session
+                            sts = self.session.client('sts')
+                            sts.get_caller_identity()
+                            ConsoleAndLog.info("Successfully refreshed SSO credentials")
+                            return
                         else:
                             raise TokenRetrievalError(
                                 "Credentials have expired. For IAM users, please update your credentials "
@@ -69,14 +79,23 @@ class AWSSessionManager:
                             )
                     else:
                         raise
-                
-                # Create new session after potential refresh
-                self.session = boto3.Session(profile_name=self.profile)
-                return
-                
+                        
             except Exception as e:
-                retry_count += 1
-                ConsoleAndLog.warning(f"Credential refresh attempt {retry_count}/{max_retries} failed: {str(e)}")
+                if "Token has expired" in str(e) and self._is_sso_profile():
+                    ConsoleAndLog.info("Token expired. Initiating SSO login...")
+                    try:
+                        self._refresh_sso_login()
+                        self.session = boto3.Session(profile_name=self.profile)
+                        sts = self.session.client('sts')
+                        sts.get_caller_identity()
+                        ConsoleAndLog.info("Successfully refreshed SSO credentials")
+                        return
+                    except Exception as login_error:
+                        retry_count += 1
+                        ConsoleAndLog.warning(f"SSO login attempt {retry_count}/{max_retries} failed: {str(login_error)}")
+                else:
+                    retry_count += 1
+                    ConsoleAndLog.warning(f"Credential refresh attempt {retry_count}/{max_retries} failed: {str(e)}")
                 
                 if retry_count >= max_retries:
                     ConsoleAndLog.error("Failed to refresh credentials after maximum retries")
@@ -113,6 +132,7 @@ class AWSSessionManager:
         try:
             ConsoleAndLog.info(f"Initiating SSO login for profile {self.profile}")
             
+            # First try to login
             result = subprocess.run(
                 ["aws", "sso", "login", "--profile", self.profile],
                 check=True,
@@ -125,10 +145,13 @@ class AWSSessionManager:
             if result.stderr:
                 ConsoleAndLog.warning(f"SSO login warnings: {result.stderr}")
                 
+            # Wait a moment for credentials to be properly saved
+            time.sleep(2)
+                
         except subprocess.CalledProcessError as e:
             error_msg = (
                 f"SSO login failed for profile {self.profile}. "
-                "If you're using IAM credentials, please ensure your profile is properly configured."
+                "Please ensure your profile is properly configured and try again."
             )
             if e.stdout:
                 error_msg += f"\nOutput: {e.stdout}"

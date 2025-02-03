@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 VERSION = "v0.1.0/2025-02-22"
-# Developed by Chad Kluck with AI assistance from Amazon Q Developer
+# Created by Chad Kluck with AI assistance from Amazon Q Developer
 # GitHub Copilot assisted in color formats of output and prompts
 
 """
@@ -16,19 +16,7 @@ Usage Examples:
         python config.py pipeline acme widget-ws test
 
     Import/Check existing stack:
-        python config.py network acme widget-ws test --check-stack --profile devuser
-
-Dependencies:
-    - boto3: AWS SDK for Python
-    - toml: TOML file parser
-    - click: Command-line interface creation kit
-    
-Environment Setup:
-    Install required packages:
-        pip install boto3 toml click
-        or
-        apt install python3-boto3 python3-toml python3-click
-
+        python config.py network acme widget-ws test --check-stack --profile yourprofile
 """
 
 # -----------------------------------------------------------------------------
@@ -39,22 +27,6 @@ Environment Setup:
 #
 # =============================================================================
 
-# TODO: Add aws_session
-# TODO: Add remote S3 templates
-
-# TODO: Test IAM deploy
-# TODO: Test Storage Deploy
-# TODO: Test Pipeline deploy
-# TODO: Test Network Deploy
-
-# TODO: Validate Tag reads
-
-# Q's suggestions
-# TODO: Better error handling
-# TODO: More detailed logging
-# TODO: Template validation before deployment
-
-import boto3
 import toml
 import json
 import yaml
@@ -64,12 +36,13 @@ import os
 import shlex
 import click
 import hashlib
+import argparse
 from pathlib import Path
 from typing import Dict, Optional, List
 from botocore.exceptions import ClientError
 
-from lib.aws_session import AWSSessionManager
-from lib.logger import ScriptLogger, Log
+from lib.aws_session import AWSSessionManager, TokenRetrievalError
+from lib.logger import ScriptLogger, Log, ConsoleAndLog
 from lib.tools import Colorize
 
 if sys.version_info[0] < 3:
@@ -79,6 +52,11 @@ if sys.version_info[0] < 3:
 # Initialize logger for this script
 ScriptLogger.setup('config')
 
+TEMPLATES_DIR = "local-templates"
+SAMCONFIG_DIR = "samconfigs"
+SETTINGS_DIR = "defaults"
+VALID_INFRA_TYPES = ['service-role', 'pipeline', 'storage', 'network']
+
 class ConfigManager:
     """
     Manages AWS CloudFormation/SAM deployment configurations.
@@ -87,20 +65,21 @@ class ConfigManager:
     including stack naming conventions, configuration file management, and parameter processing.
 
     Attributes:
-        prefix (str): The prefix to use for stack names and resources
         infra_type (str): Type of infrastructure (e.g., 'service-role', 'pipeline', 'network')
+        prefix (str): The prefix to use for stack names and resources
         project_id (str): Identifier for the project
         stage_id (str): Deployment stage identifier (default: 'default')
         profile (str): AWS credential profile name
-        templates_dir (Path): Directory containing CloudFormation/SAM templates
-        samconfig_dir (Path): Directory containing SAM configuration files
-        settings_dir (Path): Directory containing additional settings
+        check_stack (bool): Check saved config against deployed stack
+        aws_session (AWSSessionManager): AWS Session Manager
+        s3_client: AWS S3 Boto Client
+        cfn_client: AWS CloudFormation Boto Client
         template_version (str): Version of the template being used
         template_hash (str): Hash of the template content
         template_hash_id (str): Identifier based on template hash
         template_file (str): Name of the template file being used
     """
-    def __init__(self, infra_type: str, prefix: str, project_id: str, stage_id: Optional[str] = None, *, profile = None):
+    def __init__(self, infra_type: str, prefix: str, project_id: str, stage_id: Optional[str] = None, profile: Optional[str] = None, region: Optional[str] = None, check_stack: Optional[bool] = False):
         """
         Initialize a new ConfigManager instance.
 
@@ -110,27 +89,29 @@ class ConfigManager:
             project_id (str): Project identifier
             stage_id (Optional[str]): Stage identifier (default: None)
             profile (Optional[str]): AWS credential profile (default: None)
+            region (Optional[str]): AWS region
+            check_stack (Optional[bool]): Check saved config against deployed stack (default: False)
 
         Raises:
-            ValueError: If project_id is None for non-service-role infrastructure types
+            UsageError: If required arguments are missing or invalid
         """
 
-
         # Initialize basic attributes
-        self.prefix = prefix
         self.infra_type = infra_type
+        self.prefix = prefix
         self.project_id = project_id
         self.stage_id = 'default' if stage_id is None else stage_id
-        self.profile = 'default' if profile is None else profile
+        self.profile = profile
+        self.region = region
+        self.check_stack = check_stack
 
-        # Set up AWS session with specified profile
-        boto3.setup_default_session(profile_name=self.profile)
+        # Check the arguments before moving on
+        self._validate_args()
 
-        # Set up AWS client and paths
-        self.cfn_client = boto3.client('cloudformation')
-        self.templates_dir = Path('local-templates') / f"{infra_type}"
-        self.samconfig_dir = Path('samconfigs')
-        self.settings_dir = Path("defaults")
+        # Set up AWS session and clients
+        self.aws_session = AWSSessionManager(profile, region)
+        self.s3_client = self.aws_session.get_client('s3', region)
+        self.cfn_client = self.aws_session.get_client('codecommit', region)
 
         # Initialize template-related attributes
         self.template_version = 'No version found'
@@ -138,9 +119,24 @@ class ConfigManager:
         self.template_hash_id: Optional[str] = None
         self.template_file: Optional[str] = None
 
-        # Validate inputs
-        if infra_type != 'service-role' and project_id is None:
-            raise ValueError("project_id is required for non-service-role infrastructure types")
+    def _validate_args(self) -> None:
+        """Validate arguments"""
+
+        # Validate infra_type
+        if self.infra_type not in VALID_INFRA_TYPES:
+            raise click.UsageError(f"Invalid infra_type. Must be one of {VALID_INFRA_TYPES}")
+        
+        # infra_type service-role requires a project id equal to one of VALID_INFRA_TYPES (except 'service-role')
+        # create temp variable to store VALID_INFRA_TYPES without 'service-role'
+        temp_valid_infra_types = VALID_INFRA_TYPES.copy()
+        temp_valid_infra_types.remove('service-role')
+        if self.infra_type == 'service-role' and self.project_id not in temp_valid_infra_types:
+            raise click.UsageError(f"project_id must be one of {temp_valid_infra_types}")
+        
+        # Validate stage_id requirement
+        if not self.stage_id and self.infra_type != 'service-role' and self.infra_type != 'storage':
+            raise click.UsageError(f"stage_id is required for infrastructure type: {self.infra_type}")
+
 
     def generate_stack_name(self, prefix: str = "", project_id: str = "", stage_id: str = "") -> str:
         """
@@ -180,21 +176,6 @@ class ConfigManager:
 
         return stack_name
     
-    def generate_samconfig_path(self, prefix: str, project_id: str) -> Path:
-        """
-        Generate the path for the SAM configuration file.
-
-        Args:
-            prefix: Resource prefix
-            project_id: Project identifier
-
-        Returns:
-            Path object pointing to the SAM configuration file
-        """
-        filename = Path(prefix) / f"{project_id}" / f"samconfig-{prefix}-{project_id}-{self.infra_type}.toml"
-        
-        return self.samconfig_dir / filename
-    
     def read_samconfig(self) -> Optional[Dict]:
         """
         Read and parse a SAM configuration file.
@@ -223,12 +204,15 @@ class ConfigManager:
         Raises:
             Logs errors but doesn't raise exceptions
         """
-        samconfig_path = self.generate_samconfig_path(self.prefix, self.project_id)
+        samconfig_path = self.get_samconfig_file_path()
         
         if samconfig_path.exists():
             try:
                 print()
-                click.echo(Colorize.output_with_value("Using samconfig file:", samconfig_path))
+                # samconfig_path relative to script
+                samconfig_path_relative = samconfig_path.relative_to(os.getcwd())
+                click.echo(Colorize.output_with_value("Using samconfig file:", samconfig_path_relative))
+                Log.info(f"Using samconfig file: {samconfig_path}")
                 print()
 
                 samconfig_data = {'atlantis': {}, 'deployments': {}}
@@ -401,22 +385,19 @@ class ConfigManager:
                 # Parse S3 URL
                 bucket_name = template_path.split('/')[2]
                 key = '/'.join(template_path.split('/')[3:])
-                
-                # Create S3 client using existing profile/credentials
-                s3_client = boto3.client('s3')
-                
+                                
                 # Get object from S3
-                response = s3_client.get_object(Bucket=bucket_name, Key=key)
+                response = self.s3_client.get_object(Bucket=bucket_name, Key=key)
                 content = response['Body'].read()
                 return content, template_path
             else:
                 # Handle local template
-                template_path = self.templates_dir / template_path
+                template_path = self.get_templates_dir() / template_path
                 with open(template_path, "rb") as f:
                     content = f.read()
                 return content, str(template_path)
                 
-        except (ClientError, FileNotFoundError) as e:
+        except (Exception) as e:
             click.echo(Colorize.error(f"Error reading template file {template_path}"))
             Log.error(f"Error reading template file {template_path}: {e}")
             raise
@@ -525,7 +506,7 @@ class ConfigManager:
 
     def discover_local_templates(self) -> List[str]:
         """Discover available templates in the infrastructure type directory"""
-        return [f.name for f in self.templates_dir.glob('*.yml')]
+        return [f.name for f in self.get_templates_dir().glob('*.yml')]
 
     # -------------------------------------------------------------------------
     # - Read and Process samconfig
@@ -571,23 +552,23 @@ class ConfigManager:
         
         # Define the sequence of potential config files
         config_files = [
-            self.settings_dir / "defaults.json",
-            self.settings_dir / f"{self.prefix}-defaults.json"
+            self.get_settings_dir() / "defaults.json",
+            self.get_settings_dir() / f"{self.prefix}-defaults.json"
         ]
         
         # Add project_id specific files only if project_id exists
         if self.project_id:
             config_files.extend([
-                self.settings_dir / f"{self.prefix}-{self.project_id}-defaults.json",
+                self.get_settings_dir() / f"{self.prefix}-{self.project_id}-defaults.json",
             ])
         
         # Add infra_type specific files
-        config_files.append(self.settings_dir / f"{self.infra_type}" / "defaults.json")
-        config_files.append(self.settings_dir / f"{self.infra_type}" / f"{self.prefix}-defaults.json")
+        config_files.append(self.get_settings_dir() / f"{self.infra_type}" / "defaults.json")
+        config_files.append(self.get_settings_dir() / f"{self.infra_type}" / f"{self.prefix}-defaults.json")
         
         # Add project_id specific files in infra_type directory
         config_files.append(
-            self.settings_dir / f"{self.infra_type}" / f"{self.prefix}-{self.project_id}-defaults.json"
+            self.get_settings_dir() / f"{self.infra_type}" / f"{self.prefix}-{self.project_id}-defaults.json"
         )
         
         # Load each config file in sequence if it exists
@@ -975,7 +956,9 @@ class ConfigManager:
 
         # if template_file is not s3 it is local and use the local path
         if not template_file.startswith('s3://'):
-            template_file = f'../../{self.templates_dir}/{template_file}'
+            # Make template_file_path relative to samconfig_file
+            file_path = f'{self.get_templates_dir()}/{self.infra_type}/{template_file}'
+            template_file = os.path.relpath(file_path, self.get_samconfig_dir())
 
         # Generate stack name
         stack_name = self.generate_stack_name(prefix, project_id, stage_id)
@@ -1288,7 +1271,7 @@ class ConfigManager:
                 non_atlantis_deploy_sections[stage_id] = config['deployments'][stage_id]
                         
             # Write the config to samconfig.toml
-            samconfig_path = self.generate_samconfig_path(prefix, project_id)
+            samconfig_path = self.get_samconfig_file_path()
 
             # Create the samconfig directory if it doesn't exist
             os.makedirs(os.path.dirname(samconfig_path), exist_ok=True)
@@ -1335,11 +1318,13 @@ class ConfigManager:
                 
             Log.info(f"Configuration saved to '{samconfig_path}'")
 
+            # samconfig_path relative to script
+            samconfig_path_relative = samconfig_path.relative_to(os.getcwd())
             # get only the directory path from samconfig_path
-            saved_dir = os.path.dirname(samconfig_path)
+            saved_dir = os.path.dirname(samconfig_path_relative)
             
             print()
-            click.echo(Colorize.output_with_value("Configuration saved to", samconfig_path))
+            click.echo(Colorize.output_with_value("Configuration saved to", samconfig_path_relative))
             click.echo(Colorize.output_bold("Open file for 'sam deploy' commands"))
             click.echo(Colorize.output_bold(f"You must be in the {saved_dir} directory to run the command"))
             click.echo(Colorize.output(f"cd {saved_dir}"))
@@ -1564,11 +1549,11 @@ class ConfigManager:
         If user chooses no to region, save a blank file as a sample.
         If prefix-defaults.json doesn't exist, offer to save s3_bucket (and region if not saved to defaults)"""
 
-        defaults_path = self.settings_dir / "defaults.json"
-        prefix_defaults_path = self.settings_dir / f"{self.prefix}-defaults.json"
+        defaults_path = self.get_settings_dir() / "defaults.json"
+        prefix_defaults_path = self.get_settings_dir() / f"{self.prefix}-defaults.json"
         
         # Create settings directory if it doesn't exist
-        os.makedirs(self.settings_dir, exist_ok=True)
+        os.makedirs(self.get_settings_dir(), exist_ok=True)
         
         # Initialize variables to track user choices
         save_region = False
@@ -1684,115 +1669,183 @@ class ConfigManager:
                 click.echo(Colorize.error(f"Error creating {prefix_defaults_path}"))
                 Log.error(f"Error creating {prefix_defaults_path}: {str(e)}")
                 return
+    # -------------------------------------------------------------------------
+    # - File Locations and Names
+    # -------------------------------------------------------------------------
 
+    def get_samconfig_dir(self) -> Path:
+        """Get the samconfig directory path"""
+        # Get the script's directory in a cross-platform way
+        script_dir = Path(__file__).resolve().parent
+        return script_dir.parent / SAMCONFIG_DIR / self.prefix / self.project_id 
+    
+    def get_samconfig_file_name(self) -> str:
+        """Get the samconfig file name"""
+        return f"samconfig-{self.prefix}-{self.project_id}-{self.infra_type}.toml"
+    
+    def get_samconfig_file_path(self) -> Path:
+        """Get the samconfig file path"""
+        return self.get_samconfig_dir() / self.get_samconfig_file_name()
 
+    def get_settings_dir(self) -> Path:
+        """Get the settings directory path"""
+        # Get the script's directory in a cross-platform way
+        script_dir = Path(__file__).resolve().parent
+        return script_dir.parent / SETTINGS_DIR
+        
+    def get_templates_dir(self) -> Path:
+        """Get the settings directory path"""
+        # Get the script's directory in a cross-platform way
+        script_dir = Path(__file__).resolve().parent
+        return script_dir.parent / TEMPLATES_DIR / self.infra_type
+    
 # =============================================================================
 # ----- Main function ---------------------------------------------------------
 # =============================================================================
 
-VALID_INFRA_TYPES = ['service-role', 'pipeline', 'storage', 'network']
+def parse_args() -> argparse.Namespace:
 
-@click.command()
-@click.option('--check-stack', is_flag=True, help='Check existing stack configuration')
-@click.option('--profile', help='AWS profile name')
-@click.argument('infra_type')
-@click.argument('prefix')
-@click.argument('project_id', required=True)
-@click.argument('stage_id', required=False)
-def main(check_stack: bool, profile: str, infra_type: str, prefix: str, 
-        project_id: Optional[str], stage_id: Optional[str]):
-    
-    # log script arguments
-    Log.info(f"{sys.argv}")
+    parser = argparse.ArgumentParser(
+        description='Create, Update, and Manage AWS samconfig for stack deployments',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=(
+            """Supports both AWS SSO and IAM credentials.
+            For SSO users, credentials will be refreshed automatically.
+            For IAM users, please ensure your credentials are valid using 'aws configure'.
 
-    if profile:
-        boto3.setup_default_session(profile_name=profile)
-    
-    # Validate infra_type
-    if infra_type not in VALID_INFRA_TYPES:
-        raise click.UsageError(f"Invalid infra_type. Must be one of {VALID_INFRA_TYPES}")
+            For default parameter settings, add default.json files to the defaults directory.
+            
+            Examples:
+            
+                # Basic
+                config.py <infra_type> <prefix> <project_id> [<stage_id>] 
+                
+                # Use specific AWS profile
+                config.py <infra_type> <prefix> <project_id> [<stage_id>] --profile <yourprofile>
+                 
+                # Check saved configuration against deployed stack
+                config.py <infra_type> <prefix> <project_id> [<stage_id>] --profile <yourprofile> --check-stack            
+            """
+        )
+    )
 
-    # Validate project_id requirement
-    if not project_id:
-        raise click.UsageError("project_id is required")
+    parser.add_argument('infra_type',
+                        type=str,
+                        choices=VALID_INFRA_TYPES,
+                        help="Type of infrastructure (e.g., 'storage', 'pipeline', 'network')")
+    parser.add_argument('prefix',
+                        type=str,
+                        help='The prefix to use for stack names and resources')
+    parser.add_argument('project_id',
+                        type=str,
+                        help='Identifier for the project')
+    parser.add_argument('stage_id',
+                        type=str,
+                        nargs='?',  # Makes it optional
+                        default=None,
+                        help="Deployment stage identifier (e.g. 'test', 'beta', 'stage', 'prod')")
+    parser.add_argument('--profile',
+                        required=False,
+                        default=None,
+                        help='AWS credential profile name')
+    parser.add_argument('--region',
+                        required=False,
+                        default=None,
+                        help='AWS region (e.g. us-east-1)')
+    parser.add_argument('--check-stack',
+                        action='store_true',  # This makes it a flag
+                        default=False,        # Default value when flag is not used
+                        help='Compare saved configuration against deployed stack.')
     
-    # infra_type service-role requires a project id equal to one of VALID_INFRA_TYPES (except 'service-role')
-    # create temp variable to store VALID_INFRA_TYPES without 'service-role'
-    temp_valid_infra_types = VALID_INFRA_TYPES.copy()
-    temp_valid_infra_types.remove('service-role')
-    if infra_type == 'service-role' and project_id not in temp_valid_infra_types:
-        raise click.UsageError(f"project_id must be one of {temp_valid_infra_types}")
-    
-    # Validate stage_id requirement
-    if not stage_id and infra_type != 'service-role' and infra_type != 'storage':
-        raise click.UsageError(f"stage_id is required for infrastructure type: {infra_type}")
-    
-    stage_id = stage_id if stage_id else 'default'
-
-    print()
-    click.echo(Colorize.divider("="))
-    click.echo(Colorize.output_bold(f"Configuration Generator ({VERSION})"))
-    click.echo(Colorize.output_with_value("Infra Type:", infra_type))
-    click.echo(Colorize.divider("="))
-    print()
+    args = parser.parse_args()
         
-    config_manager = ConfigManager(infra_type, prefix, project_id, stage_id, profile = profile)
-    
-    # Read existing configuration
-    local_config = config_manager.read_samconfig()
-    
-    if check_stack:
-        local_config = config_manager.compare_against_stack(local_config)
+    return args
 
-    # Handle template selection and parameter configuration
-    if not local_config:
-        templates = config_manager.discover_local_templates()
-        template_file = config_manager.select_template(templates)
-    else:
-        template_file_from_config = local_config.get('atlantis', {}).get('deploy', {}).get('parameters', {}).get('template_file', '')
-        # if template file starts with s3://, use it as is, else parse
-        if template_file_from_config and template_file_from_config.startswith('s3://'):
-            template_file = template_file_from_config
+def main():
+    
+    try:
+        args = parse_args()
+        Log.info(f"{sys.argv}")
+        Log.info(f"Version: {VERSION}")
+        
+        print()
+        click.echo(Colorize.divider("="))
+        click.echo(Colorize.output_bold(f"Configuration Manager ({VERSION})"))
+        click.echo(Colorize.output_with_value("Infra Type:", args.infra_type))
+        click.echo(Colorize.divider("="))
+        print()
+            
+    
+        try:
+            config_manager = ConfigManager(args.infra_type, args.prefix, 
+                                        args.project_id, args.stage_id, 
+                                        args.profile, args.region, 
+                                        args.check_stack)
+        except TokenRetrievalError as e:
+            ConsoleAndLog.error(f"AWS authentication error: {str(e)}")
+            sys.exit(1)
+        except Exception as e:
+            ConsoleAndLog.error(f"Error initializing configuration manager: {str(e)}")
+            sys.exit(1)
+
+        # Read existing configuration
+        local_config = config_manager.read_samconfig()
+        
+        if args.check_stack:
+            local_config = config_manager.compare_against_stack(local_config)
+
+        # Handle template selection and parameter configuration
+        if not local_config:
+            templates = config_manager.discover_local_templates()
+            template_file = config_manager.select_template(templates)
         else:
-            # Split by / and get the last part
-            template_file = template_file_from_config.split('/')[-1]
+            template_file_from_config = local_config.get('atlantis', {}).get('deploy', {}).get('parameters', {}).get('template_file', '')
+            # if template file starts with s3://, use it as is, else parse
+            if template_file_from_config and template_file_from_config.startswith('s3://'):
+                template_file = template_file_from_config
+            else:
+                # Split by / and get the last part
+                template_file = template_file_from_config.split('/')[-1]
 
-    parameters = config_manager.get_template_parameters(template_file)
-    defaults = config_manager.load_defaults()
+        parameters = config_manager.get_template_parameters(template_file)
+        defaults = config_manager.load_defaults()
 
-    print()
+        print()
 
-    click.echo(Colorize.divider("-", fg=Colorize.INFO))
-    click.echo(Colorize.info("Enter to accept default, ? for help, - to clear, ^ to exit "))
+        click.echo(Colorize.divider("-", fg=Colorize.INFO))
+        click.echo(Colorize.info("Enter to accept default, ? for help, - to clear, ^ to exit "))
 
-    atlantis_deploy_parameter_defaults = defaults.get('atlantis', {})
-    if local_config:
-        atlantis_deploy_parameter_defaults.update(local_config.get('atlantis', {}).get('deploy', {}).get('parameters', {}))
+        atlantis_deploy_parameter_defaults = defaults.get('atlantis', {})
+        if local_config:
+            atlantis_deploy_parameter_defaults.update(local_config.get('atlantis', {}).get('deploy', {}).get('parameters', {}))
 
-    parameter_defaults = config_manager.calculate_stage_defaults(config_manager.stage_id)
-    parameter_defaults.update(defaults.get('parameter_overrides', {}))
-    if local_config:
-        parameter_defaults.update(local_config.get('deployments', {}).get(config_manager.stage_id, {}).get('deploy', {}).get('parameters', {}).get('parameter_overrides', {}))
+        parameter_defaults = config_manager.calculate_stage_defaults(config_manager.stage_id)
+        parameter_defaults.update(defaults.get('parameter_overrides', {}))
+        if local_config:
+            parameter_defaults.update(local_config.get('deployments', {}).get(config_manager.stage_id, {}).get('deploy', {}).get('parameters', {}).get('parameter_overrides', {}))
 
-    tag_defaults = defaults.get('tags', [])
-    if local_config:
-        tag_defaults = config_manager.merge_tags(tag_defaults, local_config.get('deployments', {}).get(config_manager.stage_id, {}).get('deploy', {}).get('parameters', {}).get('tags', []))
+        tag_defaults = defaults.get('tags', [])
+        if local_config:
+            tag_defaults = config_manager.merge_tags(tag_defaults, local_config.get('deployments', {}).get(config_manager.stage_id, {}).get('deploy', {}).get('parameters', {}).get('tags', []))
 
-    # Prompt for parameters
-    parameter_values = config_manager.prompt_for_parameters(parameters, parameter_defaults)
-    
-    # Build the complete config
-    config = config_manager.build_config(infra_type, template_file, atlantis_deploy_parameter_defaults, parameter_values, tag_defaults, local_config)
-    
-    print()
-    click.echo(Colorize.divider())
+        # Prompt for parameters
+        parameter_values = config_manager.prompt_for_parameters(parameters, parameter_defaults)
+        
+        # Build the complete config
+        config = config_manager.build_config(args.infra_type, template_file, atlantis_deploy_parameter_defaults, parameter_values, tag_defaults, local_config)
+        
+        print()
+        click.echo(Colorize.divider())
 
-    # Save the config
-    config_manager.save_config(config)
+        # Save the config
+        config_manager.save_config(config)
 
-    click.echo(Colorize.divider("="))
-    print()
+        click.echo(Colorize.divider("="))
+        print()
 
+    except Exception as e:
+        ConsoleAndLog.error(f"Unexpected error: {str(e)}")
+        sys.exit(1)
 
 if __name__ == '__main__':
     main()

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 VERSION = "v0.1.0/2025-02-22"
-# Developed by Chad Kluck with AI assistance from Amazon Q Developer
+# Created by Chad Kluck with AI assistance from Amazon Q Developer
 
 # =============================================================================
 # Usage:
@@ -31,8 +31,6 @@ if sys.version_info[0] < 3:
     sys.stderr.write("Error: Python 3 is required\n")
     sys.exit(1)
 
-IMPORT_DIR = "local-imports"
-
 # Initialize logger for this script
 ScriptLogger.setup('import')
 
@@ -40,12 +38,14 @@ def format_key_value_pair(key, value):
     """Format key-value pairs with escaped quotes"""
     return f'"{key}"="{value}"'
 
+IMPORT_DIR = "local-imports"
+
 class ConfigImporter:
-    def __init__(self, stack_name: str, region: str, profile: Optional[str] = None) -> None:
+    def __init__(self, stack_name: str, region: Optional[str] = None, profile: Optional[str] = None) -> None:
         self.stack_name = stack_name
         self.region = region
         self.profile = profile
-        self.aws_session = AWSSessionManager(profile)
+        self.aws_session = AWSSessionManager(self.profile, self.region)
         self.cfn_client = self.aws_session.get_client('cloudformation', self.region)
 
     def get_stack_info(self) -> Dict:
@@ -211,16 +211,16 @@ def parse_args() -> argparse.Namespace:
             "Examples:"
             ""
             "    # Import stack acme-blue-test-pipeline"
-            "    import.py --stack-name acme-blue-test-pipeline"
+            "    import.py acme-blue-test-pipeline"
             ""
-            "    # Import acme-blue-test-pipeline from a specific region"
-            "    import.py --stack-name acme-blue-test-pipeline --region us-west-1"
-
+            "    # Import stack acme-blue-test-pipeline from a specific region"
+            "    import.py acme-blue-test-pipeline --region us-west-1"
+            ""
             "    # With different AWS profile"
-            "    import.py --stack-name acme-blue-test-pipeline --region us-west-1 --profile myprofile"
+            "    import.py acme-blue-test-pipeline --region us-west-1 --profile myprofile"
         )
     )
-    parser.add_argument('--stack-name',
+    parser.add_argument('stack-name',
                         required=True,
                         help='Name of the existing CloudFormation stack')
     parser.add_argument('--profile',
@@ -238,6 +238,7 @@ def parse_args() -> argparse.Namespace:
 def main():
     args = parse_args()
     Log.info(f"{sys.argv}")
+    Log.info(f"Version: {VERSION}")
 
     importer = ConfigImporter(args.stack_name, args.region, args.profile)
     

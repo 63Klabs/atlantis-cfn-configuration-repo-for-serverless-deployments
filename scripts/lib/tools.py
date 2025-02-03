@@ -9,14 +9,6 @@ Utility functions for command line tools and formatting.
 Provides consistent formatting, terminal handling, and common string operations.
 """
 
-
-# Install:
-#
-# `sudo pip install click`
-# ---------- OR ----------
-# `sudo apt install python3-tomli python3-click`
-#
-
 import os
 import click
 from typing import Dict, List
