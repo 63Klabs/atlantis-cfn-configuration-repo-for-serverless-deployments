@@ -1,0 +1,14 @@
+{
+	"templates": [
+		{
+			"bucket": "63klabs",
+			"path": "/atlantis/templates/v2/"
+		}
+	],
+	"app_starters": [
+		{
+			"bucket": "63klabs",
+			"path": "/atlantis/app-starters/v2/"
+		}
+	]
+}

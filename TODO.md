@@ -2,7 +2,6 @@
 
 ## Config
 
-- Add file methods just like others
 - Add remote S3 templates
 - Make sure check-stack flag is logged
 
@@ -19,6 +18,10 @@
 - Use interactive prompts and formats
 - Tags
 - Read starter app inventory and pick from menu
+
+## Lib
+
+- Make sure logs are being stored in the right spot
 
 ## Test
 
