@@ -56,6 +56,7 @@ class AWSSessionManager:
                     sts = self.session.client('sts')
                     sts.get_caller_identity()
                     ConsoleAndLog.info("Using existing valid credentials")
+                    print()
                     return
                 except ClientError as e:
                     error_message = str(e)

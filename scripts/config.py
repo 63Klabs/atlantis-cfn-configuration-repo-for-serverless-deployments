@@ -119,6 +119,8 @@ class ConfigManager:
         self.template_hash_id: Optional[str] = None
         self.template_file: Optional[str] = None
 
+        self.settings = self._load_settings()
+
     def _validate_args(self) -> None:
         """Validate arguments"""
 
@@ -138,44 +140,7 @@ class ConfigManager:
             raise click.UsageError(f"stage_id is required for infrastructure type: {self.infra_type}")
 
 
-    def generate_stack_name(self, prefix: str = "", project_id: str = "", stage_id: str = "") -> str:
-        """
-        Generate a standardized CloudFormation stack name.
-
-        Combines prefix, project_id, stage_id, and infra_type to create a consistent
-        stack naming convention. If no parameters are provided, uses instance values.
-
-        Args:
-            prefix (str): Resource prefix (default: instance prefix)
-            project_id (str): Project identifier (default: instance project_id)
-            stage_id (str): Stage identifier (default: instance stage_id)
-
-        Returns:
-            str: Generated stack name following the pattern:
-                 {prefix}-{project_id}-{stage_id}-{infra_type}
-                 Note: project_id and stage_id are optional in the pattern
-        """
-        if not prefix:
-            prefix = self.prefix
-
-        if not project_id:
-            project_id = self.project_id
-
-        if not stage_id:
-            stage_id = self.stage_id
-
-        stack_name = f"{prefix}-"
-
-        if project_id:
-            stack_name += f"{project_id}-"
-        
-        if  stage_id and stage_id != 'default':
-            stack_name += f"{stage_id}-"
-
-        stack_name += f"{self.infra_type}"
-
-        return stack_name
-    
+ 
     def read_samconfig(self) -> Optional[Dict]:
         """
         Read and parse a SAM configuration file.
@@ -246,345 +211,7 @@ class ConfigManager:
                 return None
         return None
 
-    def parse_parameter_overrides(self, parameter_string: str) -> Dict:
-        """
-        Parse parameter overrides from a string into a dictionary.
 
-        Converts a space-separated string of key=value pairs into a dictionary.
-        Handles quoted values and escaping properly.
-
-        Args:
-            parameter_string: Space-separated string of key=value pairs
-
-        Returns:
-            Dictionary of parameter names and values
-
-        Example:
-            Input: 'ParameterKey1=value1 ParameterKey2="value 2"'
-            Output: {'ParameterKey1': 'value1', 'ParameterKey2': 'value 2'}
-        """
- 
-        parameters: Dict[str, str] = {}
-        
-        if not parameter_string:
-            return parameters
-
-        try:
-            # Split the string while preserving quoted values
-            parts = shlex.split(parameter_string)
-            
-            for part in parts:
-                if '=' in part:
-                    key, value = part.split('=', 1)
-                    parameters[key.strip()] = value.strip()
-                else:
-                    Log.warning(f"Skipping invalid parameter format: {part}")
-                    
-        except Exception as e:
-            Log.error(f"Error parsing parameter overrides: {str(e)}")
-            
-        return parameters
-
-    def parse_tags(self, tag_string: str) -> List[Dict[str, str]]:
-        """Convert a string of key-value tag pairs into AWS tag format.
-        
-        Uses shlex to properly handle quoted strings, spaces, and special characters
-        in both keys and values. Supports both single and double quotes.
-        
-        Args:
-            tag_string: A string containing space-separated key=value pairs.
-                    Examples:
-                    - 'atlantis="pipeline" Stage="test"'
-                    - 'Name="My App Server" Environment="Prod 2.0"'
-                    - 'Owner="John Doe" Cost Center="123 456"'
-        
-        Returns:
-            List[Dict[str, str]]: List of AWS format tags.
-            Example: [{'Key': 'atlantis', 'Value': 'pipeline'},
-                    {'Key': 'Stage', 'Value': 'test'}]
-        
-        Raises:
-            ValueError: If tag_string format is invalid, missing required parts,
-                    or contains malformed quotes
-        """
-        if not tag_string:
-            return []
-        
-        tags = []
-        lexer = shlex.shlex(tag_string, posix=True)
-        lexer.whitespace_split = True
-        lexer.commenters = ''
-        lexer.wordchars += '=.-/@'  # Allow these chars in unquoted strings
-        
-        try:
-            # Convert iterator to list to handle pairs
-            tokens = list(lexer)
-            
-            # Process tokens in pairs
-            for i in range(0, len(tokens), 1):
-                if not tokens[i]:
-                    continue
-                    
-                # Split on first = only
-                try:
-                    key, value = tokens[i].split('=', 1)
-                except ValueError:
-                    raise ValueError(
-                        f"Invalid tag format. Each tag must be in 'key=value' format: {tokens[i]}"
-                    )
-                
-                # Remove any remaining quotes
-                key = key.strip().strip('"\'')
-                value = value.strip().strip('"\'')
-                
-                if not key or not value:
-                    raise ValueError(
-                        f"Empty key or value not allowed: {tokens[i]}"
-                    )
-                
-                tags.append({
-                    'Key': key,
-                    'Value': value
-                })
-                
-        except ValueError as e:
-            raise ValueError(f"Error parsing tags: {str(e)}")
-        except shlex.Error as e:
-            raise ValueError(f"Error parsing quoted strings: {str(e)}")
-            
-        return tags
-
-    def stringify_parameter_overrides(self, parameter_overrides_as_dict: Dict) -> str:
-        """Convert parameter overrides from dictionary to string"""
-
-        parameter_overrides_as_string = " ".join([
-            f'"{key}"="{value}"' for key, value in parameter_overrides_as_dict.items()
-        ])
-        
-        return parameter_overrides_as_string
-
-    # -------------------------------------------------------------------------
-    # - Read and Process Templates
-    # -------------------------------------------------------------------------
-
-    def read_template_file(self, template_path: str) -> tuple[bytes, str]:
-        """
-        Read template file content from either S3 or local filesystem.
-        
-        Args:
-            template_path (str): Path to template (s3:// or local path)
-            
-        Returns:
-            tuple: (file_content as bytes, template_source_path as string)
-        
-        Raises:
-            Exception: If template cannot be read
-        """
-        try:
-            if template_path.startswith('s3://'):
-                # Parse S3 URL
-                bucket_name = template_path.split('/')[2]
-                key = '/'.join(template_path.split('/')[3:])
-                                
-                # Get object from S3
-                response = self.s3_client.get_object(Bucket=bucket_name, Key=key)
-                content = response['Body'].read()
-                return content, template_path
-            else:
-                # Handle local template
-                template_path = self.get_templates_dir() / template_path
-                with open(template_path, "rb") as f:
-                    content = f.read()
-                return content, str(template_path)
-                
-        except (Exception) as e:
-            click.echo(Colorize.error(f"Error reading template file {template_path}"))
-            Log.error(f"Error reading template file {template_path}: {e}")
-            raise
-            
-    def process_template_content(self, content: bytes, template_path: str) -> None:
-        """
-        Process template content to extract version and calculate hash.
-        
-        Args:
-            content (bytes): Template file content
-            template_path (str): Original template path for logging
-        """
-
-        try:
-            # Calculate template hash
-            sha256_hash = hashlib.sha256()
-            sha256_hash.update(content)
-            full_hash = sha256_hash.hexdigest()
-            self.template_hash = full_hash
-            self.template_hash_id = full_hash[-6:]
-            
-            # Extract version from content
-            content_str = content.decode('utf-8')
-            for line in content_str.splitlines():
-                if line.startswith('# Version:'):
-                    self.template_version = line.split(':', 1)[1].strip()
-                    break
-            else:
-                self.template_version = 'No version found'
-            
-            # Log template info
-            print()
-            click.echo(Colorize.output_with_value("Using template file:", template_path))
-            click.echo(Colorize.output_with_value("Template version:", self.template_version))
-            click.echo(Colorize.output_with_value("Template hash:", full_hash))
-            click.echo(Colorize.output_with_value("Template hash ID:", self.template_hash_id))
-            print()
-        except(Exception) as e:
-            Log.error(f"Error processing template content: {e}")
-            click.echo(Colorize.error("Error processing template content. Check logs for more info."))
-            raise
-
-    def extract_parameters(self, content: bytes) -> Dict:
-        """
-        Extract parameters section from template content.
-        
-        Args:
-            content (bytes): Template file content
-            
-        Returns:
-            Dict: Parameters section from template
-        """
-        try:
-            content_str = content.decode('utf-8')
-            parameters_section = ""
-            in_parameters = False
-            
-            for line in content_str.splitlines():
-                if line.startswith('Parameters:'):
-                    in_parameters = True
-                    parameters_section = line
-                elif in_parameters:
-                    # Check if we've moved to a new top-level section
-                    if line.strip() and not line.startswith(' ') and line.strip().endswith(':'):
-                        break
-                    parameters_section += '\n' + line
-            
-            # Parse just the Parameters section
-            if parameters_section:
-                yaml_content = yaml.safe_load(parameters_section)
-                return yaml_content.get('Parameters', {})
-            return {}
-            
-        except Exception as e:
-            Log.error(f"Error parsing parameters section: {e}")
-            click.echo(Colorize.error("Error parsing parameters section. Check logs for more info."))
-            return {}
-
-    def get_template_parameters(self, template_path: str) -> Dict:
-        """
-        Get parameters from CloudFormation template.
-        
-        Args:
-            template_path (str): Path to template (s3:// or local path)
-            
-        Returns:
-            Dict: Template parameters
-        """
-        self.template_file = str(template_path)
-        Log.info(f"Using template file: '{self.template_file}'")
-
-        try:
-            # Read template content
-            content, actual_path = self.read_template_file(template_path)
-            
-            # Process template metadata (version, hash etc)
-            self.process_template_content(content, actual_path)
-            
-            # Extract and return parameters
-            return self.extract_parameters(content)
-            
-        except Exception as e:
-            Log.error(f"Error processing template file {template_path}: {e}")
-            click.echo(Colorize.error("Error processing template file. Check logs for more info."))
-            return {}
-
-    def discover_local_templates(self) -> List[str]:
-        """Discover available templates in the infrastructure type directory"""
-        return [f.name for f in self.get_templates_dir().glob('*.yml')]
-
-    # -------------------------------------------------------------------------
-    # - Read and Process samconfig
-    # -------------------------------------------------------------------------
-
-
-
-    # -------------------------------------------------------------------------
-    # - Internal Utilities
-    # -------------------------------------------------------------------------
-
-    def deep_update(self, original: Dict, update: Dict) -> Dict:
-        """
-        Recursively update a dictionary with another dictionary's values.
-        Lists are replaced entirely rather than merged.
-        """
-        for key, value in update.items():
-            if key in original and isinstance(original[key], dict) and isinstance(value, dict):
-                self.deep_update(original[key], value)
-            elif key in original and isinstance(original[key], list) and isinstance(value, list):
-                original[key] = self.merge_tags(original[key], value)
-            else:
-                original[key] = value
-
-        return original
-
-    # -------------------------------------------------------------------------
-    # - 
-    # -------------------------------------------------------------------------
-
-    def load_defaults(self) -> Dict:
-        """Load and merge configuration files in sequence
-        
-        Order:
-        1. defaults.json
-        2. {prefix}-defaults.json
-        3. {prefix}-{project_id}-defaults.json
-        4. {infra_type}/defaults.json
-        5. {infra_type}/{prefix}-defaults.json
-        6. {infra_type}/{prefix}-{project_id}-defaults.json
-        """
-        defaults = {}
-        
-        # Define the sequence of potential config files
-        config_files = [
-            self.get_settings_dir() / "defaults.json",
-            self.get_settings_dir() / f"{self.prefix}-defaults.json"
-        ]
-        
-        # Add project_id specific files only if project_id exists
-        if self.project_id:
-            config_files.extend([
-                self.get_settings_dir() / f"{self.prefix}-{self.project_id}-defaults.json",
-            ])
-        
-        # Add infra_type specific files
-        config_files.append(self.get_settings_dir() / f"{self.infra_type}" / "defaults.json")
-        config_files.append(self.get_settings_dir() / f"{self.infra_type}" / f"{self.prefix}-defaults.json")
-        
-        # Add project_id specific files in infra_type directory
-        config_files.append(
-            self.get_settings_dir() / f"{self.infra_type}" / f"{self.prefix}-{self.project_id}-defaults.json"
-        )
-        
-        # Load each config file in sequence if it exists
-        for config_file in config_files:
-            try:
-                if config_file.exists():
-                    with open(config_file) as f:
-                        # Deep update defaults with new values
-                        new_config = json.load(f)
-                        self.deep_update(defaults, new_config)
-                        Log.info(f"Loaded config from '{config_file}'")
-            except json.JSONDecodeError as e:
-                Log.error(f"Error parsing JSON from {config_file}: {e}")
-            except Exception as e:
-                Log.error(f"Error loading config file {config_file}: {e}")
-        return defaults
 
     def prompt_for_parameters(self, parameters: Dict, defaults: Dict) -> Dict:
         """Prompt user for parameter values"""
@@ -735,45 +362,6 @@ class ConfigManager:
 
         return defaults                  
 
-    def select_template(self, templates: List[str]) -> str:
-        """Display numbered list of templates and let user select by number"""
-        if not templates:
-            Log.error("No templates found")
-            click.echo(Colorize.error("No templates found"))
-            sys.exit(1)
-        
-        # Sort templates for consistent ordering
-        templates.sort()
-        
-        # Display numbered list
-        click.echo(Colorize.question("Available templates:"))
-        for idx, template in enumerate(templates, 1):
-            click.echo(Colorize.option(f"{idx}. {template}"))
-        
-        print()
-
-        while True:
-            try:
-                default = ''
-                # if only one template, make it the default
-                if len(templates) == 1:
-                    default = 1
-
-                choice = Colorize.prompt("Enter template number", default, str)
-                # Check if input is a number
-                template_idx = int(choice) - 1
-                
-                # Validate the index is within range
-                if 0 <= template_idx < len(templates):
-                    return templates[template_idx]
-                else:
-                    click.echo(Colorize.error(f"Please enter a number between 1 and {len(templates)}"))
-            except ValueError:
-                click.echo(Colorize.error("Please enter a valid number"))
-            except KeyboardInterrupt:
-                click.echo(Colorize.info("Template selection cancelled"))
-                sys.exit(1)
-
     def gather_atlantis_deploy_parameters(self, infra_type: str, atlantis_deploy_parameter_defaults: Dict) -> Dict:
         """Gather atlantis deployment parameters with validation"""
         print()
@@ -852,27 +440,7 @@ class ConfigManager:
             return True
 
         def validate_region(region):
-            valid_regions = {
-                # https://awsregion.info/
-                # United States
-                'us-east-1', 'us-east-2', 'us-west-1', 'us-west-2',
-                # Canada
-                'ca-central-1', 'ca-west-1'
-                # Mexico
-                'mx-central-1',
-                # South America
-                'sa-east-1',
-                # Asia Pacific
-                'ap-south-1', 'ap-east-1', 'ap-northeast-1', 'ap-northeast-2', 'ap-northeast-3', 'ap-southeast-1', 'ap-southeast-2', 'ap-southeast-3',
-                # Middle East
-                'me-south-1', 'me-central-1',
-                # Israel
-                'il-central-1'
-                # South Africa
-                'af-south-1',
-                # Europe
-                'eu-north-1', 'eu-south-1', 'eu-south-2', 'eu-west-1', 'eu-west-2', 'eu-west-3', 'eu-central-1', 'eu-central-2'
-            }
+            valid_regions = self.settings.get('regions', ['us-east-1'])
             return region in valid_regions
 
         def validate_role_arn(arn):
@@ -961,7 +529,7 @@ class ConfigManager:
             template_file = os.path.relpath(file_path, self.get_samconfig_dir())
 
         # Generate stack name
-        stack_name = self.generate_stack_name(prefix, project_id, stage_id)
+        stack_name = self.get_stack_name()
 
         # Generate automated tags
         tags = self.generate_tags(parameter_values, tag_defaults)
@@ -1117,121 +685,6 @@ class ConfigManager:
         
         return {"reason": "Valid", "valid": True}
 
-    def generate_automated_tags(self, parameters: Dict) -> List[Dict]:
-        """Generate automated tags for the deployment"""
-        tags = [
-            {
-                "Key": "Atlantis",
-                "Value": f"{self.infra_type}-infrastructure"
-            },
-            {
-                "Key": "atlantis:Prefix",
-                "Value": parameters.get('Prefix')
-            },
-            {
-                "Key": "Provisioner",
-                "Value": "CloudFormation"
-            },
-            {
-                "Key": "DeployedUsing",
-                "Value": "AWS SAM CLI"
-            },
-            {
-                "Key": "atlantis:TemplateVersion",
-                "Value": f"{self.template_version} {self.template_hash_id}"              
-            },
-            {
-                "Key": "atlantis:TemplateFile",
-                "Value": self.template_file
-            }
-        ]
-
-        # Add ProjectId if defined
-        if parameters.get('ProjectId'):
-            tags.append({
-                "Key": "atlantis:Application",
-                "Value": f"{parameters['Prefix']}-{parameters['ProjectId']}"
-            })
-            tags.append({
-                "Key": "Name",
-                "Value": f"{parameters['Prefix']}-{parameters['ProjectId']}"
-            })
-
-        # Add StageId if defined
-        if parameters.get('StageId'):
-            tags.append({
-                "Key": "atlantis:ApplicationDeploymentId",
-                "Value": f"{parameters['Prefix']}-{parameters['ProjectId']}-{parameters['StageId']}"
-            })
-            tags.append({
-                "Key": "Stage",
-                "Value": parameters['StageId']
-            })
-
-        # Add Environment if defined
-        if parameters.get('DeployEnvironment'):
-            tags.append({
-                "Key": "Environment",
-                "Value": parameters['DeployEnvironment']
-            })
-
-        # Add AlarmNotificationEmail if defined
-        if parameters.get('AlarmNotificationEmail'):
-            tags.append({
-                "Key": "AlarmNotificationEmail",
-                "Value": parameters['AlarmNotificationEmail']
-            })
-
-        # Add CodeCommitRepository if defined
-        if parameters.get('Repository'):
-            tags.append({
-                "Key": "CodeCommitRepository",
-                "Value": parameters['CodeCommitRepository']
-            })
-
-        # Add CodeCommitBranch if defined
-        if parameters.get('RepositoryBranch'):
-            tags.append({
-                "Key": "CodeCommitBranch",
-                "Value": parameters['CodeCommitBranch']
-            })
-
-        return tags
-
-    def generate_tags(self, parameters: Dict, custom_tags: List[Dict]) -> List[Dict]:
-        """Generate tags for the deployment"""
-        # Generate automated tags
-        automated_tags = self.generate_automated_tags(parameters)
-
-        return self.merge_tags(automated_tags, custom_tags)
-    
-    def merge_tags(self, original_tags: List[Dict], new_tags: List[Dict]) -> List[Dict]:
-        """
-        Merge automated and custom tags with custom tags taking precedence unless the tag
-        key starts with 'atlantis:' or 'Atlantis'
-        """
-        # Convert automated tags to a dictionary for easier lookup
-        tag_dict = {
-            tag['Key']: tag['Value'] 
-            for tag in original_tags
-        }
-        
-        # Process custom tags
-        for new_tag in new_tags:
-            key = new_tag['Key']
-            # Only allow new tags to override if they don't start with atlantis: or Atlantis
-            if key in tag_dict and not (key.startswith('atlantis:') or key.startswith('Atlantis')):
-                tag_dict[key] = new_tag['Value']
-            elif key not in tag_dict:  # Add new custom tags
-                tag_dict[key] = new_tag['Value']
-        
-        # Convert back to list of dictionaries
-        return [{'Key': k, 'Value': v} for k, v in tag_dict.items()]
-    
-    def stringify_tags(self, tags: List[Dict]) -> str:
-        """Convert tags to a string"""
-        return ' '.join([f'"{tag['Key']}"="{tag['Value']}"' for tag in tags])
-    
     def save_config(self, config: Dict) -> None:
         """Save configuration to samconfig.toml file"""
 
@@ -1665,10 +1118,640 @@ class ConfigManager:
                 click.echo(Colorize.error(f"Error creating {prefix_defaults_path}"))
                 Log.error(f"Error creating {prefix_defaults_path}: {str(e)}")
                 return
+            
     # -------------------------------------------------------------------------
-    # - File Locations and Names
+    # - Parse, Stringify, and Process Parameter Overrides and Tags
     # -------------------------------------------------------------------------
 
+    def generate_automated_tags(self, parameters: Dict) -> List[Dict]:
+        """Generate automated tags for the deployment"""
+        tags = [
+            {
+                "Key": "Atlantis",
+                "Value": f"{self.infra_type}-infrastructure"
+            },
+            {
+                "Key": "atlantis:Prefix",
+                "Value": parameters.get('Prefix')
+            },
+            {
+                "Key": "Provisioner",
+                "Value": "CloudFormation"
+            },
+            {
+                "Key": "DeployedUsing",
+                "Value": "AWS SAM CLI"
+            },
+            {
+                "Key": "atlantis:TemplateVersion",
+                "Value": f"{self.template_version} {self.template_hash_id}"              
+            },
+            {
+                "Key": "atlantis:TemplateFile",
+                "Value": self.template_file
+            }
+        ]
+
+        # Add ProjectId if defined
+        if parameters.get('ProjectId'):
+            tags.append({
+                "Key": "atlantis:Application",
+                "Value": f"{parameters['Prefix']}-{parameters['ProjectId']}"
+            })
+            tags.append({
+                "Key": "Name",
+                "Value": f"{parameters['Prefix']}-{parameters['ProjectId']}"
+            })
+
+        # Add StageId if defined
+        if parameters.get('StageId'):
+            tags.append({
+                "Key": "atlantis:ApplicationDeploymentId",
+                "Value": f"{parameters['Prefix']}-{parameters['ProjectId']}-{parameters['StageId']}"
+            })
+            tags.append({
+                "Key": "Stage",
+                "Value": parameters['StageId']
+            })
+
+        # Add Environment if defined
+        if parameters.get('DeployEnvironment'):
+            tags.append({
+                "Key": "Environment",
+                "Value": parameters['DeployEnvironment']
+            })
+
+        # Add AlarmNotificationEmail if defined
+        if parameters.get('AlarmNotificationEmail'):
+            tags.append({
+                "Key": "AlarmNotificationEmail",
+                "Value": parameters['AlarmNotificationEmail']
+            })
+
+        # Add CodeCommitRepository if defined
+        if parameters.get('Repository'):
+            tags.append({
+                "Key": "CodeCommitRepository",
+                "Value": parameters['CodeCommitRepository']
+            })
+
+        # Add CodeCommitBranch if defined
+        if parameters.get('RepositoryBranch'):
+            tags.append({
+                "Key": "CodeCommitBranch",
+                "Value": parameters['CodeCommitBranch']
+            })
+
+        return tags
+
+    def generate_tags(self, parameters: Dict, custom_tags: List[Dict]) -> List[Dict]:
+        """Generate tags for the deployment"""
+        # Generate automated tags
+        automated_tags = self.generate_automated_tags(parameters)
+
+        return self.merge_tags(automated_tags, custom_tags)
+    
+    def merge_tags(self, original_tags: List[Dict], new_tags: List[Dict]) -> List[Dict]:
+        """
+        Merge automated and custom tags with custom tags taking precedence unless the tag
+        key starts with 'atlantis:' or 'Atlantis'
+        """
+        # Convert automated tags to a dictionary for easier lookup
+        tag_dict = {
+            tag['Key']: tag['Value'] 
+            for tag in original_tags
+        }
+        
+        # Process custom tags
+        for new_tag in new_tags:
+            key = new_tag['Key']
+            # Only allow new tags to override if they don't start with atlantis: or Atlantis
+            if key in tag_dict and not (key.startswith('atlantis:') or key.startswith('Atlantis')):
+                tag_dict[key] = new_tag['Value']
+            elif key not in tag_dict:  # Add new custom tags
+                tag_dict[key] = new_tag['Value']
+        
+        # Convert back to list of dictionaries
+        return [{'Key': k, 'Value': v} for k, v in tag_dict.items()]
+    
+    def stringify_tags(self, tags: List[Dict]) -> str:
+        """Convert tags to a string"""
+        return ' '.join([f'"{tag['Key']}"="{tag['Value']}"' for tag in tags])
+    
+    def parse_parameter_overrides(self, parameter_string: str) -> Dict:
+        """
+        Parse parameter overrides from a string into a dictionary.
+
+        Converts a space-separated string of key=value pairs into a dictionary.
+        Handles quoted values and escaping properly.
+
+        Args:
+            parameter_string: Space-separated string of key=value pairs
+
+        Returns:
+            Dictionary of parameter names and values
+
+        Example:
+            Input: 'ParameterKey1=value1 ParameterKey2="value 2"'
+            Output: {'ParameterKey1': 'value1', 'ParameterKey2': 'value 2'}
+        """
+ 
+        parameters: Dict[str, str] = {}
+        
+        if not parameter_string:
+            return parameters
+
+        try:
+            # Split the string while preserving quoted values
+            parts = shlex.split(parameter_string)
+            
+            for part in parts:
+                if '=' in part:
+                    key, value = part.split('=', 1)
+                    parameters[key.strip()] = value.strip()
+                else:
+                    Log.warning(f"Skipping invalid parameter format: {part}")
+                    
+        except Exception as e:
+            Log.error(f"Error parsing parameter overrides: {str(e)}")
+            
+        return parameters
+
+    def parse_tags(self, tag_string: str) -> List[Dict[str, str]]:
+        """Convert a string of key-value tag pairs into AWS tag format.
+        
+        Uses shlex to properly handle quoted strings, spaces, and special characters
+        in both keys and values. Supports both single and double quotes.
+        
+        Args:
+            tag_string: A string containing space-separated key=value pairs.
+                    Examples:
+                    - 'atlantis="pipeline" Stage="test"'
+                    - 'Name="My App Server" Environment="Prod 2.0"'
+                    - 'Owner="John Doe" Cost Center="123 456"'
+        
+        Returns:
+            List[Dict[str, str]]: List of AWS format tags.
+            Example: [{'Key': 'atlantis', 'Value': 'pipeline'},
+                    {'Key': 'Stage', 'Value': 'test'}]
+        
+        Raises:
+            ValueError: If tag_string format is invalid, missing required parts,
+                    or contains malformed quotes
+        """
+        if not tag_string:
+            return []
+        
+        tags = []
+        lexer = shlex.shlex(tag_string, posix=True)
+        lexer.whitespace_split = True
+        lexer.commenters = ''
+        lexer.wordchars += '=.-/@'  # Allow these chars in unquoted strings
+        
+        try:
+            # Convert iterator to list to handle pairs
+            tokens = list(lexer)
+            
+            # Process tokens in pairs
+            for i in range(0, len(tokens), 1):
+                if not tokens[i]:
+                    continue
+                    
+                # Split on first = only
+                try:
+                    key, value = tokens[i].split('=', 1)
+                except ValueError:
+                    raise ValueError(
+                        f"Invalid tag format. Each tag must be in 'key=value' format: {tokens[i]}"
+                    )
+                
+                # Remove any remaining quotes
+                key = key.strip().strip('"\'')
+                value = value.strip().strip('"\'')
+                
+                if not key or not value:
+                    raise ValueError(
+                        f"Empty key or value not allowed: {tokens[i]}"
+                    )
+                
+                tags.append({
+                    'Key': key,
+                    'Value': value
+                })
+                
+        except ValueError as e:
+            raise ValueError(f"Error parsing tags: {str(e)}")
+        except shlex.Error as e:
+            raise ValueError(f"Error parsing quoted strings: {str(e)}")
+            
+        return tags
+
+    def stringify_parameter_overrides(self, parameter_overrides_as_dict: Dict) -> str:
+        """Convert parameter overrides from dictionary to string"""
+
+        parameter_overrides_as_string = " ".join([
+            f'"{key}"="{value}"' for key, value in parameter_overrides_as_dict.items()
+        ])
+        
+        return parameter_overrides_as_string
+
+    # -------------------------------------------------------------------------
+    # - Read and Process Templates
+    # -------------------------------------------------------------------------
+
+    def read_template_file(self, template_path: str) -> tuple[bytes, str]:
+        """
+        Read template file content from either S3 or local filesystem.
+        
+        Args:
+            template_path (str): Path to template (s3:// or local path)
+            
+        Returns:
+            tuple: (file_content as bytes, template_source_path as string)
+        
+        Raises:
+            Exception: If template cannot be read
+        """
+        try:
+            if template_path.startswith('s3://'):
+                # Parse S3 URL
+                bucket_name = template_path.split('/')[2]
+                
+                # Split the key and potential version ID
+                remaining_path = '/'.join(template_path.split('/')[3:])
+                if '?' in remaining_path:
+                    key, query_string = remaining_path.split('?', 1)
+                    if query_string.startswith('versionId='):
+                        version_id = query_string.replace('versionId=', '')
+                        # Get object with specific version
+                        response = self.s3_client.get_object(
+                            Bucket=bucket_name,
+                            Key=key,
+                            VersionId=version_id
+                        )
+                else:
+                    key = remaining_path
+                    # Get latest version of object
+                    response = self.s3_client.get_object(
+                        Bucket=bucket_name,
+                        Key=key
+                    )
+                
+                content = response['Body'].read()
+                return content, template_path
+
+            else:
+                # Handle local template
+                template_path = self.get_templates_dir() / template_path
+                with open(template_path, "rb") as f:
+                    content = f.read()
+                return content, str(template_path)
+                
+        except (Exception) as e:
+            click.echo(Colorize.error(f"Error reading template file {template_path}"))
+            Log.error(f"Error reading template file {template_path}: {e}")
+            raise
+            
+    def process_template_content(self, content: bytes, template_path: str) -> None:
+        """
+        Process template content to extract version and calculate hash.
+        
+        Args:
+            content (bytes): Template file content
+            template_path (str): Original template path for logging
+        """
+
+        try:
+            # Calculate template hash
+            sha256_hash = hashlib.sha256()
+            sha256_hash.update(content)
+            full_hash = sha256_hash.hexdigest()
+            self.template_hash = full_hash
+            self.template_hash_id = full_hash[-6:]
+            
+            # Extract version from content
+            content_str = content.decode('utf-8')
+            for line in content_str.splitlines():
+                if line.startswith('# Version:'):
+                    self.template_version = line.split(':', 1)[1].strip()
+                    break
+            else:
+                self.template_version = 'No version found'
+            
+            # Log template info
+            print()
+            click.echo(Colorize.output_with_value("Using template file:", template_path))
+            click.echo(Colorize.output_with_value("Template version:", self.template_version))
+            click.echo(Colorize.output_with_value("Template hash:", full_hash))
+            click.echo(Colorize.output_with_value("Template hash ID:", self.template_hash_id))
+            print()
+        except(Exception) as e:
+            Log.error(f"Error processing template content: {e}")
+            click.echo(Colorize.error("Error processing template content. Check logs for more info."))
+            raise
+
+    def extract_parameters(self, content: bytes) -> Dict:
+        """
+        Extract parameters section from template content.
+        
+        Args:
+            content (bytes): Template file content
+            
+        Returns:
+            Dict: Parameters section from template
+        """
+        try:
+            content_str = content.decode('utf-8')
+            parameters_section = ""
+            in_parameters = False
+            
+            for line in content_str.splitlines():
+                if line.startswith('Parameters:'):
+                    in_parameters = True
+                    parameters_section = line
+                elif in_parameters:
+                    # Check if we've moved to a new top-level section
+                    if line.strip() and not line.startswith(' ') and line.strip().endswith(':'):
+                        break
+                    parameters_section += '\n' + line
+            
+            # Parse just the Parameters section
+            if parameters_section:
+                yaml_content = yaml.safe_load(parameters_section)
+                return yaml_content.get('Parameters', {})
+            return {}
+            
+        except Exception as e:
+            Log.error(f"Error parsing parameters section: {e}")
+            click.echo(Colorize.error("Error parsing parameters section. Check logs for more info."))
+            return {}
+
+    def get_template_parameters(self, template_path: str) -> Dict:
+        """
+        Get parameters from CloudFormation template.
+        
+        Args:
+            template_path (str): Path to template (s3:// or local path)
+            
+        Returns:
+            Dict: Template parameters
+        """
+        self.template_file = str(template_path)
+        Log.info(f"Using template file: '{self.template_file}'")
+
+        try:
+            # Read template content
+            content, actual_path = self.read_template_file(template_path)
+            
+            # Process template metadata (version, hash etc)
+            self.process_template_content(content, actual_path)
+            
+            # Extract and return parameters
+            return self.extract_parameters(content)
+            
+        except Exception as e:
+            Log.error(f"Error processing template file {template_path}: {e}")
+            click.echo(Colorize.error("Error processing template file. Check logs for more info."))
+            return {}
+
+
+    # -------------------------------------------------------------------------
+    # - Read and Process samconfig
+    # -------------------------------------------------------------------------
+
+
+
+
+    # -------------------------------------------------------------------------
+    # - Load Settings and Defaults
+    # -------------------------------------------------------------------------
+
+    def _load_settings(self) -> Dict:
+        """Load settings.json
+        
+        Returns:
+            Dict: Settings dictionary from the JSON file or empty dict if file doesn't exist
+            
+        Raises:
+            JSONDecodeError: If the settings file contains invalid JSON
+            PermissionError: If the settings file cannot be accessed due to permissions
+        """
+        settings_file = self.get_settings_dir() / "settings.json"
+        
+        try:
+            if settings_file.exists():
+                with open(settings_file) as f:
+                    try:
+                        settings = json.load(f)
+                        if not isinstance(settings, dict):
+                            raise ValueError("Settings must be a JSON object")
+                        return settings
+                    except json.JSONDecodeError as e:
+                        raise json.JSONDecodeError(
+                            f"Invalid JSON in settings file: {str(e)}", 
+                            e.doc, 
+                            e.pos
+                        )
+            else:
+                return {}
+                
+        except PermissionError:
+            raise PermissionError(f"Unable to access settings file: {settings_file}")
+        except Exception as e:
+            raise RuntimeError(f"Unexpected error loading settings: {str(e)}")
+
+
+    def load_defaults(self) -> Dict:
+        """Load and merge configuration files in sequence
+        
+        Order:
+        1. defaults.json
+        2. {prefix}-defaults.json
+        3. {prefix}-{project_id}-defaults.json
+        4. {infra_type}/defaults.json
+        5. {infra_type}/{prefix}-defaults.json
+        6. {infra_type}/{prefix}-{project_id}-defaults.json
+        """
+        defaults = {}
+        
+        # Define the sequence of potential config files
+        config_files = [
+            self.get_settings_dir() / "defaults.json",
+            self.get_settings_dir() / f"{self.prefix}-defaults.json"
+        ]
+        
+        # Add project_id specific files only if project_id exists
+        if self.project_id:
+            config_files.extend([
+                self.get_settings_dir() / f"{self.prefix}-{self.project_id}-defaults.json",
+            ])
+        
+        # Add infra_type specific files
+        config_files.append(self.get_settings_dir() / f"{self.infra_type}" / "defaults.json")
+        config_files.append(self.get_settings_dir() / f"{self.infra_type}" / f"{self.prefix}-defaults.json")
+        
+        # Add project_id specific files in infra_type directory
+        config_files.append(
+            self.get_settings_dir() / f"{self.infra_type}" / f"{self.prefix}-{self.project_id}-defaults.json"
+        )
+        
+        # Load each config file in sequence if it exists
+        for config_file in config_files:
+            try:
+                if config_file.exists():
+                    with open(config_file) as f:
+                        # Deep update defaults with new values
+                        new_config = json.load(f)
+                        self._deep_update(defaults, new_config)
+                        Log.info(f"Loaded config from '{config_file}'")
+            except json.JSONDecodeError as e:
+                Log.error(f"Error parsing JSON from {config_file}: {e}")
+            except Exception as e:
+                Log.error(f"Error loading config file {config_file}: {e}")
+        return defaults
+    
+    # -------------------------------------------------------------------------
+    # - Template Selection
+    # -------------------------------------------------------------------------
+
+    def select_from_templates(self, templates: List[str]) -> str:
+        """Select a template from a numbered list
+        
+        Args:
+            templates (List[str]): List of template paths (local and s3://)
+            
+        Returns:
+            str: Selected template, with version ID for S3 paths
+        """
+
+        if not templates:
+            Log.error("No templates found")
+            click.echo(Colorize.error("No templates found"))
+            sys.exit(1)
+        
+        # Sort templates for consistent ordering
+        templates.sort()
+        
+        # Display numbered list
+        click.echo(Colorize.question("Available templates:"))
+        for idx, template in enumerate(templates, 1):
+            click.echo(Colorize.option(f"{idx}. {template}"))
+        
+        print()
+
+        while True:
+            try:
+                default = ''
+                # if only one template, make it the default
+                if len(templates) == 1:
+                    default = 1
+
+                choice = Colorize.prompt("Enter template number", default, str)
+                # Check if input is a number
+                template_idx = int(choice) - 1
+                
+                # Validate the index is within range
+                if 0 <= template_idx < len(templates):
+                    selected = templates[template_idx]
+                    
+                    # Check if this is an S3 path
+                    if selected.startswith('s3://'):
+                        selected = self._get_latest_version_id(selected)
+                            
+                    return selected
+                else:
+                    click.echo(Colorize.error(f"Please enter a number between 1 and {len(templates)}"))
+            except ValueError:
+                click.echo(Colorize.error("Please enter a valid number"))
+            except KeyboardInterrupt:
+                click.echo(Colorize.info("Template selection cancelled"))
+                sys.exit(1)
+
+    def discover_local_templates(self) -> List[str]:
+        """Discover available templates in the infrastructure type directory"""
+        Log.info(f"Discovering templates from local directory: {self.get_templates_dir()}")
+        return [f.name for f in self.get_templates_dir().glob('*.yml')]
+
+    def discover_s3_templates(self) -> List[str]:
+        """Discover available templates in the infrastructure type directory"""
+        templates = []
+        # loop through self.settings.get('templates', []), access the bucket, and append to templates
+        for s3_template_location in self.settings.get('templates', []):
+            try:
+                bucket = s3_template_location['bucket']
+                prefix = s3_template_location['prefix'].strip('/')
+                Log.info(f"Discovering templates from s3://{bucket}/{prefix}/{self.infra_type}")
+                response = self.s3_client.list_objects_v2(Bucket=bucket, Prefix=f"{prefix}/{self.infra_type}")
+                for obj in response.get('Contents', []):
+                    if obj['Key'].endswith('.yml') or obj['Key'].endswith('.yaml'):
+                        Log.info(f"Found template: {obj}")
+                        s3_uri = f"s3://{bucket}/{obj['Key']}"
+                        templates.append(s3_uri)
+            except Exception as e:
+                Log.error(f"Error discovering templates from S3: {e}")
+                click.echo(Colorize.error("Error discovering templates from S3. Check logs for more info."))
+                raise
+
+        return templates
+
+    def _get_latest_version_id(self, s3_uri: str) -> str:
+        """Get the latest version ID for an S3 object
+        
+        Args:
+            bucket (str): S3 bucket name
+            key (str): S3 object key
+            
+        Returns:
+            str: Version ID of the latest version, or empty string if versioning not enabled
+        """
+        try:
+            # Parse bucket and key from s3:// URI
+            bucket = s3_uri.split('/')[2]
+            key = '/'.join(s3_uri.split('/')[3:])
+
+            # Get the latest version ID
+            version_id = self.s3_client.head_object(Bucket=bucket, Key=key).get('VersionId', '')
+            
+            if version_id:
+                s3_uri = f"{s3_uri}?versionId={version_id}"
+
+            return s3_uri
+        except Exception as e:
+            Log.warning(f"Failed to get version ID for s3://{bucket}/{key}: {str(e)}")
+            return ''
+        
+    # -------------------------------------------------------------------------
+    # - Naming and File Locations
+    # -------------------------------------------------------------------------
+
+    def get_stack_name(self) -> str:
+        """
+        Generate a standardized CloudFormation stack name.
+
+        Combines prefix, project_id, stage_id, and infra_type to create a consistent
+        stack naming convention. If no parameters are provided, uses instance values.
+
+        Returns:
+            str: Generated stack name following the pattern:
+                 {prefix}-{project_id}-{stage_id}-{infra_type}
+                 Note: stage_id is optional in the pattern
+        """
+
+        # We capitalize the prefix of service-roles as they are special and can be used to provide permissions
+        prefix = self.prefix.upper() if self.infra_type == 'service-role' else self.prefix
+
+        stack_name = f"{prefix}-"
+
+        if self.project_id:
+            stack_name += f"{self.project_id}-"
+        
+        if  self.stage_id and self.stage_id != 'default':
+            stack_name += f"{self.stage_id}-"
+
+        stack_name += f"{self.infra_type}"
+
+        return stack_name
+    
     def get_samconfig_dir(self) -> Path:
         """Get the samconfig directory path"""
         # Get the script's directory in a cross-platform way
@@ -1694,7 +1777,26 @@ class ConfigManager:
         # Get the script's directory in a cross-platform way
         script_dir = Path(__file__).resolve().parent
         return script_dir.parent / TEMPLATES_DIR / self.infra_type
-    
+
+    # -------------------------------------------------------------------------
+    # - Internal Utilities
+    # -------------------------------------------------------------------------
+
+    def _deep_update(self, original: Dict, update: Dict) -> Dict:
+        """
+        Recursively update a dictionary with another dictionary's values.
+        Lists are replaced entirely rather than merged.
+        """
+        for key, value in update.items():
+            if key in original and isinstance(original[key], dict) and isinstance(value, dict):
+                self._deep_update(original[key], value)
+            elif key in original and isinstance(original[key], list) and isinstance(value, list):
+                original[key] = self.merge_tags(original[key], value)
+            else:
+                original[key] = value
+
+        return original
+        
 # =============================================================================
 # ----- Main function ---------------------------------------------------------
 # =============================================================================
@@ -1792,8 +1894,10 @@ def main():
 
         # Handle template selection and parameter configuration
         if not local_config:
+            # get local templates and then add in the s3 templates before passing to the select UI
             templates = config_manager.discover_local_templates()
-            template_file = config_manager.select_template(templates)
+            templates.extend(config_manager.discover_s3_templates())
+            template_file = config_manager.select_from_templates(templates)
         else:
             template_file_from_config = local_config.get('atlantis', {}).get('deploy', {}).get('parameters', {}).get('template_file', '')
             # if template file starts with s3://, use it as is, else parse

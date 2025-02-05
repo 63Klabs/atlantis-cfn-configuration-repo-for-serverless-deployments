@@ -2,26 +2,31 @@
 
 ## Config
 
-- Add remote S3 templates
-- Make sure check-stack flag is logged
+- Fix code structure
+- Improve Logging
 
 ## Deploy
 
-- None
+- Fix code structure
+- Improve Logging
 
 ## Import
 
-- None
+- Fix code structure
+- Improve Logging
 
 ## Create Repository
 
 - Use interactive prompts and formats
 - Tags
 - Read starter app inventory and pick from menu
+- Fix code structure
+- Improve Logging
 
 ## Lib
 
 - Make sure logs are being stored in the right spot
+- Improve Logging
 
 ## Test
 
