@@ -1694,32 +1694,109 @@ class ConfigManager:
 
         return templates
 
-    def _get_latest_version_id(self, s3_uri: str) -> str:
-        """Get the latest version ID for an S3 object
+    def _parse_s3_uri(self, s3_uri: str) -> tuple[str, str, str]:
+        """Parse an S3 URI into bucket, key, and version ID components
         
         Args:
-            bucket (str): S3 bucket name
-            key (str): S3 object key
+            s3_uri (str): S3 URI in format s3://bucket/key or s3://bucket/key?versionId=xyz
             
         Returns:
-            str: Version ID of the latest version, or empty string if versioning not enabled
+            tuple: (bucket, key, version_id)
+            
+        Example:
+            >>> _parse_s3_uri("s3://my-bucket/path/to/file.txt?versionId=abc123")
+            ('my-bucket', 'path/to/file.txt', 'abc123')
+            >>> _parse_s3_uri("s3://my-bucket/path/to/file.txt")
+            ('my-bucket', 'path/to/file.txt', '')
+        """
+        # Remove s3:// prefix
+        if not s3_uri.startswith('s3://'):
+            raise ValueError(f"Invalid S3 URI format: {s3_uri}")
+        
+        # Split into path and query parts
+        path_part = s3_uri[5:]  # Remove 's3://'
+        if '?' in path_part:
+            path_part, query_part = path_part.split('?', 1)
+        else:
+            query_part = ''
+        
+        # Get bucket and key
+        parts = path_part.split('/', 1)
+        if len(parts) != 2:
+            raise ValueError(f"Invalid S3 URI format: {s3_uri}")
+        
+        bucket = parts[0]
+        key = parts[1]
+        
+        # Extract version ID if present
+        version_id = ''
+        if query_part.startswith('versionId='):
+            version_id = query_part[10:]  # Remove 'versionId='
+            
+        return bucket, key, version_id
+
+    def _get_latest_version_id(self, s3_uri: str) -> str:
+        """Get the latest version ID for an S3 object and return full URI with version
+        
+        Args:
+            s3_uri (str): S3 URI of the object
+                
+        Returns:
+            str: S3 URI with latest version ID appended if versioning enabled
         """
         try:
-            # Parse bucket and key from s3:// URI
-            bucket = s3_uri.split('/')[2]
-            key = '/'.join(s3_uri.split('/')[3:])
-
+            bucket, key, _ = self._parse_s3_uri(s3_uri)
+            
             # Get the latest version ID
             version_id = self.s3_client.head_object(Bucket=bucket, Key=key).get('VersionId', '')
             
             if version_id:
-                s3_uri = f"{s3_uri}?versionId={version_id}"
-
+                return f"{s3_uri}?versionId={version_id}"
+            
             return s3_uri
+            
         except Exception as e:
-            Log.warning(f"Failed to get version ID for s3://{bucket}/{key}: {str(e)}")
-            return ''
-        
+            Log.warning(f"Failed to get version ID for {s3_uri}: {str(e)}")
+            return s3_uri
+
+    def check_for_template_update(self, s3_uri: str) -> str:
+        """Check if the template has been updated in S3 and prompt for update
+
+        Args:
+            s3_uri (str): S3 URI of the template
+
+        Returns:
+            str: Updated S3 URI if updated, otherwise original S3 URI
+        """
+        try:
+            bucket, key, current_version_id = self._parse_s3_uri(s3_uri)
+            
+            Log.info(f"Checking for template update: s3://{bucket}/{key}")
+
+            try:
+                # Get the latest version ID
+                latest_version_id = self.s3_client.head_object(Bucket=bucket, Key=key).get('VersionId', '')
+            except self.s3_client.exceptions.ClientError as e:
+                if e.response['Error']['Code'] == '404':
+                    Log.warning(f"Template not found at s3://{bucket}/{key}")
+                    return s3_uri
+                raise
+
+            Log.info(f"Latest version ID: {latest_version_id}")
+
+            # Check if the template has been updated
+            if latest_version_id and latest_version_id != current_version_id:
+                Log.info("Newer version of template available")
+                # Prompt for update
+                if click.confirm(Colorize.warning("A newer version of the template is available. Update?")):
+                    return f"s3://{bucket}/{key}?versionId={latest_version_id}"
+                
+            return s3_uri
+            
+        except Exception as e:
+            Log.warning(f"Failed to check for template update: {str(e)}")
+            return s3_uri
+
     # -------------------------------------------------------------------------
     # - Naming and File Locations
     # -------------------------------------------------------------------------
@@ -1902,7 +1979,7 @@ def main():
             template_file_from_config = local_config.get('atlantis', {}).get('deploy', {}).get('parameters', {}).get('template_file', '')
             # if template file starts with s3://, use it as is, else parse
             if template_file_from_config and template_file_from_config.startswith('s3://'):
-                template_file = template_file_from_config
+                template_file = config_manager.check_for_template_update(template_file_from_config)
             else:
                 # Split by / and get the last part
                 template_file = template_file_from_config.split('/')[-1]

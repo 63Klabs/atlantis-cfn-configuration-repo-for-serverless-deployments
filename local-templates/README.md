@@ -21,5 +21,5 @@ Templates stored locally must be in their infrastructure type directory in order
 For a list of templates and versions:
 
 ```bash
-aws s3 cp s3://63klabs/atlantis/inventory.json ./templates/ --profile yourprofile
+aws s3 cp s3://63klabs/atlantis/templates/inventory.json ./local-templates/ --profile yourprofile
 ```

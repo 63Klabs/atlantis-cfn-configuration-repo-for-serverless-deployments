@@ -32,9 +32,7 @@ scripts/logs
 # Comment out/remove these lines if you are storing templates in this repo - NOT RECOMMENDED
 # Why? - You should really apply versioning to your templates so deploys are consistent.
 #        Check out the Atlantis Template Repository for developing and releasing templates to a versioned S3 bucket.
-local-templates/**/*.yml
-local-templates/**/*.yaml
-local-templates/**/*.json
+local-templates/*
 
 
 # -- Items above may be adjusted ----------------------------------------------
