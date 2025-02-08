@@ -16,10 +16,12 @@ import base64
 import os
 import argparse
 import sys
-import click
+import shutil
 from pathlib import Path
 from typing import Optional, List, Union
 from urllib.parse import urlparse
+
+import click
 
 from lib.loader import ConfigLoader
 from lib.aws_session import AWSSessionManager, TokenRetrievalError
@@ -57,6 +59,9 @@ class RepositoryCreator:
             infra_type=None
         )
 
+        self.clone_url_ssh = None
+        self.clone_url_https = None
+
         self.settings = config_loader.load_settings()
         self.defaults = config_loader.load_defaults()
 
@@ -81,11 +86,21 @@ class RepositoryCreator:
     # -------------------------------------------------------------------------
 
     def create_and_seed_repository(self):
+        # Create repository
+        self._create_repository()
+        
+        # Create branch structure
+        self._create_dev_test_branches()
+        
+        if (self.s3_uri):
+            # Download and extract files
+            temp_dir = self._download_and_extract()
+            
+            # Seed repository with initial commit
+            self._seed_repository(temp_dir)
 
-        # Parse S3 URL
-        s3_bucket, s3_key = self.parse_s3_url(self.s3_uri)
 
-        # Create the repository
+    def _create_repository(self):
         try:
             click.echo(Colorize.output_with_value("Creating repository:", self.repo_name))
             Log.info(f"Creating repository: {self.repo_name}")
@@ -104,93 +119,221 @@ class RepositoryCreator:
             click.echo(Colorize.error(f"Error creating repository: {str(e)}"))
             Log.error(f"Error creating repository: {str(e)}")
             sys.exit(1)
-        
-        # Download and process the zip file
-        with tempfile.TemporaryDirectory() as temp_dir:
-            zip_path = os.path.join(temp_dir, 'source.zip')
+    
+    def _create_dev_test_branches(self):
+        try:
+
+            # Create README.md content for main branch
+            readme_content = "# Hello, World\n"
+            readme_content += "\nThe main and test branches are intentionally left blank except for this file.\n\nCheck out the dev branch to get started.\n"
+
+            if self.s3_uri:
+                readme_content += "\nThe dev branch of this repository was seeded from the following S3 location:\n"
+                readme_content += f"{self.s3_uri}\n"
+            
+            # Add clone info
+            try:
+                clone_urls = self.get_clone_urls()
+                readme_content += f"Clone URL (HTTPS): {clone_urls.get('https', '')}\n"
+                readme_content += f"Clone URL (SSH): {clone_urls.get('ssh', '')}\n"
+            except Exception as e:
+                Log.error(f"Error getting repository clone urls: {str(e)}")
+
+            # Create initial commit on main branch with README
+            click.echo(Colorize.output("Creating initial README.md on main branch"))
+            Log.info("Creating initial README.md on main branch")
             
             try:
-                click.echo(Colorize.output_with_value("Downloading zip from S3:", self.s3_uri))
-                Log.info(f"Downloading zip from S3: {self.s3_uri}")
-                self.s3_client.download_file(s3_bucket, s3_key, zip_path)
-            except Exception as e:
-                click.echo(Colorize.error(f"Error downloading zip file. Check logs for more information."))
-                Log.error(f"Error downloading zip file: {str(e)}")
-                self.codecommit_client.delete_repository(repositoryName=self.repo_name)
-                sys.exit(1)
-                                    
-            # Extract files
-            try:
-                with zipfile.ZipFile(zip_path, 'r') as zip_ref:
-                    for zip_info in zip_ref.filelist:
-                        # Create the output path
-                        output_path = Path(temp_dir) / zip_info.filename
+                # Try to get main branch info
+                branch_info = self.codecommit_client.get_branch(
+                    repositoryName=self.repo_name,
+                    branchName='main'
+                )
+                parent_commit_id = branch_info['branch']['commitId']
+                
+                # Create commit with README on existing main branch
+                main_commit = self.codecommit_client.create_commit(
+                    repositoryName=self.repo_name,
+                    branchName='main',
+                    parentCommitId=parent_commit_id,
+                    putFiles=[{
+                        'filePath': 'README.md',
+                        'fileContent': readme_content,
+                        'fileMode': 'NORMAL'
+                    }],
+                    authorName="Repository Creator",
+                    email="repo.creator@example.com",
+                    commitMessage='Initial README.md commit'
+                )
+            except self.codecommit_client.exceptions.BranchDoesNotExistException:
+                # Create initial commit with README if main branch doesn't exist
+                main_commit = self.codecommit_client.create_commit(
+                    repositoryName=self.repo_name,
+                    branchName='main',
+                    putFiles=[{
+                        'filePath': 'README.md',
+                        'fileContent': readme_content,
+                        'fileMode': 'NORMAL'
+                    }],
+                    authorName="Repository Creator",
+                    email="repo.creator@example.com",
+                    commitMessage='Initial README.md commit'
+                )
+            
+            main_commit_id = main_commit['commitId']
+            
+            # Create test branch from main
+            click.echo(Colorize.output("Creating test branch from main"))
+            Log.info("Creating test branch from main")
+            self.codecommit_client.create_branch(
+                repositoryName=self.repo_name,
+                branchName='test',
+                commitId=main_commit_id
+            )
+            
+            # Create dev branch from test
+            click.echo(Colorize.output("Creating dev branch from test"))
+            Log.info("Creating dev branch from test")
+            self.codecommit_client.create_branch(
+                repositoryName=self.repo_name,
+                branchName='dev',
+                commitId=main_commit_id
+            )
+            
+            click.echo(Colorize.output("Successfully created branch structure"))
+            Log.info("Successfully created branch structure")
+            
+        except Exception as e:
+            click.echo(Colorize.error(f"Error creating branch structure. Check logs for more information."))
+            Log.error(f"Error creating branch structure: {str(e)}")
+            self.codecommit_client.delete_repository(repositoryName=self.repo_name)
+            sys.exit(1)
+
+    def _download_and_extract(self):
+        temp_dir = tempfile.mkdtemp()
+        zip_path = os.path.join(temp_dir, 'source.zip')
+        s3_bucket, s3_key = self.parse_s3_url(self.s3_uri)
+        
+        try:
+            click.echo(Colorize.output_with_value("Downloading zip from S3:", self.s3_uri))
+            Log.info(f"Downloading zip from S3: {self.s3_uri}")
+            self.s3_client.download_file(s3_bucket, s3_key, zip_path)
+            
+            with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+                for zip_info in zip_ref.filelist:
+                    output_path = Path(temp_dir) / zip_info.filename
+                    
+                    if zip_info.filename.endswith('/'):
+                        output_path.mkdir(parents=True, exist_ok=True)
+                        continue
                         
-                        # Skip if it's just a directory entry
-                        if zip_info.filename.endswith('/'):
-                            output_path.mkdir(parents=True, exist_ok=True)
-                            continue
-                            
-                        # Ensure parent directory exists
-                        output_path.parent.mkdir(parents=True, exist_ok=True)
+                    output_path.parent.mkdir(parents=True, exist_ok=True)
+                    
+                    with zip_ref.open(zip_info) as source:
+                        content = source.read()
                         
-                        # Handle the file extraction
-                        with zip_ref.open(zip_info) as source:
-                            content = source.read()
+                        text_extensions = {
+                            # Documentation and Markup
+                            '.txt', '.md', '.markdown', '.rst', '.adoc', '.asciidoc', '.wiki',
                             
-                            # Check if the file might be text-based using common extensions
-                            text_extensions = {'.txt', '.json', '.yml', '.yaml', '.md', '.py', 
-                                            '.js', '.css', '.html', '.xml', '.csv', '.properties',
-                                            '.sh', '.bash', '.cfg', '.conf', '.ini', '.env'}
-                            is_text_file = output_path.suffix.lower() in text_extensions
+                            # Web and Styling
+                            '.html', '.htm', '.xhtml', '.css', '.scss', '.sass', '.less',
+                            '.svg', '.xml', '.xsl', '.xslt', '.wsdl', '.dtd',
                             
-                            # If file exists, remove it first
-                            if output_path.exists():
-                                output_path.unlink()
+                            # Programming Languages
+                            '.py', '.pyw', '.py3', '.pyi', '.pyx',  # Python
+                            '.js', '.jsx', '.ts', '.tsx', '.mjs',    # JavaScript/TypeScript
+                            '.java', '.kt', '.kts', '.groovy',       # JVM
+                            '.c', '.h', '.cpp', '.hpp', '.cc',       # C/C++
+                            '.cs', '.csx',                           # C#
+                            '.rb', '.rbw', '.rake', '.gemspec',      # Ruby
+                            '.php', '.phtml', '.php3', '.php4',      # PHP
+                            '.go', '.rs', '.r', '.pl', '.pm',        # Go, Rust, R, Perl
                             
-                            if is_text_file:
-                                try:
-                                    # Try to decode as UTF-8 and write as text
-                                    decoded_content = content.decode('utf-8')
-                                    output_path.write_text(decoded_content, encoding='utf-8')
-                                except UnicodeDecodeError:
-                                    # If decoding fails, treat as binary
-                                    output_path.write_bytes(content)
-                            else:
-                                # Write binary files directly
+                            # Shell and Scripts
+                            '.sh', '.bash', '.zsh', '.fish',
+                            '.bat', '.cmd', '.ps1', '.psm1',
+                            
+                            # Configuration
+                            '.json', '.yaml', '.yml', '.toml', '.tml',
+                            '.ini', '.cfg', '.conf', '.config',
+                            '.env', '.properties', '.prop',
+                            '.xml', '.plist',
+                            
+                            # Build and Project
+                            '.gradle', '.maven', '.pom',
+                            '.project', '.classpath',
+                            '.editorconfig', '.gitignore', '.gitattributes',
+                            'Dockerfile', 'Makefile', 'Jenkinsfile',
+                            
+                            # Data Formats
+                            '.csv', '.tsv', '.sql', '.graphql', '.gql',
+                            
+                            # Lock Files
+                            '.lock', '.lockfile',
+                            
+                            # Template Files
+                            '.template', '.tmpl', '.j2', '.jinja', '.jinja2',
+                            
+                            # AWS and Cloud
+                            '.tf', '.tfvars',              # Terraform
+                            '.template-config',            # AWS CloudFormation
+                            '.cfn.yaml', '.cfn.json',     # AWS CloudFormation
+                            '.sam.yaml', '.sam.json',      # AWS SAM
+                            
+                            # Misc
+                            '.log', '.diff', '.patch',
+                            '.lst', '.tex', '.bib',
+                            '.manifest', '.pdl', '.po'
+                        }
+
+                        is_text_file = (output_path.suffix.lower() in text_extensions and 
+                                        not self._is_binary_string(content))
+
+                        
+                        if output_path.exists():
+                            output_path.unlink()
+                        
+                        if is_text_file:
+                            try:
+                                decoded_content = content.decode('utf-8')
+                                output_path.write_text(decoded_content, encoding='utf-8')
+                            except UnicodeDecodeError:
                                 output_path.write_bytes(content)
-                                
-                os.remove(zip_path)  # Remove the zip file to not include it
-            except Exception as e:
-                click.echo(Colorize.error(f"Error extracting zip file. Check logs for more information."))
-                Log.error(f"Error extracting zip file: {str(e)}")
-                self.codecommit_client.delete_repository(repositoryName=self.repo_name)
-                sys.exit(1)
+                        else:
+                            output_path.write_bytes(content)
+                            
+            os.remove(zip_path)
+            return temp_dir
+            
+        except Exception as e:
+            click.echo(Colorize.error(f"Error in download and extract process. Check logs for more information."))
+            Log.error(f"Error in download and extract process: {str(e)}")
+            self.codecommit_client.delete_repository(repositoryName=self.repo_name)
+            shutil.rmtree(temp_dir, ignore_errors=True)
+            sys.exit(1)
 
-
-            # Prepare files for commit
-            # Prepare files for commit
-            put_files = []
+    def _seed_repository(self, temp_dir):
+        try:
+            # Collect all files to be processed
+            all_files = []
             for root, _, files in os.walk(temp_dir):
                 for file in files:
                     full_path = os.path.join(root, file)
                     relative_path = os.path.relpath(full_path, temp_dir)
                     
                     try:
-                        # Read file content directly
                         with open(full_path, 'rb') as f:
                             content = f.read()
                             
-                        put_files.append({
+                        try:
+                            file_content = content.decode('utf-8')
+                        except UnicodeDecodeError:
+                            file_content = base64.b64encode(content).decode('utf-8')
+                            
+                        all_files.append({
                             'filePath': relative_path,
-                            'fileContent': content.decode('utf-8'),  # Just decode the content directly
-                            'fileMode': 'NORMAL'
-                        })
-                    except UnicodeDecodeError:
-                        # If UTF-8 decode fails, it's likely a binary file
-                        put_files.append({
-                            'filePath': relative_path,
-                            'fileContent': base64.b64encode(content).decode('utf-8'),
+                            'fileContent': file_content,
                             'fileMode': 'NORMAL'
                         })
                     except Exception as e:
@@ -199,60 +342,84 @@ class RepositoryCreator:
                         self.codecommit_client.delete_repository(repositoryName=self.repo_name)
                         sys.exit(1)
 
-            # Create initial commit
-            # Create initial commit
+            # Process files in batches of 100
+            batch_size = 100
+            total_files = len(all_files)
+            processed_files = 0
+            seed_branch = "dev"  # or whatever branch you want to seed
+
+            click.echo(Colorize.output(f"Seeding repository with {total_files} files"))
+            Log.info(f"Creating initial commit with {total_files} files")
+
+            # Get the initial parent commit ID
             try:
-                click.echo(Colorize.output("Seeding repository with initial commit"))
-                Log.info("Creating initial commit")
+                branch_info = self.codecommit_client.get_branch(
+                    repositoryName=self.repo_name,
+                    branchName=seed_branch
+                )
+                parent_commit_id = branch_info['branch']['commitId']
+            except self.codecommit_client.exceptions.BranchDoesNotExistException:
+                parent_commit_id = None
+
+            # Process files in batches
+            while processed_files < total_files:
+                start_idx = processed_files
+                end_idx = min(processed_files + batch_size, total_files)
+                current_batch = all_files[start_idx:end_idx]
                 
-                # First, get the default branch's HEAD commit
+                click.echo(Colorize.output(f"Processing files {start_idx + 1} to {end_idx} of {total_files}"))
+                Log.info(f"Processing batch of {len(current_batch)} files")
+
                 try:
-                    branch_info = self.codecommit_client.get_branch(
+                    commit_response = self.codecommit_client.create_commit(
                         repositoryName=self.repo_name,
-                        branchName='main'
-                    )
-                    parent_commit_id = branch_info['branch']['commitId']
-                except self.codecommit_client.exceptions.BranchDoesNotExistException:
-                    # If the branch doesn't exist, create the first commit
-                    response = self.codecommit_client.create_commit(
-                        repositoryName=self.repo_name,
-                        branchName='main',
-                        putFiles=put_files,
+                        branchName=seed_branch,
+                        parentCommitId=parent_commit_id if parent_commit_id else None,
+                        putFiles=current_batch,
                         authorName="Repository Creator",
                         email="repo.creator@example.com",
-                        commitMessage=f'Initial commit: Seeded from {self.s3_uri}'
+                        commitMessage=f'Seeding repository (batch {start_idx + 1}-{end_idx} of {total_files} files)'
                     )
-                else:
-                    # If branch exists, create commit with parent
-                    response = self.codecommit_client.create_commit(
-                        repositoryName=self.repo_name,
-                        branchName='main',
-                        parentCommitId=parent_commit_id,
-                        putFiles=put_files,
-                        authorName="Repository Creator",
-                        email="repo.creator@example.com",
-                        commitMessage=f'Initial commit: Seeded from {self.s3_uri}'
-                    )
-                
-                Log.info(f"Repository {self.repo_name} seeded successfully!")
-            except Exception as e:
-                click.echo(Colorize.error(f"Error creating initial commit. Check logs for more information."))
-                Log.error(f"Error creating initial commit: {str(e)}")
-                self.codecommit_client.delete_repository(repositoryName=self.repo_name)
-                sys.exit(1)
+                    
+                    # Update parent commit ID for the next batch
+                    parent_commit_id = commit_response['commitId']
+                    processed_files = end_idx
+                    
+                    click.echo(Colorize.success(f"Successfully committed batch {start_idx + 1}-{end_idx}"))
+                    Log.info(f"Successfully committed batch {start_idx + 1}-{end_idx}")
+                    
+                except Exception as e:
+                    click.echo(Colorize.error(f"Error creating commit for batch {start_idx + 1}-{end_idx}"))
+                    Log.error(f"Error creating commit: {str(e)}")
+                    self.codecommit_client.delete_repository(repositoryName=self.repo_name)
+                    sys.exit(1)
+
+            Log.info(f"Repository {self.repo_name} seeded successfully!")
+            Log.info(f"Total files processed: {processed_files}")
+            click.echo(Colorize.success(f"\nRepository {self.repo_name} seeded successfully!"))
+            click.echo(Colorize.output_with_value("Total files processed:", str(processed_files)))
+            
+        except Exception as e:
+            click.echo(Colorize.error(f"Error in seeding process. Check logs for more information."))
+            Log.error(f"Error in seeding process: {str(e)}")
+            self.codecommit_client.delete_repository(repositoryName=self.repo_name)
+            sys.exit(1)
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
 
 
-            #     Log.info(f"Repository {self.repo_name} seeded successfully!")
-            #     Log.info(f"Clone URL (HTTPS): {response['repositoryMetadata']['cloneUrlHttp']}")
-            #     Log.info(f"Clone URL (SSH): {response['repositoryMetadata']['cloneUrlSsh']}")
-            #     click.echo(Colorize.success(f"\nRepository {self.repo_name} seeded successfully!"))
-            #     click.echo(Colorize.output_with_value("Clone URL (HTTPS):", response['repositoryMetadata']['cloneUrlHttp']))
-            #     click.echo(Colorize.output_with_value("Clone URL (SSH):", response['repositoryMetadata']['cloneUrlSsh']))
-            # except Exception as e:
-            #     click.echo(Colorize.error(f"Error creating initial commit. Check logs for more information."))
-            #     Log.error(f"Error creating initial commit: {str(e)}")
-            #     self.codecommit_client.delete_repository(repositoryName=self.repo_name)
-            #     sys.exit(1)
+    def _is_binary_string(self, bytes_data, sample_size=1024):
+        """Returns true if the bytes_data appears to be binary rather than text."""
+        if not bytes_data:
+            return False
+        
+        # Take a sample of the file to reduce processing time for large files
+        sample = bytes_data[:sample_size]
+        text_characters = bytes(b'').join(bytes([i]) for i in range(32, 127)) + b'\n\r\t\f\b'
+        
+        # If more than 30% non-text characters, assume binary
+        non_text = bytes_data.translate(None, text_characters)
+        return len(non_text) / len(sample) > 0.30
 
     # -------------------------------------------------------------------------
     # - Prompts: Application Starter
@@ -271,10 +438,12 @@ class RepositoryCreator:
         if not app_starters:
             Log.error("No application starters found")
             click.echo(Colorize.error("No application starters found"))
-            sys.exit(1)
         
         # Sort app_starters for consistent ordering
         app_starters.sort()
+
+        # add a 0 option for None to the beginning of list
+        app_starters.insert(0, 'None')
         
         # Display numbered list
         click.echo(Colorize.question("Available application starters:"))
@@ -293,7 +462,11 @@ class RepositoryCreator:
                 
                 # Validate the index is within range
                 if 0 <= app_idx < len(app_starters):
-                    selected = app_starters[app_idx]
+
+                    selected = None
+
+                    if(app_idx != 0):
+                        selected = app_starters[app_idx]
                             
                     return selected
                 else:
@@ -411,8 +584,9 @@ class RepositoryCreator:
 
         return tags
 
+
     # -------------------------------------------------------------------------
-    # - Naming and File Locations
+    # - Getters, Naming, and File Locations
     # -------------------------------------------------------------------------
 
     def get_settings_dir(self) -> Path:
@@ -421,6 +595,51 @@ class RepositoryCreator:
         script_dir = Path(__file__).resolve().parent
         return script_dir.parent / SETTINGS_DIR
     
+    def get_repository(self) -> Dict:
+        # get repository information
+        try:
+            return self.codecommit_client.get_repository(repositoryName=self.repo_name)
+        except Exception as e:
+            Log.error(f"Error getting repository information: {e}")
+            raise
+
+    def get_clone_urls(self) -> Dict:
+        """Get the clone URLs for the repository
+
+        Returns:
+            Dict: Clone URLs for the repository
+        """
+        try:
+            if (self.clone_url_https == None and self.clone_url_ssh == None):
+                repo_info = self.get_repository()
+                repo_meta = repo_info.get('repositoryMetadata', {})
+                self.clone_url_https = repo_meta.get('cloneUrlHttp', None)
+                self.clone_url_ssh = repo_meta.get('cloneUrlSsh', None)
+
+            return {
+                'https': self.clone_url_https,
+                'ssh': self.clone_url_ssh
+            }
+
+        except Exception as e:
+            Log.error(f"Error getting clone URLs: {e}")
+            raise
+    
+    def repository_exists(self) -> bool:
+        """Check if the repository already exists in CodeCommit.
+
+        Returns:
+            bool: True if repository exists, False otherwise
+        """
+        try:
+            self.codecommit_client.get_repository(repositoryName=self.repo_name)
+            return True
+        except self.codecommit_client.exceptions.RepositoryDoesNotExistException:
+            return False
+        except Exception as e:
+            Log.error(f"Error checking repository existence: {str(e)}")
+            raise
+
     # -------------------------------------------------------------------------
     # - Setters
     # -------------------------------------------------------------------------
@@ -542,6 +761,12 @@ def main():
     except Exception as e:
         ConsoleAndLog.error(f"Error initializing repository creator: {str(e)}")
         sys.exit(1)
+
+    # check if repo already exists
+    if repo_creator.repository_exists():
+        Log.error(f"Repository {args.repository_name} already exists")
+        click.echo(Colorize.error(f"Repository {args.repository_name} already exists"))
+        sys.exit(1)
     
     # prompt for starter app if no args.s3_uri
     try:
@@ -569,11 +794,19 @@ def main():
         print()
         repo_creator.create_and_seed_repository()
         print()
-        click.echo(Colorize.divider("="))
+        click.echo(Colorize.divider())
         print()
     except Exception as e:
         ConsoleAndLog.error(f"Error creating and seeding repository: {str(e)}")
         sys.exit(1)
+
+    clone_urls = repo_creator.get_clone_urls()
+
+    click.echo(Colorize.output_with_value("Clone URL (HTTPS):", clone_urls.get('https', '')))
+    click.echo(Colorize.output_with_value("Clone URL (SSH):", clone_urls.get('ssh', '')))
+    print()
+    click.echo(Colorize.divider("="))
+    print()
 
 if __name__ == "__main__":
     main()

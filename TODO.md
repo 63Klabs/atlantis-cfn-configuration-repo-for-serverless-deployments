@@ -20,7 +20,7 @@
 
 ## Create Repository
 
-- Fix zip issue - clean up and see if all that other stuff is needed
+- Add creator to commit
 - Move zip name close to front of selection 
 - Fix code structure
 - Improve Logging
