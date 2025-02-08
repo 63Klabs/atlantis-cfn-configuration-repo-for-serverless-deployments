@@ -1,31 +1,14 @@
 #!/usr/bin/env python3
 
-VERSION = "v0.1.0/2025-02-22"
+VERSION = "v0.1.0/2025-02-28"
 # Created by Chad Kluck with AI assistance from Amazon Q Developer
 # GitHub Copilot assisted in color formats of output and prompts
 
-"""
-AWS Infrastructure Configuration Management Tool
+# Usage Information:
+# config.py -h
 
-This module provides a command-line interface for managing AWS CloudFormation/SAM 
-deployments across different infrastructure types (pipeline, network, service-role).
-It handles configuration management, stack naming conventions, and deployment parameters.
-
-Usage Examples:
-    Create/Update a pipeline:
-        python config.py pipeline acme widget-ws test
-
-    Import/Check existing stack:
-        python config.py network acme widget-ws test --check-stack --profile yourprofile
-"""
-
-# -----------------------------------------------------------------------------
 # Full Documentation:
-#
-# Check local READMEs or GitHub repository:
-# https://github.com/chadkluck/atlantis-for-aws-sam-deployments/
-#
-# =============================================================================
+# https://github.com/chadkluck/atlantis-cfn-configuration-repo-for-serverless-deployments/
 
 import toml
 import json
@@ -41,6 +24,7 @@ from pathlib import Path
 from typing import Dict, Optional, List
 from botocore.exceptions import ClientError
 
+from lib.loader import ConfigLoader
 from lib.aws_session import AWSSessionManager, TokenRetrievalError
 from lib.logger import ScriptLogger, Log, ConsoleAndLog
 from lib.tools import Colorize
@@ -119,7 +103,15 @@ class ConfigManager:
         self.template_hash_id: Optional[str] = None
         self.template_file: Optional[str] = None
 
-        self.settings = self._load_settings()
+        config_loader = ConfigLoader(
+            settings_dir=self.get_settings_dir(),
+            prefix=self.prefix,
+            project_id=self.project_id,
+            infra_type=self.infra_type
+        )
+
+        self.settings = config_loader.load_settings()
+        self.defaults = config_loader.load_defaults()
 
     def _validate_args(self) -> None:
         """Validate arguments"""
@@ -1520,96 +1512,6 @@ class ConfigManager:
     # -------------------------------------------------------------------------
 
 
-
-
-    # -------------------------------------------------------------------------
-    # - Load Settings and Defaults
-    # -------------------------------------------------------------------------
-
-    def _load_settings(self) -> Dict:
-        """Load settings.json
-        
-        Returns:
-            Dict: Settings dictionary from the JSON file or empty dict if file doesn't exist
-            
-        Raises:
-            JSONDecodeError: If the settings file contains invalid JSON
-            PermissionError: If the settings file cannot be accessed due to permissions
-        """
-        settings_file = self.get_settings_dir() / "settings.json"
-        
-        try:
-            if settings_file.exists():
-                with open(settings_file) as f:
-                    try:
-                        settings = json.load(f)
-                        if not isinstance(settings, dict):
-                            raise ValueError("Settings must be a JSON object")
-                        return settings
-                    except json.JSONDecodeError as e:
-                        raise json.JSONDecodeError(
-                            f"Invalid JSON in settings file: {str(e)}", 
-                            e.doc, 
-                            e.pos
-                        )
-            else:
-                return {}
-                
-        except PermissionError:
-            raise PermissionError(f"Unable to access settings file: {settings_file}")
-        except Exception as e:
-            raise RuntimeError(f"Unexpected error loading settings: {str(e)}")
-
-
-    def load_defaults(self) -> Dict:
-        """Load and merge configuration files in sequence
-        
-        Order:
-        1. defaults.json
-        2. {prefix}-defaults.json
-        3. {prefix}-{project_id}-defaults.json
-        4. {infra_type}/defaults.json
-        5. {infra_type}/{prefix}-defaults.json
-        6. {infra_type}/{prefix}-{project_id}-defaults.json
-        """
-        defaults = {}
-        
-        # Define the sequence of potential config files
-        config_files = [
-            self.get_settings_dir() / "defaults.json",
-            self.get_settings_dir() / f"{self.prefix}-defaults.json"
-        ]
-        
-        # Add project_id specific files only if project_id exists
-        if self.project_id:
-            config_files.extend([
-                self.get_settings_dir() / f"{self.prefix}-{self.project_id}-defaults.json",
-            ])
-        
-        # Add infra_type specific files
-        config_files.append(self.get_settings_dir() / f"{self.infra_type}" / "defaults.json")
-        config_files.append(self.get_settings_dir() / f"{self.infra_type}" / f"{self.prefix}-defaults.json")
-        
-        # Add project_id specific files in infra_type directory
-        config_files.append(
-            self.get_settings_dir() / f"{self.infra_type}" / f"{self.prefix}-{self.project_id}-defaults.json"
-        )
-        
-        # Load each config file in sequence if it exists
-        for config_file in config_files:
-            try:
-                if config_file.exists():
-                    with open(config_file) as f:
-                        # Deep update defaults with new values
-                        new_config = json.load(f)
-                        self._deep_update(defaults, new_config)
-                        Log.info(f"Loaded config from '{config_file}'")
-            except json.JSONDecodeError as e:
-                Log.error(f"Error parsing JSON from {config_file}: {e}")
-            except Exception as e:
-                Log.error(f"Error loading config file {config_file}: {e}")
-        return defaults
-    
     # -------------------------------------------------------------------------
     # - Template Selection
     # -------------------------------------------------------------------------
@@ -1859,49 +1761,38 @@ class ConfigManager:
     # - Internal Utilities
     # -------------------------------------------------------------------------
 
-    def _deep_update(self, original: Dict, update: Dict) -> Dict:
-        """
-        Recursively update a dictionary with another dictionary's values.
-        Lists are replaced entirely rather than merged.
-        """
-        for key, value in update.items():
-            if key in original and isinstance(original[key], dict) and isinstance(value, dict):
-                self._deep_update(original[key], value)
-            elif key in original and isinstance(original[key], list) and isinstance(value, list):
-                original[key] = self.merge_tags(original[key], value)
-            else:
-                original[key] = value
-
-        return original
+    # none
         
 # =============================================================================
 # ----- Main function ---------------------------------------------------------
 # =============================================================================
+
+EPILOG = """
+Supports both AWS SSO and IAM credentials.
+For SSO users, credentials will be refreshed automatically.
+For IAM users, please ensure your credentials are valid using 'aws configure'.
+
+For default parameter and tag values, add default.json files to the defaults directory.
+For settings, update settings.json in the defaults directory.
+
+Examples:
+
+    # Basic
+    config.py <infra_type> <prefix> <project_id> [<stage_id>] 
+    
+    # Use specific AWS profile
+    config.py <infra_type> <prefix> <project_id> [<stage_id>] --profile <yourprofile>
+        
+    # Check saved configuration against deployed stack
+    config.py <infra_type> <prefix> <project_id> [<stage_id>] --profile <yourprofile> --check-stack            
+"""
 
 def parse_args() -> argparse.Namespace:
 
     parser = argparse.ArgumentParser(
         description='Create, Update, and Manage AWS samconfig for stack deployments',
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog=(
-            """Supports both AWS SSO and IAM credentials.
-            For SSO users, credentials will be refreshed automatically.
-            For IAM users, please ensure your credentials are valid using 'aws configure'.
-
-            For default parameter settings, add default.json files to the defaults directory.
-            
-            Examples:
-            
-                # Basic
-                config.py <infra_type> <prefix> <project_id> [<stage_id>] 
-                
-                # Use specific AWS profile
-                config.py <infra_type> <prefix> <project_id> [<stage_id>] --profile <yourprofile>
-                 
-                # Check saved configuration against deployed stack
-                config.py <infra_type> <prefix> <project_id> [<stage_id>] --profile <yourprofile> --check-stack            
-            """
-        )
+        epilog=(EPILOG)
     )
 
     parser.add_argument('infra_type',
@@ -1985,7 +1876,7 @@ def main():
                 template_file = template_file_from_config.split('/')[-1]
 
         parameters = config_manager.get_template_parameters(template_file)
-        defaults = config_manager.load_defaults()
+        defaults = config_manager.defaults
 
         print()
 

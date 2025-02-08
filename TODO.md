@@ -2,6 +2,7 @@
 
 ## Config
 
+- Tags
 - Fix code structure
 - Improve Logging
 
@@ -18,8 +19,8 @@
 ## Create Repository
 
 - Use interactive prompts and formats
-- Tags
 - Read starter app inventory and pick from menu
+- Tags
 - Fix code structure
 - Improve Logging
 

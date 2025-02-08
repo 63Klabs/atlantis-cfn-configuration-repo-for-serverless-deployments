@@ -1,7 +1,14 @@
 #!/usr/bin/env python3
 
-VERSION = "v0.1.0/2025-02-22"
+VERSION = "v0.1.0/2025-02-28"
 # Created by Chad Kluck with AI assistance from Amazon Q Developer
+# GitHub Copilot assisted in color formats of output and prompts
+
+# Usage Information:
+# deploy.py -h
+
+# Full Documentation:
+# https://github.com/chadkluck/atlantis-cfn-configuration-repo-for-serverless-deployments/
 
 import sys
 import os
@@ -272,6 +279,23 @@ class TemplateDeployer:
 # ----- Main function ---------------------------------------------------------
 # =============================================================================
 
+EPILOG = """
+Supports both AWS SSO and IAM credentials.
+For SSO users, credentials will be refreshed automatically.
+For IAM users, please ensure your credentials are valid using 'aws configure'.
+
+Examples:
+
+    # Deploy service-role for acme prefix and project
+    deploy.py service-role acme project123
+
+    # Deploy pipeline for specific project and stage
+    deploy.py pipeline acme project123 dev
+
+    # With different AWS profile
+    deploy.py service-role acme project123 --profile myprofile
+"""
+        
 def parse_args() -> argparse.Namespace:
     # Get the script's directory in a cross-platform way
     script_dir = Path(__file__).resolve().parent
@@ -279,22 +303,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description='Deploy CloudFormation template from S3',
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog=(
-        "Supports both AWS SSO and IAM credentials."
-        "For SSO users, credentials will be refreshed automatically."
-        "For IAM users, please ensure your credentials are valid using 'aws configure'."
-        ""
-        "Examples:"
-        ""
-        "    # Deploy service-role for acme prefix and project"
-        "    deploy.py service-role acme project123"
-        ""
-        "    # Deploy pipeline for specific project and stage"
-        "    deploy.py pipeline acme project123 dev"
-
-        "    # With different AWS profile"
-        "    deploy.py service-role acme project123 --profile myprofile"
-        )
+        epilog=(EPILOG)
     )
     
     # Positional arguments

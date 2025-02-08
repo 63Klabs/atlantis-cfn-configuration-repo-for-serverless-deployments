@@ -1,20 +1,14 @@
 #!/usr/bin/env python3
 
-VERSION = "v0.1.0/2025-02-22"
+VERSION = "v0.1.0/2025-02-28"
 # Created by Chad Kluck with AI assistance from Amazon Q Developer
+# GitHub Copilot assisted in color formats of output and prompts
 
-# =============================================================================
-# Usage:
-#
-# python3 import.py --stack-name <stack-name> [--region <region>] [--profile <your-profile>]
-#
-# -----------------------------------------------------------------------------
+# Usage Information:
+# import.py -h
+
 # Full Documentation:
-#
-# Check local READMEs or GitHub repository:
-# https://github.com/chadkluck/atlantis-for-aws-sam-deployments/
-#
-# =============================================================================
+# https://github.com/chadkluck/atlantis-cfn-configuration-repo-for-serverless-deployments/
 
 import tomlkit
 import argparse
@@ -198,27 +192,29 @@ class ConfigImporter:
 # ----- Main function ---------------------------------------------------------
 # =============================================================================
 
+EPILOG = """
+Supports both AWS SSO and IAM credentials.
+For SSO users, credentials will be refreshed automatically.
+For IAM users, please ensure your credentials are valid using 'aws configure'.
+
+Examples:
+
+    # Import stack acme-blue-test-pipeline
+    import.py acme-blue-test-pipeline
+
+    # Import stack acme-blue-test-pipeline from a specific region
+    import.py acme-blue-test-pipeline --region us-west-1
+
+    # With different AWS profile
+    import.py acme-blue-test-pipeline --region us-west-1 --profile myprofile
+"""
+
 def parse_args() -> argparse.Namespace:
 
     parser = argparse.ArgumentParser(
         description='Generate SAM config from existing CloudFormation stack',
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog=(
-            "Supports both AWS SSO and IAM credentials."
-            "For SSO users, credentials will be refreshed automatically."
-            "For IAM users, please ensure your credentials are valid using 'aws configure'."
-            ""
-            "Examples:"
-            ""
-            "    # Import stack acme-blue-test-pipeline"
-            "    import.py acme-blue-test-pipeline"
-            ""
-            "    # Import stack acme-blue-test-pipeline from a specific region"
-            "    import.py acme-blue-test-pipeline --region us-west-1"
-            ""
-            "    # With different AWS profile"
-            "    import.py acme-blue-test-pipeline --region us-west-1 --profile myprofile"
-        )
+        epilog=(EPILOG)
     )
     parser.add_argument('stack-name',
                         required=True,
