@@ -13,6 +13,10 @@
 		{
 			"bucket": "63klabs",
 			"prefix": "atlantis/app-starters/v2"
+		},
+		{
+			"bucket": "63klabz",
+			"prefix": "atlantis/app-starters/v2"
 		}
 	],
 	"regions": [
@@ -27,6 +31,6 @@
 		"eu-north-1", "eu-south-1", "eu-south-2", "eu-west-1", "eu-west-2", "eu-west-3", "eu-central-1", "eu-central-2"
 	],
 	"tag_keys": [
-		"Owner", "Creator", "CostCenter"
+		"Owner", "Creator", "CostCenter", "Test:Id"
 	]
 }

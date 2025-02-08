@@ -118,11 +118,48 @@ class RepositoryCreator:
                 Log.error(f"Error downloading zip file: {str(e)}")
                 self.codecommit_client.delete_repository(repositoryName=self.repo_name)
                 sys.exit(1)
-            
+                                    
             # Extract files
             try:
                 with zipfile.ZipFile(zip_path, 'r') as zip_ref:
-                    zip_ref.extractall(temp_dir)
+                    for zip_info in zip_ref.filelist:
+                        # Create the output path
+                        output_path = Path(temp_dir) / zip_info.filename
+                        
+                        # Skip if it's just a directory entry
+                        if zip_info.filename.endswith('/'):
+                            output_path.mkdir(parents=True, exist_ok=True)
+                            continue
+                            
+                        # Ensure parent directory exists
+                        output_path.parent.mkdir(parents=True, exist_ok=True)
+                        
+                        # Handle the file extraction
+                        with zip_ref.open(zip_info) as source:
+                            content = source.read()
+                            
+                            # Check if the file might be text-based using common extensions
+                            text_extensions = {'.txt', '.json', '.yml', '.yaml', '.md', '.py', 
+                                            '.js', '.css', '.html', '.xml', '.csv', '.properties',
+                                            '.sh', '.bash', '.cfg', '.conf', '.ini', '.env'}
+                            is_text_file = output_path.suffix.lower() in text_extensions
+                            
+                            # If file exists, remove it first
+                            if output_path.exists():
+                                output_path.unlink()
+                            
+                            if is_text_file:
+                                try:
+                                    # Try to decode as UTF-8 and write as text
+                                    decoded_content = content.decode('utf-8')
+                                    output_path.write_text(decoded_content, encoding='utf-8')
+                                except UnicodeDecodeError:
+                                    # If decoding fails, treat as binary
+                                    output_path.write_bytes(content)
+                            else:
+                                # Write binary files directly
+                                output_path.write_bytes(content)
+                                
                 os.remove(zip_path)  # Remove the zip file to not include it
             except Exception as e:
                 click.echo(Colorize.error(f"Error extracting zip file. Check logs for more information."))
@@ -130,6 +167,8 @@ class RepositoryCreator:
                 self.codecommit_client.delete_repository(repositoryName=self.repo_name)
                 sys.exit(1)
 
+
+            # Prepare files for commit
             # Prepare files for commit
             put_files = []
             for root, _, files in os.walk(temp_dir):
@@ -138,12 +177,22 @@ class RepositoryCreator:
                     relative_path = os.path.relpath(full_path, temp_dir)
                     
                     try:
+                        # Read file content directly
                         with open(full_path, 'rb') as f:
                             content = f.read()
-                            put_files.append({
-                                'filePath': relative_path,
-                                'fileContent': base64.b64encode(content).decode('utf-8')
-                            })
+                            
+                        put_files.append({
+                            'filePath': relative_path,
+                            'fileContent': content.decode('utf-8'),  # Just decode the content directly
+                            'fileMode': 'NORMAL'
+                        })
+                    except UnicodeDecodeError:
+                        # If UTF-8 decode fails, it's likely a binary file
+                        put_files.append({
+                            'filePath': relative_path,
+                            'fileContent': base64.b64encode(content).decode('utf-8'),
+                            'fileMode': 'NORMAL'
+                        })
                     except Exception as e:
                         click.echo(Colorize.error(f"Error processing file {relative_path}"))
                         Log.error(f"Error processing file {relative_path}: {str(e)}")
@@ -151,29 +200,62 @@ class RepositoryCreator:
                         sys.exit(1)
 
             # Create initial commit
+            # Create initial commit
             try:
                 click.echo(Colorize.output("Seeding repository with initial commit"))
                 Log.info("Creating initial commit")
-                self.codecommit_client.create_commit(
-                    repositoryName=self.repo_name,
-                    branchName='main',
-                    putFiles=put_files,
-                    commitMessage=f'Initial commit: Seeded from {self.s3_uri}'
-                )
-                Log.info(f"\nRepository {self.repo_name} seeded successfully!")
-                Log.info(f"Clone URL (HTTPS): {response['repositoryMetadata']['cloneUrlHttp']}")
-                Log.info(f"Clone URL (SSH): {response['repositoryMetadata']['cloneUrlSsh']}")
-                click.echo(Colorize.success(f"\nRepository {self.repo_name} seeded successfully!"))
-                click.echo(Colorize.output_with_value("Clone URL (HTTPS):", response['repositoryMetadata']['cloneUrlHttp']))
-                click.echo(Colorize.output_with_value("Clone URL (SSH):", response['repositoryMetadata']['cloneUrlSsh']))
+                
+                # First, get the default branch's HEAD commit
+                try:
+                    branch_info = self.codecommit_client.get_branch(
+                        repositoryName=self.repo_name,
+                        branchName='main'
+                    )
+                    parent_commit_id = branch_info['branch']['commitId']
+                except self.codecommit_client.exceptions.BranchDoesNotExistException:
+                    # If the branch doesn't exist, create the first commit
+                    response = self.codecommit_client.create_commit(
+                        repositoryName=self.repo_name,
+                        branchName='main',
+                        putFiles=put_files,
+                        authorName="Repository Creator",
+                        email="repo.creator@example.com",
+                        commitMessage=f'Initial commit: Seeded from {self.s3_uri}'
+                    )
+                else:
+                    # If branch exists, create commit with parent
+                    response = self.codecommit_client.create_commit(
+                        repositoryName=self.repo_name,
+                        branchName='main',
+                        parentCommitId=parent_commit_id,
+                        putFiles=put_files,
+                        authorName="Repository Creator",
+                        email="repo.creator@example.com",
+                        commitMessage=f'Initial commit: Seeded from {self.s3_uri}'
+                    )
+                
+                Log.info(f"Repository {self.repo_name} seeded successfully!")
             except Exception as e:
                 click.echo(Colorize.error(f"Error creating initial commit. Check logs for more information."))
                 Log.error(f"Error creating initial commit: {str(e)}")
                 self.codecommit_client.delete_repository(repositoryName=self.repo_name)
                 sys.exit(1)
 
+
+            #     Log.info(f"Repository {self.repo_name} seeded successfully!")
+            #     Log.info(f"Clone URL (HTTPS): {response['repositoryMetadata']['cloneUrlHttp']}")
+            #     Log.info(f"Clone URL (SSH): {response['repositoryMetadata']['cloneUrlSsh']}")
+            #     click.echo(Colorize.success(f"\nRepository {self.repo_name} seeded successfully!"))
+            #     click.echo(Colorize.output_with_value("Clone URL (HTTPS):", response['repositoryMetadata']['cloneUrlHttp']))
+            #     click.echo(Colorize.output_with_value("Clone URL (SSH):", response['repositoryMetadata']['cloneUrlSsh']))
+            # except Exception as e:
+            #     click.echo(Colorize.error(f"Error creating initial commit. Check logs for more information."))
+            #     Log.error(f"Error creating initial commit: {str(e)}")
+            #     self.codecommit_client.delete_repository(repositoryName=self.repo_name)
+            #     sys.exit(1)
+
     # -------------------------------------------------------------------------
-    # - Interactive Prompts
+    # - Prompts: Application Starter
     # -------------------------------------------------------------------------
 
     def select_from_app_starters(self, app_starters: List[str]) -> str:
@@ -244,6 +326,10 @@ class RepositoryCreator:
                 raise
 
         return app_starters
+    
+    # -------------------------------------------------------------------------
+    # - Prompts: Tags
+    # -------------------------------------------------------------------------
 
     def prompt_for_tags(self, tags: Dict) -> Dict:
         """Prompt the user to enter tags for the repository
@@ -255,28 +341,48 @@ class RepositoryCreator:
             Dict: Tags for the repository
         """
 
-        # First, iterate through the default tags and prompt the user to enter values
-        # Some may already have default values. Allow the user to just hit enter to accept default
-        for key, value in tags.items():
-            if value is None:
-                value = ''
-            tags[key] = Colorize.prompt(f"Enter value for tag '{key}'", value, str)
+        user_tags = {}
 
-        # Now, ask the user to add any additional tags using key=value. 
-        # After the user enters a key=value pair, place it in the tags Dict and prompt again
-        # If the user enters an empty string, stop prompting and return the tags
-        while True:
-            tag_input = Colorize.prompt("Enter tag in key=value format", "", str)
-            if tag_input == "":
-                break
-            try:
-                key, value = tag_input.split('=')
-                tags[key.strip()] = value.strip()
-            except ValueError:
-                click.echo(Colorize.error("Invalid tag format. Please use key=value format."))
-                continue
+        try:
 
-        return tags
+            # If there are tags then prompt the user to enter values for each tag
+            if tags:
+                print()
+                click.echo(Colorize.divider())
+                click.echo(Colorize.output_bold("Enter values for the following tags:"))
+                print()
+
+                # First, iterate through the default tags and prompt the user to enter values
+                # Some may already have default values. Allow the user to just hit enter to accept default
+                for key, value in tags.items():
+                    if value is None:
+                        value = ''
+                    user_tags[key] = Colorize.prompt(f"{key}", value, str)
+
+            # Now, ask the user to add any additional tags using key=value. 
+            # After the user enters a key=value pair, place it in the tags Dict and prompt again
+            # If the user enters an empty string, stop prompting and return the tags
+
+            print()
+            click.echo(Colorize.divider())
+            click.echo(Colorize.output_bold("Enter additional tags in key=value format. Hit enter to finish:"))
+            print()
+
+            while True:
+                tag_input = Colorize.prompt("New tag", "", str)
+                if tag_input == "":
+                    break
+                try:
+                    key, value = tag_input.split('=')
+                    user_tags[key.strip()] = value.strip()
+                except ValueError:
+                    click.echo(Colorize.error("Invalid tag format. Please use key=value format."))
+                    continue
+        except Exception as e:
+            Log.error(f"Error prompting for tags: {e}")
+            raise
+
+        return user_tags
     
     def get_default_tags(self) -> Dict:
         """Get the default tags for the repository
@@ -286,16 +392,22 @@ class RepositoryCreator:
         """
         tags = {}
 
-        # Get the default tag keys from self.settings.tag_keys
-        tag_keys = self.settings.get('tag_keys', [])
-        # place each key as an entry in tags where it's value is None
-        for key in tag_keys:
-            tags[key] = None
+        try:
 
-        # Get the default tags from self.defaults.tags and merge with tags. Overwrite existing keys in tags with the value from default. Add in any new tags.
-        default_tags = self.defaults.get('tags', {})
-        for key, value in default_tags.items():
-            tags[key] = value
+            # Get the default tag keys from self.settings.tag_keys
+            tag_keys = self.settings.get('tag_keys', [])
+            # place each key as an entry in tags where it's value is None
+            for key in tag_keys:
+                tags[key] = None
+
+            # Get the default tags from self.defaults.tags and merge with tags. Overwrite existing keys in tags with the value from default. Add in any new tags.
+            default_tags = self.defaults.get('tags', {})
+            for item in default_tags:
+                tags[item['Key']] = item['Value']
+
+        except Exception as e:
+            ConsoleAndLog.error(f"Error getting default tags: {e}")
+            raise
 
         return tags
 
@@ -317,24 +429,35 @@ class RepositoryCreator:
         """Set the S3 URI for the repository"""
         self.s3_uri = s3_uri
 
-    def set_tags(self, tags: Union[Dict, List]) -> None:
+    def set_tags(self, tags: Union[Dict, List]) -> Dict:
         """Set the tags for the repository
         
         Args:
             tags: Either a dictionary of tags {"key": "value"} or 
                 a list of tag dictionaries [{"Key": "key", "Value": "value"}]
+        
+        Returns:
+            Dict: Normalized dictionary of tags
+        
+        Raises:
+            TypeError: If tags is neither a dict nor a list
+            ValueError: If list items don't contain required Key/Value pairs
         """
         if isinstance(tags, list):
             # Convert AWS-style tag list to dictionary
-            self.tags = {
-                item["Key"]: item["Value"] 
-                for item in tags 
-                if "Key" in item and "Value" in item
-            }
+            normalized_tags = {}
+            for tag in tags:
+                if not isinstance(tag, dict) or 'Key' not in tag or 'Value' not in tag:
+                    raise ValueError("List items must be dictionaries with 'Key' and 'Value' fields")
+                normalized_tags[tag['Key']] = tag['Value']
+            self.tags = normalized_tags
         elif isinstance(tags, dict):
-            self.tags = tags
+            self.tags = tags.copy()  # Make a copy to avoid modifying the original
         else:
+            Log.error(f"Tags must be either a dictionary or a list of key-value pairs. Got {type(tags)} instead.")
             raise TypeError("Tags must be either a dictionary or a list of key-value pairs")
+        
+        return self.tags
 
 
     
@@ -443,7 +566,11 @@ def main():
 
     # create repo and seed with code
     try:
+        print()
         repo_creator.create_and_seed_repository()
+        print()
+        click.echo(Colorize.divider("="))
+        print()
     except Exception as e:
         ConsoleAndLog.error(f"Error creating and seeding repository: {str(e)}")
         sys.exit(1)

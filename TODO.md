@@ -3,6 +3,8 @@
 ## Config
 
 - Tags
+- Meta
+- move template name close to front of selection
 - Fix code structure
 - Improve Logging
 
@@ -18,9 +20,8 @@
 
 ## Create Repository
 
-- Use interactive prompts and formats
-- Read starter app inventory and pick from menu
-- Tags
+- Fix zip issue - clean up and see if all that other stuff is needed
+- Move zip name close to front of selection 
 - Fix code structure
 - Improve Logging
 
