@@ -1544,9 +1544,6 @@ class ConfigManager:
         while True:
             try:
                 default = ''
-                # if only one template, make it the default
-                if len(templates) == 1:
-                    default = 1
 
                 choice = Colorize.prompt("Enter template number", default, str)
                 # Check if input is a number

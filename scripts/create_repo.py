@@ -18,13 +18,14 @@ import argparse
 import sys
 import click
 from pathlib import Path
-from typing import Optional, List
+from typing import Optional, List, Union
 from urllib.parse import urlparse
 
 from lib.loader import ConfigLoader
 from lib.aws_session import AWSSessionManager, TokenRetrievalError
 from lib.logger import ScriptLogger, Log, ConsoleAndLog
 from lib.tools import Colorize
+from typing import Dict
 
 if sys.version_info[0] < 3:
     sys.stderr.write("Error: Python 3 is required\n")
@@ -43,6 +44,7 @@ class RepositoryCreator:
         self.region = region
         self.profile = profile
         self.prefix = prefix
+        self.tags = {}
         
         self.aws_session = AWSSessionManager(self.profile, self.region)
         self.s3_client = self.aws_session.get_client('s3', self.region)
@@ -58,6 +60,9 @@ class RepositoryCreator:
         self.settings = config_loader.load_settings()
         self.defaults = config_loader.load_defaults()
 
+    # -------------------------------------------------------------------------
+    # - Utility
+    # -------------------------------------------------------------------------
 
     def parse_s3_url(self, s3_uri: str) -> List[str]:
         """Parse an S3 URL into bucket and key."""
@@ -71,6 +76,10 @@ class RepositoryCreator:
             Log.error(f"Error: {str(e)}")
             sys.exit(1)
 
+    # -------------------------------------------------------------------------
+    # - Create and Seed Repository
+    # -------------------------------------------------------------------------
+
     def create_and_seed_repository(self):
 
         # Parse S3 URL
@@ -82,7 +91,8 @@ class RepositoryCreator:
             Log.info(f"Creating repository: {self.repo_name}")
             response = self.codecommit_client.create_repository(
                 repositoryName=self.repo_name,
-                repositoryDescription=f'Repository seeded from {self.s3_uri}'
+                repositoryDescription=f'Repository seeded from {self.s3_uri}',
+                tags=self.tags
             )
             click.echo(Colorize.output_with_value("Repository created:", response['repositoryMetadata']['cloneUrlHttp']))
             Log.info(f"Repository created: {response['repositoryMetadata']['cloneUrlHttp']}")
@@ -163,6 +173,133 @@ class RepositoryCreator:
                 sys.exit(1)
 
     # -------------------------------------------------------------------------
+    # - Interactive Prompts
+    # -------------------------------------------------------------------------
+
+    def select_from_app_starters(self, app_starters: List[str]) -> str:
+        """List available application starters and prompt the user to choose one to seed the repository.
+        
+        Args:
+            app_starters (List[str]): List of application starters from s3
+            
+        Returns:
+            str: Selected application starter
+        """
+
+        if not app_starters:
+            Log.error("No application starters found")
+            click.echo(Colorize.error("No application starters found"))
+            sys.exit(1)
+        
+        # Sort app_starters for consistent ordering
+        app_starters.sort()
+        
+        # Display numbered list
+        click.echo(Colorize.question("Available application starters:"))
+        for idx, app_starter in enumerate(app_starters, 1):
+            click.echo(Colorize.option(f"{idx}. {app_starter}"))
+        
+        print()
+
+        while True:
+            try:
+                default = ''
+
+                choice = Colorize.prompt("Enter app number", default, str)
+                # Check if input is a number
+                app_idx = int(choice) - 1
+                
+                # Validate the index is within range
+                if 0 <= app_idx < len(app_starters):
+                    selected = app_starters[app_idx]
+                            
+                    return selected
+                else:
+                    click.echo(Colorize.error(f"Please enter a number between 1 and {len(app_starters)}"))
+            except ValueError:
+                click.echo(Colorize.error("Please enter a valid number"))
+            except KeyboardInterrupt:
+                click.echo(Colorize.info("Application starter selection cancelled"))
+                sys.exit(1)
+
+
+    def discover_s3_app_starters(self) -> List[str]:
+        """Discover available app starters in the app starter directory"""
+        app_starters = []
+        # loop through self.settings.get('app_starters', []), access the bucket, and append to app_starters
+        for s3_app_starters_location in self.settings.get('app_starters', []):
+            try:
+                bucket = s3_app_starters_location['bucket']
+                prefix = s3_app_starters_location['prefix'].strip('/')
+                Log.info(f"Discovering app starters from s3://{bucket}/{prefix}")
+                response = self.s3_client.list_objects_v2(Bucket=bucket, Prefix=f"{prefix}")
+                for obj in response.get('Contents', []):
+                    if obj['Key'].endswith('.zip'):
+                        #Log.info(f"Found app starter: {obj}")
+                        s3_uri = f"s3://{bucket}/{obj['Key']}"
+                        app_starters.append(s3_uri)
+            except Exception as e:
+                Log.error(f"Error discovering application starters from S3: {e}")
+                click.echo(Colorize.error("Error discovering application starters from S3. Check logs for more info."))
+                raise
+
+        return app_starters
+
+    def prompt_for_tags(self, tags: Dict) -> Dict:
+        """Prompt the user to enter tags for the repository
+
+        Args:
+            tags (Dict): Default tags for the repository
+
+        Returns:
+            Dict: Tags for the repository
+        """
+
+        # First, iterate through the default tags and prompt the user to enter values
+        # Some may already have default values. Allow the user to just hit enter to accept default
+        for key, value in tags.items():
+            if value is None:
+                value = ''
+            tags[key] = Colorize.prompt(f"Enter value for tag '{key}'", value, str)
+
+        # Now, ask the user to add any additional tags using key=value. 
+        # After the user enters a key=value pair, place it in the tags Dict and prompt again
+        # If the user enters an empty string, stop prompting and return the tags
+        while True:
+            tag_input = Colorize.prompt("Enter tag in key=value format", "", str)
+            if tag_input == "":
+                break
+            try:
+                key, value = tag_input.split('=')
+                tags[key.strip()] = value.strip()
+            except ValueError:
+                click.echo(Colorize.error("Invalid tag format. Please use key=value format."))
+                continue
+
+        return tags
+    
+    def get_default_tags(self) -> Dict:
+        """Get the default tags for the repository
+
+        Returns:
+            Dict: Default tags for the repository
+        """
+        tags = {}
+
+        # Get the default tag keys from self.settings.tag_keys
+        tag_keys = self.settings.get('tag_keys', [])
+        # place each key as an entry in tags where it's value is None
+        for key in tag_keys:
+            tags[key] = None
+
+        # Get the default tags from self.defaults.tags and merge with tags. Overwrite existing keys in tags with the value from default. Add in any new tags.
+        default_tags = self.defaults.get('tags', {})
+        for key, value in default_tags.items():
+            tags[key] = value
+
+        return tags
+
+    # -------------------------------------------------------------------------
     # - Naming and File Locations
     # -------------------------------------------------------------------------
 
@@ -171,6 +308,35 @@ class RepositoryCreator:
         # Get the script's directory in a cross-platform way
         script_dir = Path(__file__).resolve().parent
         return script_dir.parent / SETTINGS_DIR
+    
+    # -------------------------------------------------------------------------
+    # - Setters
+    # -------------------------------------------------------------------------
+
+    def set_s3_uri(self, s3_uri: str) -> None:
+        """Set the S3 URI for the repository"""
+        self.s3_uri = s3_uri
+
+    def set_tags(self, tags: Union[Dict, List]) -> None:
+        """Set the tags for the repository
+        
+        Args:
+            tags: Either a dictionary of tags {"key": "value"} or 
+                a list of tag dictionaries [{"Key": "key", "Value": "value"}]
+        """
+        if isinstance(tags, list):
+            # Convert AWS-style tag list to dictionary
+            self.tags = {
+                item["Key"]: item["Value"] 
+                for item in tags 
+                if "Key" in item and "Value" in item
+            }
+        elif isinstance(tags, dict):
+            self.tags = tags
+        else:
+            raise TypeError("Tags must be either a dictionary or a list of key-value pairs")
+
+
     
 # =============================================================================
 # ----- Main function ---------------------------------------------------------
@@ -253,11 +419,34 @@ def main():
     except Exception as e:
         ConsoleAndLog.error(f"Error initializing repository creator: {str(e)}")
         sys.exit(1)
-        
-    # TODO prompt for starter app if no args.s3_uri
-    # TODO add tags
-    repo_creator.create_and_seed_repository()
-    # TODO tag repo
+    
+    # prompt for starter app if no args.s3_uri
+    try:
+        if args.s3_uri is None:
+            repo_creator.set_s3_uri(repo_creator.select_from_app_starters(repo_creator.discover_s3_app_starters()))
+    except KeyboardInterrupt:
+        ConsoleAndLog.info("Repository creation cancelled")
+        sys.exit(1)
+    except Exception as e:
+        ConsoleAndLog.error(f"Error selecting application starter: {str(e)}")
+        sys.exit(1)
+
+    # prompt for tags
+    try:
+        repo_creator.set_tags(repo_creator.prompt_for_tags(repo_creator.get_default_tags()))
+    except KeyboardInterrupt:
+        ConsoleAndLog.info("Repository creation cancelled")
+        sys.exit(1)
+    except Exception as e:
+        ConsoleAndLog.error(f"Error setting tags: {str(e)}")
+        sys.exit(1)
+
+    # create repo and seed with code
+    try:
+        repo_creator.create_and_seed_repository()
+    except Exception as e:
+        ConsoleAndLog.error(f"Error creating and seeding repository: {str(e)}")
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()
