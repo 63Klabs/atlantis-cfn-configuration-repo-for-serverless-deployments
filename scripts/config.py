@@ -28,6 +28,7 @@ from lib.loader import ConfigLoader
 from lib.aws_session import AWSSessionManager, TokenRetrievalError
 from lib.logger import ScriptLogger, Log, ConsoleAndLog
 from lib.tools import Colorize
+from lib.atlantis import FileNameListUtils
 
 if sys.version_info[0] < 3:
     sys.stderr.write("Error: Python 3 is required\n")
@@ -1516,56 +1517,12 @@ class ConfigManager:
     # - Template Selection
     # -------------------------------------------------------------------------
 
-    def select_from_templates(self, templates: List[str]) -> str:
-        """Select a template from a numbered list
+    def discover_templates(self) -> List[str]:
+        """Discover available templates from local and s3"""
+        templates = self.discover_local_templates()
+        templates.extend(self.discover_s3_templates())
+        return templates
         
-        Args:
-            templates (List[str]): List of template paths (local and s3://)
-            
-        Returns:
-            str: Selected template, with version ID for S3 paths
-        """
-
-        if not templates:
-            Log.error("No templates found")
-            click.echo(Colorize.error("No templates found"))
-            sys.exit(1)
-        
-        # Sort templates for consistent ordering
-        templates.sort()
-        
-        # Display numbered list
-        click.echo(Colorize.question("Available templates:"))
-        for idx, template in enumerate(templates, 1):
-            click.echo(Colorize.option(f"{idx}. {template}"))
-        
-        print()
-
-        while True:
-            try:
-                default = ''
-
-                choice = Colorize.prompt("Enter template number", default, str)
-                # Check if input is a number
-                template_idx = int(choice) - 1
-                
-                # Validate the index is within range
-                if 0 <= template_idx < len(templates):
-                    selected = templates[template_idx]
-                    
-                    # Check if this is an S3 path
-                    if selected.startswith('s3://'):
-                        selected = self._get_latest_version_id(selected)
-                            
-                    return selected
-                else:
-                    click.echo(Colorize.error(f"Please enter a number between 1 and {len(templates)}"))
-            except ValueError:
-                click.echo(Colorize.error("Please enter a valid number"))
-            except KeyboardInterrupt:
-                click.echo(Colorize.info("Template selection cancelled"))
-                sys.exit(1)
-
     def discover_local_templates(self) -> List[str]:
         """Discover available templates in the infrastructure type directory"""
         Log.info(f"Discovering templates from local directory: {self.get_templates_dir()}")
@@ -1860,9 +1817,8 @@ def main():
         # Handle template selection and parameter configuration
         if not local_config:
             # get local templates and then add in the s3 templates before passing to the select UI
-            templates = config_manager.discover_local_templates()
-            templates.extend(config_manager.discover_s3_templates())
-            template_file = config_manager.select_from_templates(templates)
+            templates = config_manager.discover_templates()
+            template_file = FileNameListUtils.select_from_file_list(templates, heading_text="Available templates", prompt_text="Enter a template number")
         else:
             template_file_from_config = local_config.get('atlantis', {}).get('deploy', {}).get('parameters', {}).get('template_file', '')
             # if template file starts with s3://, use it as is, else parse

@@ -2,7 +2,7 @@
 
 ## Config
 
-- move template name close to front of selection
+- collapse list to two rows if too long
 - Tags
 - Meta
 - Fix code structure

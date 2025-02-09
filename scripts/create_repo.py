@@ -123,9 +123,6 @@ class RepositoryCreator:
     
     def _create_dev_test_branches(self):
         try:
-
-
-
             # Create README.md content for main branch
             readme_content = "# Hello, World\n"
             readme_content += "\nThe main and test branches are intentionally left blank except for this file.\n\nCheck out the dev branch to get started.\n"
@@ -153,7 +150,7 @@ class RepositoryCreator:
                     branchName='main'
                 )
                 parent_commit_id = branch_info['branch']['commitId']
-                
+
                 # Create commit with README on existing main branch
                 main_commit = self.codecommit_client.create_commit(
                     repositoryName=self.repo_name,
@@ -169,6 +166,7 @@ class RepositoryCreator:
                     commitMessage='Initial README.md commit'
                 )
             except self.codecommit_client.exceptions.BranchDoesNotExistException:
+                Log.warning("Using secondary option to crate initial commit")
                 # Create initial commit with README if main branch doesn't exist
                 main_commit = self.codecommit_client.create_commit(
                     repositoryName=self.repo_name,
@@ -399,7 +397,7 @@ class RepositoryCreator:
 
             Log.info(f"Repository {self.repo_name} seeded successfully!")
             Log.info(f"Total files processed: {processed_files}")
-            click.echo(Colorize.success(f"\nRepository {self.repo_name} seeded successfully!"))
+            click.echo(Colorize.success(f"Repository {self.repo_name} seeded successfully!"))
             click.echo(Colorize.output_with_value("Total files processed:", str(processed_files)))
             
         except Exception as e:
@@ -409,7 +407,6 @@ class RepositoryCreator:
             sys.exit(1)
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
-
 
     def _is_binary_string(self, bytes_data, sample_size=1024):
         """Returns true if the bytes_data appears to be binary rather than text."""
@@ -428,83 +425,27 @@ class RepositoryCreator:
     # - Prompts: Application Starter
     # -------------------------------------------------------------------------
 
-    def select_from_app_starters(self, app_starters: List[str]) -> str:
-        """List available application starters and prompt the user to choose one to seed the repository.
-        
-        Args:
-            app_starters (List[str]): List of application starters from s3
-            
-        Returns:
-            str: Selected application starter
-        """
-
-        if not app_starters:
-            Log.error("No application starters found")
-            click.echo(Colorize.error("No application starters found"))
-        
-        # Sort app_starters for consistent ordering
-        app_starters.sort()
-
-        # We want to put the filename first and pad out to make it easy to view
-        starter_list = FileNameListUtils.extract_filenames_from_paths(app_starters)
-        max_filename = FileNameListUtils.find_longest_filename(starter_list)
-        
-        # Display numbered list
-        click.echo(Colorize.question("Available application starters:"))
-        click.echo(Colorize.option("0. None"))
-        for idx, starter_app in enumerate(starter_list, 1):
-            line = f"{idx}. {FileNameListUtils.pad_filename(starter_app[0], max_filename)} | {starter_app[1]}"
-            click.echo(Colorize.option(line))
-        
-        print()
-
-        while True:
-            try:
-                default = ''
-
-                choice = Colorize.prompt("Enter app number", default, str)
-                # Check if input is a number
-                app_idx = int(choice) - 1
-                
-                # Validate the index is within range
-                if -1 <= app_idx < len(starter_list):
-
-                    selected = None
-
-                    if(app_idx >= 0):
-                        selected = starter_list[app_idx][1]
-                            
-                    return selected
-                else:
-                    click.echo(Colorize.error(f"Please enter a number between 0 and {len(starter_list)}"))
-            except ValueError:
-                click.echo(Colorize.error("Please enter a valid number"))
-            except KeyboardInterrupt:
-                click.echo(Colorize.info("Application starter selection cancelled"))
-                sys.exit(1)
-
-
-    def discover_s3_app_starters(self) -> List[str]:
+    def discover_s3_file_list(self) -> List[str]:
         """Discover available app starters in the app starter directory"""
-        app_starters = []
-        # loop through self.settings.get('app_starters', []), access the bucket, and append to app_starters
-        for s3_app_starters_location in self.settings.get('app_starters', []):
+        file_list = []
+        # loop through self.settings.get('app_starters', []), access the bucket, and append to file_list
+        for s3_file_list_location in self.settings.get('app_starters', []):
             try:
-                bucket = s3_app_starters_location['bucket']
-                prefix = s3_app_starters_location['prefix'].strip('/')
+                bucket = s3_file_list_location['bucket']
+                prefix = s3_file_list_location['prefix'].strip('/')
                 Log.info(f"Discovering app starters from s3://{bucket}/{prefix}")
                 response = self.s3_client.list_objects_v2(Bucket=bucket, Prefix=f"{prefix}")
                 for obj in response.get('Contents', []):
                     if obj['Key'].endswith('.zip'):
                         #Log.info(f"Found app starter: {obj}")
                         s3_uri = f"s3://{bucket}/{obj['Key']}"
-                        app_starters.append(s3_uri)
+                        file_list.append(s3_uri)
             except Exception as e:
                 Log.error(f"Error discovering application starters from S3: {e}")
                 click.echo(Colorize.error("Error discovering application starters from S3. Check logs for more info."))
                 raise
 
-        return app_starters
+        return file_list
     
     # -------------------------------------------------------------------------
     # - Prompts: Tags
@@ -652,13 +593,16 @@ class RepositoryCreator:
         Returns:
             str: The value of the Creator or Owner tag if present
         """
+        
+        creator = ''
+
         try:
             if self.tags.get('Creator'):
-                return self.tags.get('Creator')
+                creator = self.tags.get('Creator')
             elif self.tags.get('Owner'):
-                return self.tags.get('Owner')
-            else:
-                return ''
+                creator = self.tags.get('Owner')
+
+            return creator
         except Exception as e:
             Log.error(f"Error getting creator tag: {e}")
             raise
@@ -669,6 +613,7 @@ class RepositoryCreator:
         Returns:
             str: The author for the initial commit
         """
+
         author_name = "Repository Creator (via CLI)"
         creator = self.get_creator_tag()
         if creator:
@@ -678,16 +623,16 @@ class RepositoryCreator:
         
     def get_init_commit_email(self) -> str:
         """Get the author email for the initial commit"""
-        
+
         author_email = "repo.creator@example.com"
         creator = self.get_creator_tag()
         contact = self.tags.get('Contact', None)
 
         regex = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'
 
-        if(re.fullmatch(regex, contact)):
+        if(contact and re.fullmatch(regex, contact)):
             author_email = contact
-        elif (re.fullmatch(regex, creator)):
+        elif (creator and re.fullmatch(regex, creator)):
             author_email = creator
         elif (contact):
             # remove all spaces and special characters from contact
@@ -832,7 +777,9 @@ def main():
     # prompt for starter app if no args.s3_uri
     try:
         if args.s3_uri is None:
-            repo_creator.set_s3_uri(repo_creator.select_from_app_starters(repo_creator.discover_s3_app_starters()))
+            file_list = repo_creator.discover_s3_file_list()
+            app_starter_file = FileNameListUtils.select_from_file_list(file_list, True, heading_text="Available application starters", prompt_text="Enter an app starter number")
+            repo_creator.set_s3_uri(app_starter_file)
     except KeyboardInterrupt:
         ConsoleAndLog.info("Repository creation cancelled")
         sys.exit(1)
