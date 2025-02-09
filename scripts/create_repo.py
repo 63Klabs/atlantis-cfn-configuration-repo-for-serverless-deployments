@@ -10,6 +10,7 @@ VERSION = "v0.1.0/2025-02-28"
 # Full Documentation:
 # https://github.com/chadkluck/atlantis-cfn-configuration-repo-for-serverless-deployments/
 
+import re
 import tempfile
 import zipfile
 import base64
@@ -18,7 +19,7 @@ import argparse
 import sys
 import shutil
 from pathlib import Path
-from typing import Optional, List, Union
+from typing import Optional, List, Dict, Union
 from urllib.parse import urlparse
 
 import click
@@ -27,7 +28,7 @@ from lib.loader import ConfigLoader
 from lib.aws_session import AWSSessionManager, TokenRetrievalError
 from lib.logger import ScriptLogger, Log, ConsoleAndLog
 from lib.tools import Colorize
-from typing import Dict
+from lib.atlantis import FileNameListUtils
 
 if sys.version_info[0] < 3:
     sys.stderr.write("Error: Python 3 is required\n")
@@ -123,6 +124,8 @@ class RepositoryCreator:
     def _create_dev_test_branches(self):
         try:
 
+
+
             # Create README.md content for main branch
             readme_content = "# Hello, World\n"
             readme_content += "\nThe main and test branches are intentionally left blank except for this file.\n\nCheck out the dev branch to get started.\n"
@@ -134,8 +137,8 @@ class RepositoryCreator:
             # Add clone info
             try:
                 clone_urls = self.get_clone_urls()
-                readme_content += f"Clone URL (HTTPS): {clone_urls.get('https', '')}\n"
-                readme_content += f"Clone URL (SSH): {clone_urls.get('ssh', '')}\n"
+                readme_content += f"\nClone URL (HTTPS): {clone_urls.get('https', '')}\n"
+                readme_content += f"\nClone URL (SSH): {clone_urls.get('ssh', '')}\n"
             except Exception as e:
                 Log.error(f"Error getting repository clone urls: {str(e)}")
 
@@ -161,8 +164,8 @@ class RepositoryCreator:
                         'fileContent': readme_content,
                         'fileMode': 'NORMAL'
                     }],
-                    authorName="Repository Creator",
-                    email="repo.creator@example.com",
+                    authorName=self.get_init_commit_author(),
+                    email=self.get_init_commit_email(),
                     commitMessage='Initial README.md commit'
                 )
             except self.codecommit_client.exceptions.BranchDoesNotExistException:
@@ -175,8 +178,8 @@ class RepositoryCreator:
                         'fileContent': readme_content,
                         'fileMode': 'NORMAL'
                     }],
-                    authorName="Repository Creator",
-                    email="repo.creator@example.com",
+                    authorName=self.get_init_commit_author(),
+                    email=self.get_init_commit_email(),
                     commitMessage='Initial README.md commit'
                 )
             
@@ -376,8 +379,8 @@ class RepositoryCreator:
                         branchName=seed_branch,
                         parentCommitId=parent_commit_id if parent_commit_id else None,
                         putFiles=current_batch,
-                        authorName="Repository Creator",
-                        email="repo.creator@example.com",
+                        authorName=self.get_init_commit_author(),
+                        email=self.get_init_commit_email(),
                         commitMessage=f'Seeding repository (batch {start_idx + 1}-{end_idx} of {total_files} files)'
                     )
                     
@@ -442,13 +445,16 @@ class RepositoryCreator:
         # Sort app_starters for consistent ordering
         app_starters.sort()
 
-        # add a 0 option for None to the beginning of list
-        app_starters.insert(0, 'None')
+        # We want to put the filename first and pad out to make it easy to view
+        starter_list = FileNameListUtils.extract_filenames_from_paths(app_starters)
+        max_filename = FileNameListUtils.find_longest_filename(starter_list)
         
         # Display numbered list
         click.echo(Colorize.question("Available application starters:"))
-        for idx, app_starter in enumerate(app_starters, 1):
-            click.echo(Colorize.option(f"{idx}. {app_starter}"))
+        click.echo(Colorize.option("0. None"))
+        for idx, starter_app in enumerate(starter_list, 1):
+            line = f"{idx}. {FileNameListUtils.pad_filename(starter_app[0], max_filename)} | {starter_app[1]}"
+            click.echo(Colorize.option(line))
         
         print()
 
@@ -461,16 +467,16 @@ class RepositoryCreator:
                 app_idx = int(choice) - 1
                 
                 # Validate the index is within range
-                if 0 <= app_idx < len(app_starters):
+                if -1 <= app_idx < len(starter_list):
 
                     selected = None
 
-                    if(app_idx != 0):
-                        selected = app_starters[app_idx]
+                    if(app_idx >= 0):
+                        selected = starter_list[app_idx][1]
                             
                     return selected
                 else:
-                    click.echo(Colorize.error(f"Please enter a number between 1 and {len(app_starters)}"))
+                    click.echo(Colorize.error(f"Please enter a number between 0 and {len(starter_list)}"))
             except ValueError:
                 click.echo(Colorize.error("Please enter a valid number"))
             except KeyboardInterrupt:
@@ -639,6 +645,61 @@ class RepositoryCreator:
         except Exception as e:
             Log.error(f"Error checking repository existence: {str(e)}")
             raise
+
+    def get_creator_tag(self) -> str:
+        """Access the Creator tag if there is one. Can be used for the initial commit
+        
+        Returns:
+            str: The value of the Creator or Owner tag if present
+        """
+        try:
+            if self.tags.get('Creator'):
+                return self.tags.get('Creator')
+            elif self.tags.get('Owner'):
+                return self.tags.get('Owner')
+            else:
+                return ''
+        except Exception as e:
+            Log.error(f"Error getting creator tag: {e}")
+            raise
+
+    def get_init_commit_author(self) -> str:
+        """Get the author for the initial commit
+
+        Returns:
+            str: The author for the initial commit
+        """
+        author_name = "Repository Creator (via CLI)"
+        creator = self.get_creator_tag()
+        if creator:
+            author_name += f" ({creator})"
+
+        return author_name
+        
+    def get_init_commit_email(self) -> str:
+        """Get the author email for the initial commit"""
+        
+        author_email = "repo.creator@example.com"
+        creator = self.get_creator_tag()
+        contact = self.tags.get('Contact', None)
+
+        regex = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'
+
+        if(re.fullmatch(regex, contact)):
+            author_email = contact
+        elif (re.fullmatch(regex, creator)):
+            author_email = creator
+        elif (contact):
+            # remove all spaces and special characters from contact
+            contact = re.sub(r'[^A-Za-z0-9._-]', '', contact)
+            author_email = f"{contact}@example.com"
+        elif (creator):
+            # remove all spaces and special characters from creator
+            creator = re.sub(r'[^A-Za-z0-9._-]', '', creator)
+            author_email = f"{creator}@example.com"
+
+        return author_email
+
 
     # -------------------------------------------------------------------------
     # - Setters

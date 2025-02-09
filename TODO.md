@@ -2,9 +2,9 @@
 
 ## Config
 
+- move template name close to front of selection
 - Tags
 - Meta
-- move template name close to front of selection
 - Fix code structure
 - Improve Logging
 
@@ -20,8 +20,6 @@
 
 ## Create Repository
 
-- Add creator to commit
-- Move zip name close to front of selection 
 - Fix code structure
 - Improve Logging
 
