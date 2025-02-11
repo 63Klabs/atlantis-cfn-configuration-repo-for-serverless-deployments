@@ -1,22 +1,26 @@
 #!/usr/bin/env python3
 
-VERSION = "v0.1.0/2025-02-22"
+VERSION = "v0.1.0/2025-02-28"
 # Developed by Chad Kluck with AI assistance from Amazon Q Developer
 
-# Usage Example:
+"""
+Logger functions for command line scripts.
 
-# from lib.logger import ScriptLogger, ConsoleAndLog
+Usage Example:
 
-# # Setup logger at the start of your script
-# ScriptLogger.setup('your-script-name')
+from lib.logger import ScriptLogger, ConsoleAndLog
 
-# # ConsoleAndLog can be used to display the SAME message to BOTH the console and log file
-# ConsoleAndLog.info("Starting process...")
-# try:
-#     # do something
-#     pass
-# except Exception as e:
-#     ConsoleAndLog.error("Process failed", e)
+# Setup logger at the start of your script
+ScriptLogger.setup('your-script-name')
+
+# ConsoleAndLog can be used to display the SAME message to BOTH the console and log file
+ConsoleAndLog.info("Starting process...")
+try:
+    # do something
+    pass
+except Exception as e:
+    ConsoleAndLog.error("Process failed", e)
+"""
 
 import logging
 import sys

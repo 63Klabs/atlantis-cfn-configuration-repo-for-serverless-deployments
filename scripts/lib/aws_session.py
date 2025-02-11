@@ -1,18 +1,23 @@
 #!/usr/bin/env python3
 
-VERSION = "v0.1.0/2025-02-22"
+VERSION = "v0.1.0/2025-02-28"
 # Developed by Chad Kluck with AI assistance from Amazon Q Developer
 
-# Usage:
-# In your script:
-# from lib.aws_session import AWSSessionManager
+"""
+AWS Session Manager for scripts using boto3
+Automatically detects if a session needs to be refreshed and (if SSO) invokes the sso login
 
-# # Create a session manager
-# session_manager = AWSSessionManager(profile="my-profile")
+Usage:
+In your script:
+from lib.aws_session import AWSSessionManager
 
-# # Get a client for any AWS service
-# s3_client = session_manager.get_client('s3')
-# sts_client = session_manager.get_client('sts')
+# Create a session manager
+session_manager = AWSSessionManager(profile="my-profile")
+
+# Get a client for any AWS service
+s3_client = session_manager.get_client('s3')
+sts_client = session_manager.get_client('sts')
+"""
 
 
 import os

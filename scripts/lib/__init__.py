@@ -10,5 +10,6 @@ __all__ = [
 	'Log',
 	'Strings',
 	'Colorize',
-	'FileNameListUtils'
+	'FileNameListUtils',
+	'ConfigLoader'
 ]

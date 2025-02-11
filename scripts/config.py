@@ -24,11 +24,10 @@ from pathlib import Path
 from typing import Dict, Optional, List
 from botocore.exceptions import ClientError
 
-from lib.loader import ConfigLoader
 from lib.aws_session import AWSSessionManager, TokenRetrievalError
 from lib.logger import ScriptLogger, Log, ConsoleAndLog
 from lib.tools import Colorize
-from lib.atlantis import FileNameListUtils
+from lib.atlantis import FileNameListUtils, ConfigLoader
 
 if sys.version_info[0] < 3:
     sys.stderr.write("Error: Python 3 is required\n")
