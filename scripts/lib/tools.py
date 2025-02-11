@@ -199,6 +199,46 @@ class Strings:
         import datetime
         return datetime.datetime.now().strftime(format)
 
+    @staticmethod
+    def find_longest_string_length_in_column(two_dim_array: List[List[str]], column: int = 0) -> int:
+        """Find the length of the longest string in a 2 dimensional list column.
+        
+        Args:
+            filename_pairs (List[List[str]]): List of [filename, full_path] pairs
+            
+        Returns:
+            int: Length of the longest string in column
+            
+        Example:
+            Input: [['file.zip', 'File Zip'], 
+                    ['longer_file.zip', 'Longer File Zip']]
+            Output: 14  # length of 'longer_file.zip' if column 0, 15 if column 1
+        """
+        if not two_dim_array:
+            return 0
+            
+        # Get the length of each filename (first element of each pair)
+        # and return the maximum
+        return max(len(pair[column]) for pair in two_dim_array)
+
+    @staticmethod
+    def pad_string(text: str, str_length: int) -> str:
+        """Pad a string with spaces at end to reach the specified length.
+        
+        Args:
+            text (str): The text string to pad
+            str_length (int): The desired total length after padding
+            
+        Returns:
+            str: The padded string
+            
+        Example:
+            Input: text="test.zip", str_length=10
+            Output: "test.zip  " (padded with spaces to length 10)
+        """
+        return text.ljust(str_length)
+
+
 # =============================================================================
 # ----- TERMINAL COLORS -------------------------------------------------------
 # =============================================================================

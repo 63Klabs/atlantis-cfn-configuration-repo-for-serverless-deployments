@@ -2,7 +2,6 @@
 
 ## Config
 
-- collapse list to two rows if too long
 - Tags
 - Meta
 - Fix code structure

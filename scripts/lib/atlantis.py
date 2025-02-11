@@ -9,7 +9,7 @@ import sys
 import click
 
 from .logger import Log
-from .tools import Colorize
+from .tools import Colorize, Strings
 
 # -------------------------------------------------------------------------
 # - File Name List Utilities
@@ -44,13 +44,20 @@ class FileNameListUtils:
 
         # We want to put the filename first and pad out to make it easy to view
         selection_list = FileNameListUtils.extract_filenames_from_paths(file_list)
-        max_filename = FileNameListUtils.find_longest_filename(selection_list)
+        max_filename = Strings.find_longest_string_length_in_column(selection_list, 0)
+        max_filepath = Strings.find_longest_string_length_in_column(selection_list, 1)
+        terminal_width = Strings.get_terminal_width(900)
+        two_line = max_filename + max_filepath + 7 > terminal_width
         
         # Display numbered list
         click.echo(Colorize.question(f"{heading_text}:"))
         if (allow_none): click.echo(Colorize.option("0. None"))
         for idx, line_item in enumerate(selection_list, 1):
-            line = f"{idx}. {FileNameListUtils.pad_filename(line_item[0], max_filename)} | {line_item[1]}"
+            line = ""
+            if two_line:
+                line = f"{idx}. {line_item[0]}\n    {line_item[1]}"
+            else:
+                line = f"{idx}. {Strings.pad_string(line_item[0], max_filename)} | {line_item[1]}"
             click.echo(Colorize.option(line))
         
         print()
@@ -110,50 +117,4 @@ class FileNameListUtils:
             Log.error(f"Error processing S3 URLs: {str(e)}")
             raise
 
-    @staticmethod
-    def find_longest_filename(filename_pairs: List[List[str]]) -> int:
-        """Find the length of the longest filename in the list of filename pairs.
-        
-        Args:
-            filename_pairs (List[List[str]]): List of [filename, full_path] pairs
-            
-        Returns:
-            int: Length of the longest filename
-            
-        Example:
-            Input: [['file.zip', 's3://bucket/path/file.zip'], 
-                    ['longer_file.zip', 's3://bucket/other/longer_file.zip']]
-            Output: 14  # length of 'longer_file.zip'
-        """
-        try:
-            if not filename_pairs:
-                return 0
-                
-            # Get the length of each filename (first element of each pair)
-            # and return the maximum
-            return max(len(pair[0]) for pair in filename_pairs)
-            
-        except Exception as e:
-            Log.error(f"Error finding longest filename: {str(e)}")
-            raise
 
-    @staticmethod
-    def pad_filename(file_name: str, str_length: int) -> str:
-        """Pad a filename with spaces to reach the specified length.
-        
-        Args:
-            file_name (str): The filename to pad
-            str_length (int): The desired total length after padding
-            
-        Returns:
-            str: The padded filename
-            
-        Example:
-            Input: file_name="test.zip", str_length=10
-            Output: "test.zip  " (padded with spaces to length 10)
-        """
-        try:
-            return file_name.ljust(str_length)
-        except Exception as e:
-            Log.error(f"Error padding filename: {str(e)}")
-            raise
