@@ -27,7 +27,7 @@ import click
 from lib.aws_session import AWSSessionManager, TokenRetrievalError
 from lib.logger import ScriptLogger, Log, ConsoleAndLog
 from lib.tools import Colorize
-from lib.atlantis import FileNameListUtils, ConfigLoader
+from lib.atlantis import FileNameListUtils, ConfigLoader, TagUtils
 
 if sys.version_info[0] < 3:
     sys.stderr.write("Error: Python 3 is required\n")
@@ -449,59 +449,6 @@ class RepositoryCreator:
     # -------------------------------------------------------------------------
     # - Prompts: Tags
     # -------------------------------------------------------------------------
-
-    def prompt_for_tags(self, tags: Dict) -> Dict:
-        """Prompt the user to enter tags for the repository
-
-        Args:
-            tags (Dict): Default tags for the repository
-
-        Returns:
-            Dict: Tags for the repository
-        """
-
-        user_tags = {}
-
-        try:
-
-            # If there are tags then prompt the user to enter values for each tag
-            if tags:
-                print()
-                click.echo(Colorize.divider())
-                click.echo(Colorize.output_bold("Enter values for the following tags:"))
-                print()
-
-                # First, iterate through the default tags and prompt the user to enter values
-                # Some may already have default values. Allow the user to just hit enter to accept default
-                for key, value in tags.items():
-                    if value is None:
-                        value = ''
-                    user_tags[key] = Colorize.prompt(f"{key}", value, str)
-
-            # Now, ask the user to add any additional tags using key=value. 
-            # After the user enters a key=value pair, place it in the tags Dict and prompt again
-            # If the user enters an empty string, stop prompting and return the tags
-
-            print()
-            click.echo(Colorize.divider())
-            click.echo(Colorize.output_bold("Enter additional tags in key=value format. Hit enter to finish:"))
-            print()
-
-            while True:
-                tag_input = Colorize.prompt("New tag", "", str)
-                if tag_input == "":
-                    break
-                try:
-                    key, value = tag_input.split('=')
-                    user_tags[key.strip()] = value.strip()
-                except ValueError:
-                    click.echo(Colorize.error("Invalid tag format. Please use key=value format."))
-                    continue
-        except Exception as e:
-            Log.error(f"Error prompting for tags: {e}")
-            raise
-
-        return user_tags
     
     def get_default_tags(self) -> Dict:
         """Get the default tags for the repository
@@ -509,27 +456,12 @@ class RepositoryCreator:
         Returns:
             Dict: Default tags for the repository
         """
-        tags = {}
-
         try:
-
-            # Get the default tag keys from self.settings.tag_keys
-            tag_keys = self.settings.get('tag_keys', [])
-            # place each key as an entry in tags where it's value is None
-            for key in tag_keys:
-                tags[key] = None
-
-            # Get the default tags from self.defaults.tags and merge with tags. Overwrite existing keys in tags with the value from default. Add in any new tags.
-            default_tags = self.defaults.get('tags', {})
-            for item in default_tags:
-                tags[item['Key']] = item['Value']
-
+            default_tags = TagUtils.get_default_tags(self.settings, self.defaults)
+            return default_tags
         except Exception as e:
-            ConsoleAndLog.error(f"Error getting default tags: {e}")
+            Log.error(f"Error getting default tags: {e}")
             raise
-
-        return tags
-
 
     # -------------------------------------------------------------------------
     # - Getters, Naming, and File Locations
@@ -788,7 +720,7 @@ def main():
 
     # prompt for tags
     try:
-        repo_creator.set_tags(repo_creator.prompt_for_tags(repo_creator.get_default_tags()))
+        repo_creator.set_tags(TagUtils.prompt_for_tags(repo_creator.get_default_tags()))
     except KeyboardInterrupt:
         ConsoleAndLog.info("Repository creation cancelled")
         sys.exit(1)

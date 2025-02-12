@@ -27,7 +27,7 @@ from botocore.exceptions import ClientError
 from lib.aws_session import AWSSessionManager, TokenRetrievalError
 from lib.logger import ScriptLogger, Log, ConsoleAndLog
 from lib.tools import Colorize
-from lib.atlantis import FileNameListUtils, ConfigLoader
+from lib.atlantis import FileNameListUtils, ConfigLoader, TagUtils
 
 if sys.version_info[0] < 3:
     sys.stderr.write("Error: Python 3 is required\n")
@@ -560,8 +560,8 @@ class ConfigManager:
                 # We do this below so we'll skip doing it here
 
         # We will now apply the deploy parameters to the deployment
-        # We already applied the atlantis_defalt_deploy_parameters above but now
-        # we focus on just the curren stage
+        # We already applied the atlantis_default_deploy_parameters above but now
+        # we focus on just the current stage
         deployment_parameters = atlantis_default_deploy_parameters.copy()
         deployment_parameters.update({
             'stack_name': stack_name,
@@ -1110,7 +1110,24 @@ class ConfigManager:
                 click.echo(Colorize.error(f"Error creating {prefix_defaults_path}"))
                 Log.error(f"Error creating {prefix_defaults_path}: {str(e)}")
                 return
-            
+
+    # -------------------------------------------------------------------------
+    # - Prompts: Tags
+    # -------------------------------------------------------------------------
+    
+    def get_default_tags(self) -> Dict:
+        """Get the default tags for the repository
+
+        Returns:
+            Dict: Default tags for the repository
+        """
+        try:
+            default_tags = TagUtils.get_default_tags(self.settings, self.defaults)
+            return default_tags
+        except Exception as e:
+            Log.error(f"Error getting default tags: {e}")
+            raise
+
     # -------------------------------------------------------------------------
     # - Parse, Stringify, and Process Parameter Overrides and Tags
     # -------------------------------------------------------------------------
@@ -1218,7 +1235,7 @@ class ConfigManager:
         for new_tag in new_tags:
             key = new_tag['Key']
             # Only allow new tags to override if they don't start with atlantis: or Atlantis
-            if key in tag_dict and not (key.startswith('atlantis:') or key.startswith('Atlantis')):
+            if key in tag_dict and not (TagUtils.is_atlantis_reserved_tag(key)):
                 tag_dict[key] = new_tag['Value']
             elif key not in tag_dict:  # Add new custom tags
                 tag_dict[key] = new_tag['Value']
@@ -1590,7 +1607,7 @@ class ConfigManager:
             
         return bucket, key, version_id
 
-    def _get_latest_version_id(self, s3_uri: str) -> str:
+    def get_latest_version_id(self, s3_uri: str) -> str:
         """Get the latest version ID for an S3 object and return full URI with version
         
         Args:
@@ -1818,6 +1835,8 @@ def main():
             # get local templates and then add in the s3 templates before passing to the select UI
             templates = config_manager.discover_templates()
             template_file = FileNameListUtils.select_from_file_list(templates, heading_text="Available templates", prompt_text="Enter a template number")
+            if template_file.startswith('s3://'):
+                template_file = config_manager.get_latest_version_id(template_file)
         else:
             template_file_from_config = local_config.get('atlantis', {}).get('deploy', {}).get('parameters', {}).get('template_file', '')
             # if template file starts with s3://, use it as is, else parse
@@ -1851,6 +1870,17 @@ def main():
         # Prompt for parameters
         parameter_values = config_manager.prompt_for_parameters(parameters, parameter_defaults)
         
+        # prompt for tags
+        try:
+            tag_defaults = config_manager.merge_tags(TagUtils.tags_as_list(config_manager.get_default_tags()), tag_defaults)
+            tag_defaults = TagUtils.tags_as_list(TagUtils.prompt_for_tags(TagUtils.tags_as_dict(tag_defaults)))
+        except KeyboardInterrupt:
+            ConsoleAndLog.info("Config creation cancelled")
+            sys.exit(1)
+        except Exception as e:
+            ConsoleAndLog.error(f"Error setting tags: {str(e)}")
+            sys.exit(1)
+
         # Build the complete config
         config = config_manager.build_config(args.infra_type, template_file, atlantis_deploy_parameter_defaults, parameter_values, tag_defaults, local_config)
         

@@ -14,8 +14,218 @@ import sys
 
 import click
 
-from .logger import Log
+from .logger import Log, ConsoleAndLog
 from .tools import Colorize, Strings
+
+# -------------------------------------------------------------------------
+# - Tag Utilities
+# -------------------------------------------------------------------------
+
+
+class TagUtils:
+
+    def is_valid_aws_tag(key: str, value: str) -> tuple[bool, str]:
+        """Validate AWS tag key and value according to AWS requirements
+        
+        Returns:
+            tuple[bool, str]: (is_valid, error_message)
+        """
+        # Key validation
+        if len(key) > 128:
+            return False, "Tag key cannot be longer than 128 characters"
+        
+        if not key.strip():
+            return False, "Tag key cannot be empty"
+        
+        if key.lower().startswith("aws:"):
+            return False, "Tag keys cannot start with 'aws:'"
+        
+        if key.startswith(" ") or key.endswith(" "):
+            return False, "Tag keys cannot start or end with spaces"
+            
+        if value.startswith(" ") or value.endswith(" "):
+            return False, "Tag values cannot start or end with spaces"
+        
+        if key.startswith('Atlantis') or key.startswith('atlantis:'):
+            return False, "Tag key cannot start with 'Atlantis' or 'atlantis:'"
+        
+        if TagUtils.is_atlantis_reserved_tag(key):
+            return False, f"Tag key '{key}' is a reserved Atlantis tag"
+        
+        # AWS allows letters, numbers, spaces, and the following special characters: + - = . _ : / @
+        allowed_chars = set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 +-=._:/@")
+        invalid_chars = set(key) - allowed_chars
+        if invalid_chars:
+            return False, f"Tag key contains invalid characters: {', '.join(invalid_chars)}"
+        
+        # Value validation
+        if len(value) > 256:
+            return False, "Tag value cannot be longer than 256 characters"
+        if not value.strip():
+            return False, "Tag value cannot be empty"
+        
+        # AWS allows letters, numbers, spaces, and the following special characters: + - = . _ : / @
+        invalid_chars = set(value) - allowed_chars
+        if invalid_chars:
+            return False, f"Tag value contains invalid characters: {', '.join(invalid_chars)}"
+        
+        return True, ""
+
+    @staticmethod
+    def is_atlantis_reserved_tag(key: str) -> bool:
+        """Check if the tag key is not a reserved Atlantis tag
+
+        Args:
+            key (str): Tag key
+
+        Returns:
+            bool: True if the tag key is not a reserved Atlantis tag
+        """
+        return (key.startswith('Atlantis') or key.startswith('atlantis:') or key in ['Provisioner', 'DeployedUsing', 'Name', 'Stage', 'Environment', 'AlarmNotificationEmail'])
+
+    @staticmethod
+    def prompt_for_tags(tags: Dict) -> Dict:
+        """Prompt the user to enter tags for the repository
+
+        Args:
+            tags (Dict): Default tags for the repository
+
+        Returns:
+            Dict: Tags for the repository
+        """
+
+        user_tags = {}
+
+        try:
+
+            # If there are tags then prompt the user to enter values for each tag
+            if tags:
+                print()
+                click.echo(Colorize.divider())
+                click.echo(Colorize.output_bold("Enter values for the following tags:"))
+                print()
+
+                # First, iterate through the default tags and prompt the user to enter values
+                # Some may already have default values. Allow the user to just hit enter to accept default
+                for key, value in tags.items():
+                    # skip any that begin with 'Atlantis' or 'atlantis'
+                    if TagUtils.is_atlantis_reserved_tag(key):
+                        continue
+
+                    if value is None:
+                        value = ''
+                    
+                    while True:
+                        user_input = Colorize.prompt(f"{key}", value, str)
+                        is_valid, error_msg = TagUtils.is_valid_aws_tag(key, user_input)
+                        if is_valid:
+                            user_tags[key] = user_input
+                            break
+                        click.echo(Colorize.error(f"Error: {error_msg}"))
+
+
+            # Now, ask the user to add any additional tags using key=value. 
+            # After the user enters a key=value pair, place it in the tags Dict and prompt again
+            # If the user enters an empty string, stop prompting and return the tags
+
+            print()
+            click.echo(Colorize.divider())
+            click.echo(Colorize.output_bold("Enter additional tags in key=value format. Hit enter to finish:"))
+            print()
+
+            while True:
+                tag_input = Colorize.prompt("New tag", "", str)
+                if tag_input == "":
+                    break
+                
+                # Split and validate the input
+                if '=' not in tag_input:
+                    click.echo(Colorize.error("Invalid tag format. Please use key=value format."))
+                    continue
+                    
+                parts = tag_input.split('=', 1)
+                key, value = parts[0].strip(), parts[1].strip()
+                
+                # Validate both key and value
+                is_valid_key, key_error = TagUtils.is_valid_aws_tag(key, "dummy")  # Validate key format
+                is_valid_value, value_error = TagUtils.is_valid_aws_tag("dummy", value)  # Validate value format
+                
+                if not is_valid_key:
+                    click.echo(Colorize.error(f"Invalid tag key: {key_error}"))
+                    continue
+                    
+                if not is_valid_value:
+                    click.echo(Colorize.error(f"Invalid tag value: {value_error}"))
+                    continue
+                
+                # If we get here, both key and value are valid
+                user_tags[key] = value
+
+        except Exception as e:
+            Log.error(f"Error prompting for tags: {e}")
+            raise
+
+        return user_tags
+    
+    @staticmethod
+    def tags_as_list(tags: Dict) -> List[Dict]:
+        """Convert tags from dictionary to list of dictionaries
+
+        Args:
+            tags (Dict): Tags for the repository
+
+        Returns:
+            List[Dict]: List of tags for the repository
+        """
+        tag_list = []
+        for key, value in tags.items():
+            tag_list.append({"Key": key, "Value": value})
+        return tag_list
+
+    @staticmethod
+    def tags_as_dict(tags: List[Dict]) -> Dict:
+        """Convert tags from list of dictionaries to dictionary
+
+        Args:
+            tags (List[Dict]): List of tags for the repository
+
+        Returns:
+            Dict: Tags for the repository
+        """
+        tag_dict = {}
+        for tag in tags:
+            tag_dict[tag['Key']] = tag['Value']
+
+        return tag_dict
+    
+    @staticmethod
+    def get_default_tags(settings: Dict, defaults: Dict) -> Dict:
+        """Get the default tags for the repository
+
+        Returns:
+            Dict: Default tags for the repository
+        """
+        tags = {}
+
+        try:
+
+            # Get the default tag keys from self.settings.tag_keys
+            tag_keys = settings.get('tag_keys', [])
+            # place each key as an entry in tags where it's value is None
+            for key in tag_keys:
+                tags[key] = None
+
+            # Get the default tags from self.defaults.tags and merge with tags. Overwrite existing keys in tags with the value from default. Add in any new tags.
+            default_tags = defaults.get('tags', {})
+            for item in default_tags:
+                tags[item['Key']] = item['Value']
+
+        except Exception as e:
+            ConsoleAndLog.error(f"Error getting default tags: {e}")
+            raise
+
+        return tags
+
 
 # -------------------------------------------------------------------------
 # - File Name List Utilities

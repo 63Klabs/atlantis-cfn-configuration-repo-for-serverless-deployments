@@ -1,7 +1,7 @@
 from .aws_session import AWSSessionManager
 from .logger import ScriptLogger, ConsoleAndLog, Log
 from .tools import Strings, Colorize
-from .atlantis import FileNameListUtils
+from .atlantis import FileNameListUtils, ConfigLoader, TagUtils
 
 __all__ = [
     'AWSSessionManager',
@@ -11,5 +11,6 @@ __all__ = [
 	'Strings',
 	'Colorize',
 	'FileNameListUtils',
-	'ConfigLoader'
+	'ConfigLoader',
+	'TagUtils'
 ]

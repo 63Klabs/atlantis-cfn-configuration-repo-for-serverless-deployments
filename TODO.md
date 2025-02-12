@@ -2,7 +2,7 @@
 
 ## Config
 
-- Tags
+- Fix tags - converting back and forth
 - Meta
 - Fix code structure
 - Improve Logging
