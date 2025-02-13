@@ -589,7 +589,7 @@ class RepositoryCreator:
         """Set the tags for the repository
         
         Args:
-            tags: Either a dictionary of tags {"key": "value"} or 
+            Union[Dict, List] tags: Either a dictionary of tags {"key": "value"} or 
                 a list of tag dictionaries [{"Key": "key", "Value": "value"}]
         
         Returns:

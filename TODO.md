@@ -2,9 +2,9 @@
 
 ## Config
 
+- Metadata
+- Investigate if no stage provided and it is required for that infra_type, reading config and getting options
 - Fix tags - converting back and forth
-- Meta
-- Investigate if no stage provided and it is required, reading config and getting options
 - Fix code structure
 - Improve Logging
 
