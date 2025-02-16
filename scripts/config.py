@@ -27,7 +27,7 @@ from botocore.exceptions import ClientError
 from lib.aws_session import AWSSessionManager, TokenRetrievalError
 from lib.logger import ScriptLogger, Log, ConsoleAndLog
 from lib.tools import Colorize
-from lib.atlantis import FileNameListUtils, ConfigLoader, TagUtils
+from lib.atlantis import FileNameListUtils, ConfigLoader, TagUtils, Utils
 
 if sys.version_info[0] < 3:
     sys.stderr.write("Error: Python 3 is required\n")
@@ -84,7 +84,7 @@ class ConfigManager:
         self.infra_type = infra_type
         self.prefix = prefix
         self.project_id = project_id
-        self.stage_id = 'default' if stage_id is None else stage_id
+        self.stage_id = 'default' if (stage_id is None and (infra_type == 'network' or infra_type == 'pipeline')) else stage_id
         self.profile = profile
         self.region = region
         self.check_stack = check_stack
@@ -126,87 +126,29 @@ class ConfigManager:
         temp_valid_infra_types.remove('service-role')
         if self.infra_type == 'service-role' and self.project_id not in temp_valid_infra_types:
             raise click.UsageError(f"project_id must be one of {temp_valid_infra_types}")
-        
-        # Validate stage_id requirement
-        if not self.stage_id and self.infra_type != 'service-role' and self.infra_type != 'storage':
-            raise click.UsageError(f"stage_id is required for infrastructure type: {self.infra_type}")
-
-
- 
-    def read_samconfig(self) -> Optional[Dict]:
-        """
-        Read and parse a SAM configuration file.
-
-        Loads the appropriate samconfig.toml file based on the current configuration
-        and parses its contents into a structured dictionary. Handles both atlantis
-        configuration and deployment parameters.
-
-        Returns:
-            Optional[Dict]: Dictionary containing parsed configuration data with structure:
-                          {
-                              'atlantis': {configuration settings},
-                              'deployments': {
-                                  'stage_name': {
-                                      'deploy': {
-                                          'parameters': {
-                                              'parameter_overrides': {...},
-                                              'tags': {...}
-                                          }
-                                      }
-                                  }
-                              }
-                          }
-                          Returns None if file doesn't exist or on error
-
-        Raises:
-            Logs errors but doesn't raise exceptions
-        """
-        samconfig_path = self.get_samconfig_file_path()
-        
-        if samconfig_path.exists():
-            try:
-                print()
-                # samconfig_path relative to script
-                samconfig_path_relative = samconfig_path.relative_to(os.getcwd())
-                click.echo(Colorize.output_with_value("Using samconfig file:", samconfig_path_relative))
-                Log.info(f"Using samconfig file: {samconfig_path}")
-                print()
-
-                samconfig_data = {'atlantis': {}, 'deployments': {}}
-                samconfig = toml.load(samconfig_path)
-                
-                # Handle atlantis deploy parameters section
-                if 'atlantis' in samconfig and isinstance(samconfig['atlantis'], dict):
-                    samconfig_data['atlantis'] = samconfig['atlantis']
-
-                # Handle deployment sections
-                for key, value in samconfig.items():
-                    if key != 'atlantis' and isinstance(value, dict):
-                        try:
-                            deploy_params = value.get('deploy', {}).get('parameters', {})
-                            if isinstance(deploy_params, dict):
-                                parameter_overrides = deploy_params.get('parameter_overrides', '')
-                                if parameter_overrides and isinstance(parameter_overrides, str):
-                                    value['deploy']['parameters']['parameter_overrides'] = self.parse_parameter_overrides(parameter_overrides)
-                                tags = deploy_params.get('tags', '')
-                                if tags and isinstance(tags, str):
-                                    value['deploy']['parameters']['tags'] = self.parse_tags(tags)
-                                samconfig_data['deployments'][key] = value
-                        except (AttributeError, TypeError) as e:
-                            Log.warning(f"Skipping invalid deployment section '{key}': {e}")
-                            continue
-
-                return samconfig_data
-            except Exception as e:
-                Log.error(f"Error reading samconfig file {samconfig_path}: {e}")
-                click.echo(Colorize.error("Error reading samconfig file. Check logs for more info."))
-                return None
-        return None
-
 
 
     def prompt_for_parameters(self, parameter_groups: List, parameters: Dict, defaults: Dict) -> Dict:
-        """Prompt user for parameter values"""
+        """
+        Prompt user for parameter values.
+
+        Args:
+            parameter_groups (List): List of parameter groups defining the organization
+                of parameters in the template
+            parameters (Dict): Dictionary of parameters and their properties from
+                the CloudFormation template
+            defaults (Dict): Dictionary of default values for parameters
+
+        Returns:
+            Dict: Dictionary containing parameter names as keys and their user-provided
+                or default values
+        
+        Example:
+            >>> parameter_groups = [{'Label': {'default': 'Network'}, 'Parameters': ['VpcId', 'Subnets']}]
+            >>> parameters = {'VpcId': {'Type': 'AWS::EC2::VPC::Id'}, 'Subnets': {'Type': 'List<AWS::EC2::Subnet::Id>'}}
+            >>> defaults = {'VpcId': 'vpc-123456'}
+            >>> result = prompt_for_parameters(parameter_groups, parameters, defaults)
+        """
 
         print()
         click.echo(Colorize.divider())
@@ -236,7 +178,6 @@ class ConfigManager:
                 # add to params list
                 params.append(param[0])
             parameter_groups = [{'Parameters': params}]
-            print(parameter_groups)
 
         useLineBreakBeforeLabel = False
 
@@ -519,105 +460,6 @@ class ConfigManager:
             click.echo(Colorize.info("\nOperation cancelled by user"))
             sys.exit(1)
 
-    def build_config(self, infra_type: str, template_file: str, atlantis_deploy_parameter_defaults: Dict, parameter_values: Dict, tag_defaults: List, local_config: Dict) -> Dict:
-        """Build the complete config dictionary"""
-        # Get atlantis deploy parameters used for all deployments of this application
-        atlantis_deploy_params = self.gather_atlantis_deploy_parameters(infra_type, atlantis_deploy_parameter_defaults)
-
-        prefix = parameter_values.get('Prefix', '')
-        project_id = parameter_values.get('ProjectId', '')
-        if parameter_values.get('StageId', '') != '':
-            stage_id = parameter_values.get('StageId', '')
-        else:
-            stage_id = self.stage_id
-
-        # if self.prefix or self.project_id is not equal to sys arg 2 and 3 
-        # then deployments = {} else set to local_config deployments
-        # Because that means we made a copy and are creating a fresh copy 
-        # with only atlantis and current deploy environment
-        if not isinstance(local_config, dict) or prefix != sys.argv[2] or (project_id and project_id != sys.argv[3]):
-            deployments = {}
-        else:
-            deployments = local_config.get('deployments', {})
-
-        # if template_file is not s3 it is local and use the local path
-        if not template_file.startswith('s3://'):
-            # Make template_file_path relative to samconfig_file
-            file_path = f'{self.get_templates_dir()}/{self.infra_type}/{template_file}'
-            template_file = os.path.relpath(file_path, self.get_samconfig_dir())
-
-        # Generate stack name
-        stack_name = self.get_stack_name()
-
-        # Generate automated tags
-        tags = self.generate_tags(parameter_values, tag_defaults)
-
-        atlantis_default_deploy_parameters = {
-            'template_file': template_file,
-            's3_bucket': atlantis_deploy_params['s3_bucket'],
-            'region': atlantis_deploy_params['region'],
-            'capabilities': 'CAPABILITY_NAMED_IAM',
-            'confirm_changeset': (atlantis_deploy_params['confirm_changeset'].lower() == 'true')
-        }
-
-        # If deployments has more than one key then inform the user that multiple deployments were detected, 
-        # would they like to update the atlantis deployment parameters across all?
-        if len(deployments) > 1:
-            print()
-            # Multiple deploy environments detected. Do you want to apply the atlantis deploy parameters to ALL deployments? This will NOT update parameter_overrides or tags for those deployments.
-            click.echo(Colorize.output_with_value("Multiple deploy environments detected for ", f"{prefix}-{project_id}"))
-            click.echo(Colorize.question(f"Do you want to apply the Deploy Parameters to ALL deployments?"))
-            click.echo(Colorize.info(f"(This will NOT update Template Parameter Overrides or Tags for those deployments.)"))
-            click.echo(Colorize.option("Yes or No"))
-            print()
-            choice = ""
-            # prompt until choice is either y or n
-            while choice.upper() not in ['Y', 'N', 'YES', 'NO']:
-                choice = Colorize.prompt("Apply Deploy Parameters to All?", "Yes", str)
-                if choice.upper() not in ['Y', 'N', 'YES', 'NO']:
-                    click.echo(Colorize.error("Please enter 'Yes' or 'No'"))
-            print()
-            if choice.upper() in ['Y', 'YES']:
-                click.echo(Colorize.output_bold(f"Updating Deploy Parameters across all deployments of {prefix}-{project_id}..."))
-                for deployment in deployments:
-                    deployments[deployment]['deploy']['parameters'].update(atlantis_default_deploy_parameters)
-            else:
-                click.echo(Colorize.output_bold(f"Updating Deploy Parameters only for {stage_id}..."))
-                # We do this below so we'll skip doing it here
-
-        # We will now apply the deploy parameters to the deployment
-        # We already applied the atlantis_default_deploy_parameters above but now
-        # we focus on just the current stage
-        deployment_parameters = atlantis_default_deploy_parameters.copy()
-        deployment_parameters.update({
-            'stack_name': stack_name,
-            's3_prefix': stack_name,
-            'parameter_overrides': parameter_values,
-            'tags': tags
-        })
-
-        deployments[stage_id] = {
-            'deploy': {
-                'parameters': deployment_parameters
-            }
-        }
-
-        # Build the config structure
-        config = {
-            'atlantis': {
-                'deploy': {
-                    'parameters': atlantis_default_deploy_parameters
-                }
-            },
-            'deployments': deployments
-        }
-        
-        # Add role_arn if this is a pipeline deployment
-        if infra_type == 'pipeline':
-            config['atlantis']['deploy']['parameters']['role_arn'] = atlantis_deploy_params['role_arn']
-        
-        return config
-
     def validate_parameter(self, value: str, param_def: Dict) -> bool:
         """Validate parameter value against CloudFormation parameter definition
         
@@ -703,109 +545,13 @@ class ConfigManager:
         
         return {"reason": "Valid", "valid": True}
 
-    def save_config(self, config: Dict) -> None:
-        """Save configuration to samconfig.toml file"""
-
-        try:
-            # Get the parameter values from the config
-            parameter_values = config.get('deployments', {}).get(self.stage_id, {}).get('deploy', {}).get('parameters', {}).get('parameter_overrides', {})
-            
-            prefix = parameter_values.get('Prefix', self.prefix)
-            project_id = parameter_values.get('ProjectId', self.project_id)
-
-            pystr = f"{sys.argv[0]} {self.infra_type} {prefix} {project_id}"
-
-            header_pystr = f"{pystr}"
-            if self.stage_id != 'default':
-                header_pystr += " <StageId>"
-            if self.profile != 'default' and self.profile != None:
-                header_pystr += f" --profile {self.profile}"
-            # Create the header with version and comments
-            header = (
-                'version = 0.1\n\n'
-                '# !!! DO NOT EDIT THIS FILE !!!\n\n'
-                '# Make changes and re-generate this file by running the python script:\n\n'
-                f'# python3 {header_pystr}\n\n'
-                '# Using the script provides consistent parameter overrides and tags '
-                'and ensures your changes are not overwritten!\n\n'
-            )
-
-            atlantis_deploy_section = {
-                'atlantis': config.get('atlantis', {})
-            }
-
-            non_atlantis_deploy_sections = {}
-            # Reorder the deployments to place default first, then those starting with t, b, s, and finally p
-            for stage_id in sorted(config.get('deployments', {}), key=lambda x: (x[0] != 'd', x[0] != 't', x[0] != 'b', x[0] != 's', x[0] != 'p')):
-                non_atlantis_deploy_sections[stage_id] = config['deployments'][stage_id]
-                        
-            # Write the config to samconfig.toml
-            samconfig_path = self.get_samconfig_file_path()
-
-            # Create the samconfig directory if it doesn't exist
-            os.makedirs(os.path.dirname(samconfig_path), exist_ok=True)
-            
-            with open(samconfig_path, 'w') as f:
-                f.write(header)
-                toml.dump(atlantis_deploy_section, f)
-                    
-                for section, section_config in non_atlantis_deploy_sections.items():
-
-                    section_pystr = f"{pystr}"
-                    if section != 'default':
-                        section_pystr += f" {section}"
-
-                    deploy_section_header = (
-                        '# =====================================================\n'
-                        f'# {section} Deployment Configuration\n\n'
-                        '# Deploy command:\n'
-                        f'# sam deploy --config-env {section} --config-file {self.get_samconfig_file_name()} --profile {self.profile}\n\n'
-                        '# Do not update this file!\n'
-                        '# To update parameter_overrides or tags for this deployment, use the generate script:\n'
-                        f'# python3 {section_pystr}\n'
-                    )
-
-                    # Convert parameter_values dict to parameter_overrides string
-                    p_overrides = section_config.get('deploy', {}).get('parameters', {}).get('parameter_overrides', '')
-                    if isinstance(p_overrides, dict):
-                        parameter_overrides = self.stringify_parameter_overrides(p_overrides)
-                        
-                        # Update the config with the string version
-                        section_config['deploy']['parameters']['parameter_overrides'] = parameter_overrides
-
-                    tags = section_config.get('deploy', {}).get('parameters', {}).get('tags', '')
-                    if isinstance(tags, list):
-                        # Update the config with the string version
-                        section_config['deploy']['parameters']['tags'] = self.stringify_tags(tags)
-                    
-                    f.write(f'\n{deploy_section_header}\n')
-                    toml.dump({section: section_config}, f)
-                
-            Log.info(f"Configuration saved to '{samconfig_path}'")
-
-            # samconfig_path relative to script
-            samconfig_path_relative = samconfig_path.relative_to(os.getcwd())
-            # get only the directory path from samconfig_path
-            saved_dir = os.path.dirname(samconfig_path_relative)
-            
-            print()
-            click.echo(Colorize.output_with_value("Configuration saved to", samconfig_path_relative))
-            click.echo(Colorize.output_bold("Open file for 'sam deploy' commands"))
-            click.echo(Colorize.output_bold(f"You must be in the {saved_dir} directory to run the command"))
-            click.echo(Colorize.output(f"cd {saved_dir}"))
-            print()
-
-            # Check if default.json and prefix.json exists
-            self.check_for_default_json(atlantis_deploy_section.get('atlantis', {}), parameter_values)
-            
-        except Exception as e:
-            Log.error(f"Error saving configuration: {e}")
-            click.echo(Colorize.error(f"Error saving configuration. Check logs for more info."))
-            sys.exit(1)
+    # -------------------------------------------------------------------------
+    # - Deployed Stack Utilities
+    # -------------------------------------------------------------------------
 
     def compare_against_stack(self, local_config: Dict) -> Dict:
 
-        stack_name = self.generate_stack_name()
+        stack_name = self.get_stack_name()
         stack_config = self.get_stack_config(stack_name)
         
         if stack_config and local_config:
@@ -1007,6 +753,10 @@ class ConfigManager:
             click.echo(Colorize.warning("Please check your AWS configuration and try again"))
             print()
             sys.exit(1)
+
+    # -------------------------------------------------------------------------
+    # - Read in Settings and Defaults
+    # -------------------------------------------------------------------------
 
     def check_for_default_json(self, atlantis: Dict, parameter_overrides: Dict) -> None:
         """Check if settings/defaults.json and/or <prefix>-defaults.json exists.
@@ -1600,7 +1350,345 @@ class ConfigManager:
     # - Read and Process samconfig
     # -------------------------------------------------------------------------
 
+    def read_samconfig(self) -> Optional[Dict]:
+        """
+        Read and parse a SAM configuration file.
 
+        Loads the appropriate samconfig.toml file based on the current configuration
+        and parses its contents into a structured dictionary. Handles both atlantis
+        configuration and deployment parameters.
+
+        Returns:
+            Optional[Dict]: Dictionary containing parsed configuration data with structure:
+                          {
+                              'atlantis': {configuration settings},
+                              'deployments': {
+                                  'stage_name': {
+                                      'deploy': {
+                                          'parameters': {
+                                              'parameter_overrides': {...},
+                                              'tags': {...}
+                                          }
+                                      }
+                                  }
+                              }
+                          }
+                          Returns None if file doesn't exist or on error
+
+        Raises:
+            Logs errors but doesn't raise exceptions
+        """
+        samconfig_path = self.get_samconfig_file_path()
+        
+        if samconfig_path.exists():
+            try:
+                print()
+                # samconfig_path relative to script
+                samconfig_path_relative = samconfig_path.relative_to(os.getcwd())
+                click.echo(Colorize.output_with_value("Using samconfig file:", samconfig_path_relative))
+                Log.info(f"Using samconfig file: {samconfig_path}")
+                print()
+
+                samconfig_data = {'atlantis': {}, 'deployments': {}}
+                samconfig = toml.load(samconfig_path)
+                
+                # Handle atlantis deploy parameters section
+                if 'atlantis' in samconfig and isinstance(samconfig['atlantis'], dict):
+                    samconfig_data['atlantis'] = samconfig['atlantis']
+
+                # Handle deployment sections
+                for key, value in samconfig.items():
+                    if key != 'atlantis' and isinstance(value, dict):
+                        try:
+                            deploy_params = value.get('deploy', {}).get('parameters', {})
+                            if isinstance(deploy_params, dict):
+                                parameter_overrides = deploy_params.get('parameter_overrides', '')
+                                if parameter_overrides and isinstance(parameter_overrides, str):
+                                    value['deploy']['parameters']['parameter_overrides'] = self.parse_parameter_overrides(parameter_overrides)
+                                tags = deploy_params.get('tags', '')
+                                if tags and isinstance(tags, str):
+                                    value['deploy']['parameters']['tags'] = self.parse_tags(tags)
+                                samconfig_data['deployments'][key] = value
+                        except (AttributeError, TypeError) as e:
+                            Log.warning(f"Skipping invalid deployment section '{key}': {e}")
+                            continue
+
+                print(json.dumps(samconfig_data, indent=4))
+                return samconfig_data
+            except Exception as e:
+                Log.error(f"Error reading samconfig file {samconfig_path}: {e}")
+                click.echo(Colorize.error("Error reading samconfig file. Check logs for more info."))
+                return None
+        return None
+
+    def build_config(self, infra_type: str, template_file: str, atlantis_deploy_parameter_defaults: Dict, parameter_values: Dict, tag_defaults: List, local_config: Dict) -> Dict:
+        """Build the complete config dictionary"""
+        # Get atlantis deploy parameters used for all deployments of this application
+        atlantis_deploy_params = self.gather_atlantis_deploy_parameters(infra_type, atlantis_deploy_parameter_defaults)
+
+        prefix = parameter_values.get('Prefix', '')
+        project_id = parameter_values.get('ProjectId', '')
+        if parameter_values.get('StageId', '') != '':
+            stage_id = parameter_values.get('StageId', '')
+        else:
+            stage_id = self.stage_id
+
+        # if self.prefix or self.project_id is not equal to sys arg 2 and 3 
+        # then deployments = {} else set to local_config deployments
+        # Because that means we made a copy and are creating a fresh copy 
+        # with only atlantis and current deploy environment
+        if not isinstance(local_config, dict) or prefix != sys.argv[2] or (project_id and project_id != sys.argv[3]):
+            deployments = {}
+        else:
+            deployments = local_config.get('deployments', {})
+
+        # if template_file is not s3 it is local and use the local path
+        if not template_file.startswith('s3://'):
+            # Make template_file_path relative to samconfig_file
+            file_path = f'{self.get_templates_dir()}/{self.infra_type}/{template_file}'
+            template_file = os.path.relpath(file_path, self.get_samconfig_dir())
+
+        # Generate stack name
+        stack_name = self.get_stack_name()
+
+        # Generate automated tags
+        tags = self.generate_tags(parameter_values, tag_defaults)
+
+        atlantis_default_deploy_parameters = {
+            'template_file': template_file,
+            's3_bucket': atlantis_deploy_params['s3_bucket'],
+            'region': atlantis_deploy_params['region'],
+            'capabilities': 'CAPABILITY_NAMED_IAM',
+            'confirm_changeset': (atlantis_deploy_params['confirm_changeset'].lower() == 'true')
+        }
+
+        # If deployments has more than one key then inform the user that multiple deployments were detected, 
+        # would they like to update the atlantis deployment parameters across all?
+        if len(deployments) > 1:
+            print()
+            # Multiple deploy environments detected. Do you want to apply the atlantis deploy parameters to ALL deployments? This will NOT update parameter_overrides or tags for those deployments.
+            click.echo(Colorize.output_with_value("Multiple deploy environments detected for ", f"{prefix}-{project_id}"))
+            click.echo(Colorize.question(f"Do you want to apply the Deploy Parameters to ALL deployments?"))
+            click.echo(Colorize.info(f"(This will NOT update Template Parameter Overrides or Tags for those deployments.)"))
+            click.echo(Colorize.option("Yes or No"))
+            print()
+            choice = ""
+            # prompt until choice is either y or n
+            while choice.upper() not in ['Y', 'N', 'YES', 'NO']:
+                choice = Colorize.prompt("Apply Deploy Parameters to All?", "Yes", str)
+                if choice.upper() not in ['Y', 'N', 'YES', 'NO']:
+                    click.echo(Colorize.error("Please enter 'Yes' or 'No'"))
+            print()
+            if choice.upper() in ['Y', 'YES']:
+                click.echo(Colorize.output_bold(f"Updating Deploy Parameters across all deployments of {prefix}-{project_id}..."))
+                for deployment in deployments:
+                    deployments[deployment]['deploy']['parameters'].update(atlantis_default_deploy_parameters)
+            else:
+                click.echo(Colorize.output_bold(f"Updating Deploy Parameters only for {stage_id}..."))
+                # We do this below so we'll skip doing it here
+
+        # We will now apply the deploy parameters to the deployment
+        # We already applied the atlantis_default_deploy_parameters above but now
+        # we focus on just the current stage
+        deployment_parameters = atlantis_default_deploy_parameters.copy()
+        deployment_parameters.update({
+            'stack_name': stack_name,
+            's3_prefix': stack_name,
+            'parameter_overrides': parameter_values,
+            'tags': tags
+        })
+
+        deployments[stage_id] = {
+            'deploy': {
+                'parameters': deployment_parameters
+            }
+        }
+
+        # Build the config structure
+        config = {
+            'atlantis': {
+                'deploy': {
+                    'parameters': atlantis_default_deploy_parameters
+                }
+            },
+            'deployments': deployments
+        }
+        
+        # Add role_arn if this is a pipeline deployment
+        if infra_type == 'pipeline':
+            config['atlantis']['deploy']['parameters']['role_arn'] = atlantis_deploy_params['role_arn']
+        
+        return config
+
+    def save_config(self, config: Dict) -> None:
+        """Save configuration to samconfig.toml file"""
+
+        try:
+            # Get the parameter values from the config
+            parameter_values = config.get('deployments', {}).get(self.stage_id, {}).get('deploy', {}).get('parameters', {}).get('parameter_overrides', {})
+            
+            prefix = parameter_values.get('Prefix', self.prefix)
+            project_id = parameter_values.get('ProjectId', self.project_id)
+
+            pystr = f"{sys.argv[0]} {self.infra_type} {prefix} {project_id}"
+
+            header_pystr = f"{pystr}"
+            if self.stage_id != 'default':
+                header_pystr += " <StageId>"
+            if self.profile != 'default' and self.profile != None:
+                header_pystr += f" --profile {self.profile}"
+            # Create the header with version and comments
+            header = (
+                'version = 0.1\n\n'
+                '# !!! DO NOT EDIT THIS FILE !!!\n\n'
+                '# Make changes and re-generate this file by running the python script:\n\n'
+                f'# python3 {header_pystr}\n\n'
+                '# Using the script provides consistent parameter overrides and tags '
+                'and ensures your changes are not overwritten!\n\n'
+            )
+
+            atlantis_deploy_section = {
+                'atlantis': config.get('atlantis', {})
+            }
+
+            non_atlantis_deploy_sections = {}
+            # Reorder the deployments to place default first, then those starting with t, b, s, and finally p
+            for stage_id in sorted(config.get('deployments', {}), key=lambda x: (x[0] != 'd', x[0] != 't', x[0] != 'b', x[0] != 's', x[0] != 'p')):
+                non_atlantis_deploy_sections[stage_id] = config['deployments'][stage_id]
+                        
+            # Write the config to samconfig.toml
+            samconfig_path = self.get_samconfig_file_path()
+
+            # Create the samconfig directory if it doesn't exist
+            os.makedirs(os.path.dirname(samconfig_path), exist_ok=True)
+            
+            with open(samconfig_path, 'w') as f:
+                f.write(header)
+                toml.dump(atlantis_deploy_section, f)
+                    
+                for section, section_config in non_atlantis_deploy_sections.items():
+
+                    section_pystr = f"{pystr}"
+                    if section != 'default':
+                        section_pystr += f" {section}"
+
+                    deploy_section_header = (
+                        '# =====================================================\n'
+                        f'# {section} Deployment Configuration\n\n'
+                        '# Deploy command:\n'
+                        f'# sam deploy --config-env {section} --config-file {self.get_samconfig_file_name()} --profile {self.profile}\n\n'
+                        '# Do not update this file!\n'
+                        '# To update parameter_overrides or tags for this deployment, use the generate script:\n'
+                        f'# python3 {section_pystr}\n'
+                    )
+
+                    # Convert parameter_values dict to parameter_overrides string
+                    p_overrides = section_config.get('deploy', {}).get('parameters', {}).get('parameter_overrides', '')
+                    if isinstance(p_overrides, dict):
+                        parameter_overrides = self.stringify_parameter_overrides(p_overrides)
+                        
+                        # Update the config with the string version
+                        section_config['deploy']['parameters']['parameter_overrides'] = parameter_overrides
+
+                    tags = section_config.get('deploy', {}).get('parameters', {}).get('tags', '')
+                    if isinstance(tags, list):
+                        # Update the config with the string version
+                        section_config['deploy']['parameters']['tags'] = self.stringify_tags(tags)
+                    
+                    f.write(f'\n{deploy_section_header}\n')
+                    toml.dump({section: section_config}, f)
+                
+            Log.info(f"Configuration saved to '{samconfig_path}'")
+
+            # samconfig_path relative to script
+            samconfig_path_relative = samconfig_path.relative_to(os.getcwd())
+            # get only the directory path from samconfig_path
+            saved_dir = os.path.dirname(samconfig_path_relative)
+            
+            print()
+            click.echo(Colorize.output_with_value("Configuration saved to", samconfig_path_relative))
+            click.echo(Colorize.output_bold("Open file for 'sam deploy' commands"))
+            click.echo(Colorize.output_bold(f"You must be in the {saved_dir} directory to run the command"))
+            click.echo(Colorize.output(f"cd {saved_dir}"))
+            print()
+
+            # Check if default.json and prefix.json exists
+            self.check_for_default_json(atlantis_deploy_section.get('atlantis', {}), parameter_values)
+            
+        except Exception as e:
+            Log.error(f"Error saving configuration: {e}")
+            click.echo(Colorize.error(f"Error saving configuration. Check logs for more info."))
+            sys.exit(1)
+
+    # -------------------------------------------------------------------------
+    # - Prompt for stage_id
+    # -------------------------------------------------------------------------
+
+    def prompt_for_stage_id(self, local_config: Dict) -> str:
+        """
+        Prompts user to select an existing stage or create a new one.
+
+        Args:
+            local_config (Dict): Configuration dictionary containing deployment stages.
+                Expected structure: {'deployments': {'stage1': {...}, 'stage2': {...}}}
+
+        Returns:
+            str: Selected or newly created stage ID. Examples: 'test', 'beta', 'prod'
+
+        Notes:
+            - If stages exist, presents numbered list for selection
+            - If no selection made, prompts for new stage name
+            - Suggests logical next stage based on existing stages:
+                * If 'test' exists, suggests 'beta'
+                * If 'beta' exists, suggests 'prod'
+            - Empty stage names are not allowed
+
+        Example:
+            >>> config = {'deployments': {'test': {}, 'beta': {}}}
+            >>> stage = prompt_for_stage_id(config)
+            Select a stage to edit or copy
+            0. New
+            1. test
+            2. beta
+            Enter stage number: 0
+            Enter a name for the new stage [prod]: production
+            >>> print(stage)
+            'production'
+        """
+        stage_id = None
+
+        # if deployments exists in local_config, then get the key of its children
+        if local_config:
+            deployments = local_config.get('deployments', {})
+            # get the keys
+            stages = list(deployments.keys())
+
+            # Prompt the user to choose a stage from stages. If the user chooses 0 they should be prompted to enter a name for the stage. The user cannot proceed until a stage is selected
+
+            heading_text = "Select a stage to edit or copy"
+            prompt_text = "Enter stage number"
+            allow_none = True
+            options = stages
+
+            stage_id = Utils.make_selection_from_list(options, allow_none, heading_text=heading_text, prompt_text=prompt_text)
+
+            if stage_id is None:
+                next_logical_stage = ''
+                # determine the next logical stage
+                if 'test' in stages:
+                    next_logical_stage = 'beta'
+                    if 'beta' in stages:
+                        next_logical_stage = 'prod'
+                # Prompt the user to enter a name for the stage and it cannot be empty
+                while True:
+                    stage_id = Colorize.prompt("Enter a name for the new stage", next_logical_stage, str)
+                    if stage_id:
+                        break
+                    else:
+                        click.echo(Colorize.error("Stage name cannot be empty"))
+        self.stage_id = stage_id
+        return stage_id
+ 
     # -------------------------------------------------------------------------
     # - Template Selection
     # -------------------------------------------------------------------------
@@ -1898,7 +1986,12 @@ def main():
 
         # Read existing configuration
         local_config = config_manager.read_samconfig()
+
+        # if no stage_id is provided for a pipeline or network, prompt for one
+        if not args.stage_id and args.infra_type in ['pipeline', 'network']:
+            args.stage_id = config_manager.prompt_for_stage_id(local_config)
         
+        # Compare against deployed stack
         if args.check_stack:
             local_config = config_manager.compare_against_stack(local_config)
 

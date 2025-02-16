@@ -228,6 +228,86 @@ class TagUtils:
 
 
 # -------------------------------------------------------------------------
+# - Utilities
+# -------------------------------------------------------------------------
+
+class Utils:
+
+    @staticmethod
+    def make_selection_from_list(options: List[str],
+                                allow_none: Optional[bool] = False,
+                                *, 
+                                heading_text="Select from options",
+                                prompt_text="Enter a selection number") -> str:
+        """
+        Presents a numbered list of options to the user and prompts for a selection.
+
+        Args:
+            options (List[str]): List of options to present to the user
+            allow_none (Optional[bool]): If True, allows user to make no selection. Defaults to False
+            heading_text (str): Text to display as heading above the options. Defaults to "Select from options"
+            prompt_text (str): Text to display when prompting for input. Defaults to "Enter a selection number"
+
+        Returns:
+            str: The selected option from the list. If allow_none is True and no selection is made, returns empty string
+
+        Raises:
+            ValueError: If the user enters an invalid selection number
+            
+        Example:
+            >>> options = ["dev", "prod", "stage"]
+            >>> selected = make_selection_from_list(
+            ...     options,
+            ...     allow_none=True,
+            ...     heading_text="Select environment",
+            ...     prompt_text="Choose environment number"
+            ... )
+            Select environment
+            1. dev
+            2. prod
+            3. stage
+            Choose environment number: 1
+            >>> print(selected)
+            'dev'
+        """
+        print(options)
+        # Display numbered list
+        click.echo(Colorize.question(f"{heading_text}:"))
+        if allow_none: click.echo(Colorize.option("0. New"))
+        for idx, option in enumerate(options, 1):
+            line = f"{idx}. {option}"
+            click.echo(Colorize.option(line))
+        
+        print()
+
+        while True:
+            try:
+                default = ''
+
+                choice = Colorize.prompt(prompt_text, default, str)
+                # Check if input is a number
+                sel_idx = int(choice) - 1
+
+                min = -1 if allow_none else 0
+                
+                # Validate the index is within range
+                if min <= sel_idx < len(options):
+
+                    selected = None
+
+                    if(sel_idx >= 0):
+                        selected = options[sel_idx]
+                                                
+                    return selected
+                else:
+                    click.echo(Colorize.error(f"Please enter a number between {min} and {len(options)}"))
+            except ValueError:
+                click.echo(Colorize.error("Please enter a valid number"))
+            except KeyboardInterrupt:
+                click.echo(Colorize.info("Selection cancelled"))
+                sys.exit(1)
+
+# -------------------------------------------------------------------------
 # - File Name List Utilities
 # -------------------------------------------------------------------------
 
