@@ -21,7 +21,7 @@ import click
 import hashlib
 import argparse
 from pathlib import Path
-from typing import Dict, Optional, List
+from typing import Dict, Optional, List, Tuple
 from botocore.exceptions import ClientError
 
 from lib.aws_session import AWSSessionManager, TokenRetrievalError
@@ -205,7 +205,7 @@ class ConfigManager:
 
 
 
-    def prompt_for_parameters(self, parameters: Dict, defaults: Dict) -> Dict:
+    def prompt_for_parameters(self, parameter_groups: List, parameters: Dict, defaults: Dict) -> Dict:
         """Prompt user for parameter values"""
 
         print()
@@ -228,103 +228,129 @@ class ConfigManager:
         if self.stage_id and self.stage_id != 'default' and 'StageId' in parameters:
             defaults['StageId'] = self.stage_id
 
-        for param_name, param_def in parameters.items():
+        # If there are no parameter groups, then create a parameter_list that is just a list of all the parameter_name values
+        if not parameter_groups:
+            # loop through parameters and create a list of all the parameter_name values
+            params = []
+            for param in parameters.items():
+                # add to params list
+                params.append(param[0])
+            parameter_groups = [{'Parameters': params}]
+            print(parameter_groups)
 
-            # Skip PrefixUpper as it will be handled automatically
-            if param_name == 'PrefixUpper':
-                continue
+        useLineBreakBeforeLabel = False
 
-            default_value = defaults.get(param_name, param_def.get('Default', ''))
-
-            while True:
-
-                value = Colorize.prompt(
-                    param_name,
-                    default_value,
-                    str
-                )
-                
-                if value == '?':
-                    help = []
-
-                    help.append({"header": "Description", "text": param_def.get('Description', 'No description available')})
-
-                    allowed_pattern = param_def.get('AllowedPattern', None)
-                    if allowed_pattern:
-                        help.append({"header": "Allowed Pattern", "text": allowed_pattern})
-
-                    allowed_values = param_def.get('AllowedValues', None)
-                    if allowed_values:
-                        help.append({"header": "Allowed Values", "text": ", ".join(allowed_values)})
-
-                    constraint_description = param_def.get('ConstraintDescription', None)
-                    if constraint_description:
-                        help.append({"header": "Constraint Description", "text": constraint_description})
-
-                    # Assemble help text from MinLength, MaxLength, MinValue, MaxValue in one line like "MinLength: x, MaxLength: x, "
-                    help_text = ""
-                    if 'Type' in param_def:
-                        help_text += f"Type: {param_def['Type']}, "
-                    if 'MinLength' in param_def:
-                        help_text += f"MinLength: {param_def['MinLength']}, "
-                    if 'MaxLength' in param_def:
-                        help_text += f"MaxLength: {param_def['MaxLength']}, "
-                    if 'MinValue' in param_def:
-                        help_text += f"MinValue: {param_def['MinValue']}, "
-                    if 'MaxValue' in param_def:
-                        help_text += f"MaxValue: {param_def['MaxValue']}, "
-                    if help_text:
-                        help.append({"header": None, "text": help_text[:-2]})
-
+        # Loop through each group in parameter_groups
+        for group in parameter_groups:
+            label = group.get('Label', {}).get('default', None)
+            if label:
+                if useLineBreakBeforeLabel:
                     print()
-                    Colorize.box_info(help)
-                    print()
+                useLineBreakBeforeLabel = True
+                click.echo(Colorize.output_bold(f"{label}\n"))
 
+            # for each parameter_name in group.Parameters, find the corresponding parameter_name and param_def in parameters
+            for param_name in group['Parameters']:
+                # find the corresponding parameter_name and param_def in parameters
+                param_def = parameters.get(param_name, None)
+
+            #for param_name, param_def in parameters.items():
+
+                # Skip PrefixUpper as it will be handled automatically
+                if param_name == 'PrefixUpper':
                     continue
-                elif value == '^':
-                    raise click.Abort()
-                elif value == '-':
-                    value = ''
-                
-                # Validate and store parameter
-                validation_result = self.validate_parameter(value, param_def)
-                if validation_result.get("valid", False):
-                    values[param_name] = value
 
-                    # If we just got a Prefix value, automatically set PrefixUpper and update self.prefix
-                    if param_name == 'Prefix':
-                        self.prefix = value
-                        if 'PrefixUpper' in parameters:
-                            values['PrefixUpper'] = value.upper()
+                default_value = defaults.get(param_name, param_def.get('Default', ''))
+
+                while True:
+
+                    value = Colorize.prompt(
+                        param_name,
+                        default_value,
+                        str
+                    )
                     
-                    # Update project_id and stage_id if they were just set
-                    if param_name == 'ProjectId':
-                        self.project_id = value
+                    if value == '?':
+                        help = []
 
-                    if param_name == 'StageId':
-                        self.stage_id = value
+                        help.append({"header": "Description", "text": param_def.get('Description', 'No description available')})
 
-                        # if StageId was changed from default, then recalculate defaults for DeployEnvironment, Repository Branch
-                        if self.stage_id != defaults['StageId']:
-                            stage_defaults = self.calculate_stage_defaults(self.stage_id)
-                            if 'DeployEnvironment' in parameters:
-                                defaults['DeployEnvironment'] = stage_defaults['DeployEnvironment']
+                        allowed_pattern = param_def.get('AllowedPattern', None)
+                        if allowed_pattern:
+                            help.append({"header": "Allowed Pattern", "text": allowed_pattern})
 
-                            if 'RepositoryBranch' in parameters:
-                                defaults['RepositoryBranch'] = stage_defaults['RepositoryBranch']
+                        allowed_values = param_def.get('AllowedValues', None)
+                        if allowed_values:
+                            help.append({"header": "Allowed Values", "text": ", ".join(allowed_values)})
 
-                            if 'CodeCommitBranch' in parameters:
-                                defaults['CodeCommitBranch'] = stage_defaults['CodeCommitBranch']
+                        constraint_description = param_def.get('ConstraintDescription', None)
+                        if constraint_description:
+                            help.append({"header": "Constraint Description", "text": constraint_description})
 
-                    break
-                else:
-                    print()
-                    click.echo(Colorize.error(f"Invalid value for {param_name}"))
-                    click.echo(Colorize.error(validation_result.get("reason")))
-                    click.echo(Colorize.info("Enter ? for help, ^ to exit"))
-                    print()
+                        # Assemble help text from MinLength, MaxLength, MinValue, MaxValue in one line like "MinLength: x, MaxLength: x, "
+                        help_text = ""
+                        if 'Type' in param_def:
+                            help_text += f"Type: {param_def['Type']}, "
+                        if 'MinLength' in param_def:
+                            help_text += f"MinLength: {param_def['MinLength']}, "
+                        if 'MaxLength' in param_def:
+                            help_text += f"MaxLength: {param_def['MaxLength']}, "
+                        if 'MinValue' in param_def:
+                            help_text += f"MinValue: {param_def['MinValue']}, "
+                        if 'MaxValue' in param_def:
+                            help_text += f"MaxValue: {param_def['MaxValue']}, "
+                        if help_text:
+                            help.append({"header": None, "text": help_text[:-2]})
 
+                        print()
+                        Colorize.box_info(help)
+                        print()
+
+                        continue
+                    elif value == '^':
+                        raise click.Abort()
+                    elif value == '-':
+                        value = ''
                     
+                    # Validate and store parameter
+                    validation_result = self.validate_parameter(value, param_def)
+                    if validation_result.get("valid", False):
+                        values[param_name] = value
+
+                        # If we just got a Prefix value, automatically set PrefixUpper and update self.prefix
+                        if param_name == 'Prefix':
+                            self.prefix = value
+                            if 'PrefixUpper' in parameters:
+                                values['PrefixUpper'] = value.upper()
+                        
+                        # Update project_id and stage_id if they were just set
+                        if param_name == 'ProjectId':
+                            self.project_id = value
+
+                        if param_name == 'StageId':
+                            self.stage_id = value
+
+                            # if StageId was changed from default, then recalculate defaults for DeployEnvironment, Repository Branch
+                            if self.stage_id != defaults['StageId']:
+                                stage_defaults = self.calculate_stage_defaults(self.stage_id)
+                                if 'DeployEnvironment' in parameters:
+                                    defaults['DeployEnvironment'] = stage_defaults['DeployEnvironment']
+
+                                if 'RepositoryBranch' in parameters:
+                                    defaults['RepositoryBranch'] = stage_defaults['RepositoryBranch']
+
+                                if 'CodeCommitBranch' in parameters:
+                                    defaults['CodeCommitBranch'] = stage_defaults['CodeCommitBranch']
+
+                        break
+                    else:
+                        print()
+                        click.echo(Colorize.error(f"Invalid value for {param_name}"))
+                        click.echo(Colorize.error(validation_result.get("reason")))
+                        click.echo(Colorize.info("Enter ? for help, ^ to exit"))
+                        print()
+
+                        
         return values
     
     def calculate_stage_defaults(self, stage_id: str) -> Dict:
@@ -1459,6 +1485,44 @@ class ConfigManager:
             click.echo(Colorize.error("Error processing template content. Check logs for more info."))
             raise
 
+    def extract_parameter_groups(self, content: bytes) -> List:
+        """
+        Extract metadata section from template content and return parameter groups.
+
+        Args:
+            content (bytes): Template file content
+
+        Returns:
+            Dict: Parameter Groups from metadata section from template
+        """
+        try:
+            content_str = content.decode('utf-8')
+            metadata_section = ""
+            in_metadata = False
+
+            for line in content_str.splitlines():
+                if line.startswith('Metadata:'):
+                    in_metadata = True
+                    metadata_section = line
+                elif in_metadata:
+                    # Check if we've moved to a new top-level section
+                    if line.strip() and not line.startswith(' ') and line.strip().endswith(':'):
+                        break
+                    metadata_section += '\n' + line
+
+            # Parse just the Metadata section
+            if metadata_section:
+                yaml_content = yaml.safe_load(metadata_section)
+                metadata_section = yaml_content.get('Metadata', {})
+                parameter_groups = metadata_section.get('AWS::CloudFormation::Interface', {}).get('ParameterGroups', [])
+                return parameter_groups
+            return []
+
+        except Exception as e:
+            Log.error(f"Error parsing metadata section: {e}")
+            click.echo(Colorize.error("Error parsing metadata section. Check logs for more info."))
+            return []
+
     def extract_parameters(self, content: bytes) -> Dict:
         """
         Extract parameters section from template content.
@@ -1495,16 +1559,19 @@ class ConfigManager:
             click.echo(Colorize.error("Error parsing parameters section. Check logs for more info."))
             return {}
 
-    def get_template_parameters(self, template_path: str) -> Dict:
+    def get_template_parameters(self, template_path: str) -> Tuple[List, Dict]:
         """
         Get parameters from CloudFormation template.
         
         Args:
             template_path (str): Path to template (s3:// or local path)
-            
+                
         Returns:
-            Dict: Template parameters
+            Tuple[List, Dict]: A tuple containing:
+                - List: Parameter Groups
+                - Dict: Template parameters
         """
+
         self.template_file = str(template_path)
         Log.info(f"Using template file: '{self.template_file}'")
 
@@ -1514,14 +1581,19 @@ class ConfigManager:
             
             # Process template metadata (version, hash etc)
             self.process_template_content(content, actual_path)
+
+            # Extract metadata if present
+            parameter_groups = self.extract_parameter_groups(content)
             
             # Extract and return parameters
-            return self.extract_parameters(content)
+            parameters = self.extract_parameters(content)
+            
+            return (parameter_groups, parameters)
             
         except Exception as e:
             Log.error(f"Error processing template file {template_path}: {e}")
             click.echo(Colorize.error("Error processing template file. Check logs for more info."))
-            return {}
+            return ([],{})
 
 
     # -------------------------------------------------------------------------
@@ -1846,7 +1918,7 @@ def main():
                 # Split by / and get the last part
                 template_file = template_file_from_config.split('/')[-1]
 
-        parameters = config_manager.get_template_parameters(template_file)
+        parameter_groups, parameters = config_manager.get_template_parameters(template_file)
         defaults = config_manager.defaults
 
         print()
@@ -1868,7 +1940,7 @@ def main():
             tag_defaults = config_manager.merge_tags(tag_defaults, local_config.get('deployments', {}).get(config_manager.stage_id, {}).get('deploy', {}).get('parameters', {}).get('tags', []))
 
         # Prompt for parameters
-        parameter_values = config_manager.prompt_for_parameters(parameters, parameter_defaults)
+        parameter_values = config_manager.prompt_for_parameters(parameter_groups, parameters, parameter_defaults)
         
         # prompt for tags
         try:

@@ -2,7 +2,6 @@
 
 ## Config
 
-- Metadata
 - Investigate if no stage provided and it is required for that infra_type, reading config and getting options
 - Fix tags - converting back and forth
 - Fix code structure
@@ -27,6 +26,8 @@
 
 - Make sure logs are being stored in the right spot
 - Improve Logging
+- Should settings be moved?
+- Overall settings load
 
 ## Test
 
