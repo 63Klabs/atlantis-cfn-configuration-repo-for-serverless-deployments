@@ -2,32 +2,29 @@
 
 ## Config
 
-- Investigate if no stage provided and it is required for that infra_type, reading config and getting options
-- Fix tags - converting back and forth
-- Fix code structure
+- Improve code structure
 - Improve Logging
+- Fix tags - converting back and forth
 
 ## Deploy
 
-- Fix code structure
+- Improve code structure
 - Improve Logging
 
 ## Import
 
-- Fix code structure
+- Improve code structure
 - Improve Logging
 
 ## Create Repository
 
-- Fix code structure
+- Improve code structure
 - Improve Logging
 
 ## Lib
 
 - Make sure logs are being stored in the right spot
 - Improve Logging
-- Should settings be moved?
-- Overall settings load
 
 ## Test
 

@@ -631,6 +631,9 @@ For settings, update settings.json in the defaults directory.
 
 Examples:
 
+    # Create repository and choose from provided application starters
+    create_repo.py your-webapp
+
     # Create repository and load code from zip
     create_repo.py <repo-name> --s3-uri <s3://bucket/path/to/file.zip>
 
