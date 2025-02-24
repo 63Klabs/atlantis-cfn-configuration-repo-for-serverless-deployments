@@ -18,13 +18,16 @@
 # temporary directory is cleaned up whether the script succeeds or fails.
 
 # Check if two arguments are provided
-if [ "$#" -ne 2 ]; then
-    echo "Usage: $0 <repository-name> <s3-url>"
+if [ "$#" -lt 2 ]; then
+    echo "Usage: $0 <repository-name> <source-url> [aws-profile]"
+    echo "source-url can be either an S3 URL (s3://) or GitHub URL (https://github.com/)"
     exit 1
 fi
 
 REPO_NAME=$1
-S3_URL=$2
+SOURCE_URL=$2
+AWS_PROFILE=${3:-default}  # Use provided profile or 'default' if not specified
+
 TEMP_DIR=$(mktemp -d)
 
 # Exit if temp directory creation failed
@@ -49,12 +52,27 @@ gh repo create "$REPO_NAME" --private --confirm || {
     exit 1
 }
 
-# Download and extract the S3 content
-echo "Downloading content from S3..."
-aws s3 cp "$S3_URL" "$TEMP_DIR/content.zip" || {
-    echo "Failed to download from S3"
+# Download content based on URL type
+echo "Downloading content..."
+if [[ "$SOURCE_URL" == s3://* ]]; then
+    echo "Downloading from S3..."
+    aws s3 cp "$SOURCE_URL" "$TEMP_DIR/content.zip" --profile "$AWS_PROFILE" || {
+        echo "Failed to download from S3"
+        exit 1
+    }
+elif [[ "$SOURCE_URL" == https://github.com/* ]]; then
+    echo "Downloading from GitHub..."
+    # Extract the archive URL from the GitHub repository URL
+    # Convert URL from https://github.com/owner/repo to https://github.com/owner/repo/archive/refs/heads/main.zip
+    GITHUB_ARCHIVE_URL="${SOURCE_URL%/}/archive/refs/heads/main.zip"
+    curl -L "$GITHUB_ARCHIVE_URL" -o "$TEMP_DIR/content.zip" || {
+        echo "Failed to download from GitHub"
+        exit 1
+    }
+else
+    echo "Error: Invalid URL format. Must start with 's3://' or 'https://github.com/'. If downloading from GitHub only include the repository URL, not the ZIP download URL"
     exit 1
-}
+fi
 
 echo "Extracting content..."
 cd "$TEMP_DIR" || exit 1
@@ -64,11 +82,19 @@ unzip -q content.zip || {
 }
 rm content.zip
 
+# If downloaded from GitHub, content will be in a subdirectory
+if [[ "$SOURCE_URL" == https://github.com/* ]]; then
+    # Move contents from the subdirectory up one level
+    mv */* . 2>/dev/null || true
+    # Clean up empty subdirectory
+    rm -rf */
+fi
+
 # Initialize git and push content
 echo "Initializing git repository and pushing content..."
 git init
 git add .
-git commit -m "Initial commit from S3 template"
+git commit -m "Initial commit from template"
 git branch -M main
 git remote add origin "https://github.com/$(gh api user -q .login)/$REPO_NAME.git"
 git push -u origin main
