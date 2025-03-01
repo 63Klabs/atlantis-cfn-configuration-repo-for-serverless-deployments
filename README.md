@@ -9,11 +9,11 @@
 
 These instructions assume you have an AWS account, AWS CLI, SAM, and profile configuration set up. They also assume a Linux-like environment and CLI. On Windows you can use Git Bash or Windows Subsystem for Linux (WSL). And finally, you should have a familiarity with AWS CLI, SAM, and git.
 
-## Quick Start: Install and Set Up
+## Install and Set Up
 
-> **If you are the administrator** of the AWS account (or you are managing a personal AWS account and config repo) and have not yet configured or set-up CloudFormation roles for the developer user accounts, see [Set Up AWS Account and Config Repo](./docs/01-Set-Up-AWS-Account-and-Config-Repo.md). Then instruct your developers on the proper parameters to use.
+> **If you are the administrator** of of the AWS account (either personal or organization) perform the following first: [Set Up AWS Account and Config Repo](./docs/01-Set-Up-AWS-Account-and-Config-Repo.md).
 
-**If you are a developer** your organization should already have the configuration repository established. Obtain necessary information about the repository location, Prefix to use, and other requirements from your administrator.
+**If you are a developer** your organization should already have the configuration repository established. Obtain necessary information about the repository location, prefix, cf bucket, and other requirements from your administrator.
 
 1. Clone this repository from your organization's version control system
 2. Make scripts executable
