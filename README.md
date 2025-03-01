@@ -50,7 +50,7 @@ chmod +x ./scripts/*.sh
 ./script/config.py pipeline acme your-webapp test
 
 # Deploy an infrastructure stack such as a pipeline for the test branch
-./script/config.py pipeline acme your-webapp test # we do this instead of sam deploy because it can handle templates in S3
+./script/deploy.py pipeline acme your-webapp test # we do this instead of sam deploy because it can handle templates in S3
 
 # Import an existing stack
 ./scripts/import.py stack-to-import
