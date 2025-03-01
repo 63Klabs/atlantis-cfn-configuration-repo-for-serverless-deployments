@@ -34,23 +34,26 @@ chmod +x ./scripts/*.sh
 ## Basic Usage Examples
 
 ```bash
+# You may need to add --profile yourprofile if not using the default AWS CLI profile
+# Python scripts will automatically check for current credentials an initiate a login if necessary.
+
 # Create a CodeCommit repository and seed it with an application starter from a list of choices
 ./scripts/create_repo.py your-repo-name
 
 # Create a CodeCommit repository and seed it with an application starter from a zip in S3
 ./scripts/create_repo.py your-repo-name --s3-uri s3://bucket/path/to/file.zip
 
-# Create a GitHub repository and seed it with an application starter from a zip in S3
+# Create a GitHub repository and seed it with an application starter from a zip in S3 (requires GitHub CLI)
 ./scripts/create-gh-repo.sh your-repo-name s3://bucket/path/to/file.zip
 
-# Create a GitHub repository and seed it with an application starter from a GitHub repository
+# Create a GitHub repository and seed it with an application starter from a GitHub repository (requires GitHub CLI)
 ./scripts/create-gh-repo.sh your-repo-name https://github.com/someacct/some-repository
 
-# Create/Manage an infrastructure stack such as a pipeline for the test branch
-./script/config.py pipeline acme your-webapp test
+# Create/Manage a pipeline infrastructure stack for your application's test branch
+./scripts/config.py pipeline acme your-webapp test
 
-# Deploy an infrastructure stack such as a pipeline for the test branch
-./script/deploy.py pipeline acme your-webapp test # we do this instead of sam deploy because it can handle templates in S3
+# Deploy a pipeline infrastructure stack for your application's test branch
+./scripts/deploy.py pipeline acme your-webapp test # we do this instead of sam deploy because it can handle templates in S3
 
 # Import an existing stack
 ./scripts/import.py stack-to-import
