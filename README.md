@@ -1,5 +1,13 @@
 # Atlantis Configuration Repository for Serverless Deployments using AWS SAM
 
+A central repository structure and scripts to store, manage, and deploy supporting SAM configuration files for serverless infrastructure (such as pipelines). Various scripts allow for importing existing stack configurations, creating and seeding application repositories, managing tags, and updating multi-stage deployments all while using standard `samconfig` files.
+
+While applications should be deployed using automated pipelines, those pipelines need to be created and managed. In addition to pipelines, applications may also have persistent S3, DynamoDb, Route53, and CloudFront resources outside of the main application stack.
+
+SAM configuration files (`samconfig`) can handle stack configurations but cannot scale to handle tags and parameter overrides among multiple deployment stages. SAM config files also do not support utilizing templates stored in S3.
+
+These scripts and templates overcome those limitations and establish a structured approach to managing deployments.
+
 ## Prerequisites
 
 1. AWS CLI installed
@@ -13,7 +21,7 @@ These instructions assume you have an AWS account, AWS CLI, SAM, and profile con
 
 > **If you are the administrator** of of the AWS account (either personal or organization) perform the following first: [Set Up AWS Account and Config Repo](./docs/01-Set-Up-AWS-Account-and-Config-Repo.md).
 
-**If you are a developer** your organization should already have the configuration repository established. Obtain necessary information about the repository location, prefix, cf bucket, and other requirements from your administrator.
+**If you are a developer** your organization should already have the configuration repository established. Obtain necessary information about the repository location, prefix, cf bucket, and other requirements from your administrator. If you do not yet have an AWS development environment set up see [Set-Up-Local-Environment](./docs/00-Set-Up-Local-Environment.md).
 
 1. Clone this repository from your organization's version control system
 2. Make scripts executable
@@ -23,13 +31,39 @@ chmod +x ./scripts/*.py
 chmod +x ./scripts/*.sh
 ```
 
-### Create an Application Repository
+## Basic Usage Examples
 
-Application starters are available to seed your repository with the necessary code to get started with a serverless application. Various templates are available depending on what type of application you wish to build.
+```bash
+# Create a CodeCommit repository and seed it with an application starter from a list of choices
+./scripts/create_repo.py your-repo-name
+
+# Create a CodeCommit repository and seed it with an application starter from a zip in S3
+./scripts/create_repo.py your-repo-name --s3-uri s3://bucket/path/to/file.zip
+
+# Create a GitHub repository and seed it with an application starter from a zip in S3
+./scripts/create-gh-repo.sh your-repo-name s3://bucket/path/to/file.zip
+
+# Create a GitHub repository and seed it with an application starter from a GitHub repository
+./scripts/create-gh-repo.sh your-repo-name https://github.com/someacct/some-repository
+
+# Create/Manage an infrastructure stack such as a pipeline for the test branch
+./script/config.py pipeline acme your-webapp test
+
+# Deploy an infrastructure stack such as a pipeline for the test branch
+./script/config.py pipeline acme your-webapp test # we do this instead of sam deploy because it can handle templates in S3
+
+# Import an existing stack
+./scripts/import.py stack-to-import
+
+# Import an existing stack with template
+./scripts/import.py acme-blue-test-pipeline --template
+```
+
+### Create a New Repository for Your Application
+
+Various serverless application starters are available to seed your repository depending on what type of application you wish to build.
 
 Two scripts (one for CodeCommit, one for GitHub) are provided that will automatically create your repository and seed it with the necessary code files.
-
-Though the scripts to create the seed your repository reside here, your application and its configuration will reside in its own repository.
 
 #### CodeCommit
 
@@ -65,7 +99,7 @@ Assuming you used the very basic application starter, your next step will to be 
 
 If you chose an application starter beyond the basic, then you may need to set up additional infrastructure as well. Check the application starter documentation.
 
-We will be using git-based deployments, commonly referred to as GitOps. In its simplist form, your repository will have several branches. The `dev` branch for work-in-progress, the `test` branch for deploying your application remotely, and a `main` branch fro deploying your application to production. There may be additional branches for features, staging, beta, etc, but we'll start off with these three main branches first.
+We will be using git-based deployments, commonly referred to as GitOps. In its simplest form, your repository will have several branches. The `dev` branch for work-in-progress, the `test` branch for deploying your application remotely, and a `main` branch fro deploying your application to production. There may be additional branches for features, staging, beta, etc, but we'll start off with these three main branches first.
 
 As you start to develop new features you will begin with a `dev` branch. You will deploy and test changes locally on your machine. When you have working code you will then merge that code into the `test` branch. The act of merging and pushing your code to the test branch will kick off an automated deployment (you will no longer do `sam deploy` for anything other than local testing in the dev branch).
 
