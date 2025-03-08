@@ -174,3 +174,23 @@ We separate out domain names (Route53) and Content Delivery Network (CloudFormat
 Utilize the Principle of Least Privilege through the use of resource naming and tagging. Construct IAM roles so that they limit actions to related resources. 
 
 For example, the CloudFormation pipeline templates can only create a pipeline for applications under the same Prefix, and each pipeline can only create, delete, and modify resources under the same Prefix, ProjectId, and StageId it was created. (`acme-your-webservice-test-pipeline` cannot modify any resources named or tagged `acme-your-webservice-prod-*` or `acme-jane-webservice-test-*`).
+
+## Updates
+
+> Still in development
+
+To update the scripts and documentation from the GitHub repository run the `update.py` script.
+
+The following settings will eventually be moved to the `defaults/settings.json` directory. For now you will need to update environment variables. You can also download a zip file (such as a prior release) and update from there.
+
+```bash
+# For Git repository
+export UPDATE_SOURCE_TYPE=git
+export SOURCE_LOCATION=https://github.com/chadkluck/atlantis-cfn-configuration-repo-for-serverless-deployments.git
+# OR for CodeCommit
+export SOURCE_LOCATION=https://git-codecommit.region.amazonaws.com/v1/repos/your-repo
+
+# For ZIP file
+export UPDATE_SOURCE_TYPE=zip
+export SOURCE_LOCATION=/path/to/your/archive.zip
+```
