@@ -14,6 +14,12 @@ The repository can reside in the repository provider of your choice (CodeCommit,
 
 Initialize a new repository and download and extract the Atlantis CloudFormation Configuration Repository For Serverless Deployments into it.
 
+```bash
+# 
+curl -L -o repo.zip "https://github.com/chadkluck/atlantis-cfn-configuration-repo-for-serverless-deployments/archive/refs/heads/main.zip" && unzip -o -v repo.zip && mv */docs . && mv */scripts . && mv */README.md . 2>/dev/null && rm -rf repo.zip && rm -rf */
+
+```
+
 This repository will host the scripts and deployment configurations for storage, network, pipeline, and IAM roles. Developers will use the scripts to manage their deployment configurations and commit and push their changes into the repository.
 
 Make the scripts executable:

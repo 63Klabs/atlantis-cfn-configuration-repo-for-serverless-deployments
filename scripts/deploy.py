@@ -15,6 +15,7 @@ import os
 import tempfile
 import subprocess
 import argparse
+import traceback
 import tomli  # Make sure to pip install tomli
 from pathlib import Path
 from typing import Optional
@@ -65,7 +66,8 @@ class TemplateDeployer:
             return 1
         
         try:
-            with open(config_path, 'rb') as f:
+            config_file = self.get_samconfig_file_path()
+            with open(config_file, 'rb') as f:
                 config = tomli.load(f)
             
             # Look for template parameter in stage-specific section
@@ -243,7 +245,7 @@ class TemplateDeployer:
         
         result = subprocess.run(
             sam_cmd,
-            cwd=self.config_dir,
+            cwd=self.get_samconfig_dir(),
             check=False,
             stdout=None,
             stderr=None,
@@ -353,7 +355,8 @@ def main() -> int:
         ConsoleAndLog.error(str(e))
         return 1
     except Exception as e:
-        ConsoleAndLog.error(f"Deployment script failed: {e}")
+        ConsoleAndLog.error(f"Deployment script failed: {str(e)}")
+        ConsoleAndLog.error(f"Error occurred at:\n{traceback.format_exc()}")
         return 1
 
 if __name__ == "__main__":

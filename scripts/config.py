@@ -20,6 +20,7 @@ import shlex
 import click
 import hashlib
 import argparse
+import traceback
 from pathlib import Path
 from typing import Dict, Optional, List, Tuple
 from botocore.exceptions import ClientError
@@ -84,7 +85,7 @@ class ConfigManager:
         self.infra_type = infra_type
         self.prefix = prefix
         self.project_id = project_id
-        self.stage_id = 'default' if (stage_id is None and (infra_type == 'network' or infra_type == 'pipeline')) else stage_id
+        self.stage_id = 'default' if (stage_id is None) else stage_id
         self.profile = profile
         self.region = region
         self.check_stack = check_stack
@@ -291,10 +292,9 @@ class ConfigManager:
                         click.echo(Colorize.info("Enter ? for help, ^ to exit"))
                         print()
 
-                        
         return values
     
-    def calculate_stage_defaults(self, stage_id: str) -> Dict:
+    def calculate_stage_defaults(self, stage_id: str = None) -> Dict:
         """Calculate defaults for DeployEnvironment and Branch based on stage_id"""
             
         defaults = {}
@@ -302,22 +302,24 @@ class ConfigManager:
         # stage_id impacts the defaults of the 
         # DeployEnvironment, RepositoryBranch/CodeCommitBranch
 
-        envValue = 'PROD'
-        if stage_id.startswith('t'):
-            envValue = 'TEST'
-        elif stage_id.startswith('d'):
-            envValue = 'DEV'
-        
-        defaults['DeployEnvironment'] = envValue
+        if stage_id is not None:
 
-        # if value is prod, then set RepositoryBranch
-        # to 'main' otherwise set to value
-        branch = stage_id
-        if stage_id == 'prod':
-            branch = 'main'
+            envValue = 'PROD'
+            if stage_id.startswith('t'):
+                envValue = 'TEST'
+            elif stage_id.startswith('d'):
+                envValue = 'DEV'
+            
+            defaults['DeployEnvironment'] = envValue
 
-        defaults['CodeCommitBranch'] = branch
-        defaults['RepositoryBranch'] = branch
+            # if value is prod, then set RepositoryBranch
+            # to 'main' otherwise set to value
+            branch = stage_id
+            if stage_id == 'prod':
+                branch = 'main'
+
+            defaults['CodeCommitBranch'] = branch
+            defaults['RepositoryBranch'] = branch
 
         return defaults                  
 
@@ -901,7 +903,7 @@ class ConfigManager:
             default_tags = TagUtils.get_default_tags(self.settings, self.defaults)
             return default_tags
         except Exception as e:
-            Log.error(f"Error getting default tags: {e}")
+            Log.error(f"Error getting default tags: {str(e)}")
             raise
 
     # -------------------------------------------------------------------------
@@ -910,6 +912,16 @@ class ConfigManager:
 
     def generate_automated_tags(self, parameters: Dict) -> List[Dict]:
         """Generate automated tags for the deployment"""
+
+        # If self.template_file has a version (?version=) then place the version information in template_file_version
+        template_file_version = None
+        if '?' in self.template_file:
+            template_file_version = self.template_file.split('?')[-1]
+            template_file = self.template_file.split('?')[0]
+        else:
+            template_file = self.template_file
+
+
         tags = [
             {
                 "Key": "Atlantis",
@@ -933,7 +945,11 @@ class ConfigManager:
             },
             {
                 "Key": "atlantis:TemplateFile",
-                "Value": self.template_file
+                "Value": template_file
+            },
+            {
+                "Key": "atlantis:TemplateFileVersion",
+                "Value": template_file_version
             }
         ]
 
@@ -1194,7 +1210,7 @@ class ConfigManager:
                 
         except (Exception) as e:
             click.echo(Colorize.error(f"Error reading template file {template_path}"))
-            Log.error(f"Error reading template file {template_path}: {e}")
+            Log.error(f"Error reading template file {template_path}: {str(e)}")
             raise
             
     def process_template_content(self, content: bytes, template_path: str) -> None:
@@ -1231,7 +1247,7 @@ class ConfigManager:
             click.echo(Colorize.output_with_value("Template hash ID:", self.template_hash_id))
             print()
         except(Exception) as e:
-            Log.error(f"Error processing template content: {e}")
+            Log.error(f"Error processing template content: {str(e)}")
             click.echo(Colorize.error("Error processing template content. Check logs for more info."))
             raise
 
@@ -1269,7 +1285,7 @@ class ConfigManager:
             return []
 
         except Exception as e:
-            Log.error(f"Error parsing metadata section: {e}")
+            Log.error(f"Error parsing metadata section: {str(e)}")
             click.echo(Colorize.error("Error parsing metadata section. Check logs for more info."))
             return []
 
@@ -1305,7 +1321,7 @@ class ConfigManager:
             return {}
             
         except Exception as e:
-            Log.error(f"Error parsing parameters section: {e}")
+            Log.error(f"Error parsing parameters section: {str(e)}")
             click.echo(Colorize.error("Error parsing parameters section. Check logs for more info."))
             return {}
 
@@ -1341,7 +1357,7 @@ class ConfigManager:
             return (parameter_groups, parameters)
             
         except Exception as e:
-            Log.error(f"Error processing template file {template_path}: {e}")
+            Log.error(f"Error processing template file {template_path}: {str(e)}")
             click.echo(Colorize.error("Error processing template file. Check logs for more info."))
             return ([],{})
 
@@ -1410,13 +1426,12 @@ class ConfigManager:
                                     value['deploy']['parameters']['tags'] = self.parse_tags(tags)
                                 samconfig_data['deployments'][key] = value
                         except (AttributeError, TypeError) as e:
-                            Log.warning(f"Skipping invalid deployment section '{key}': {e}")
+                            Log.warning(f"Skipping invalid deployment section '{key}': {str(e)}")
                             continue
 
-                print(json.dumps(samconfig_data, indent=4))
                 return samconfig_data
             except Exception as e:
-                Log.error(f"Error reading samconfig file {samconfig_path}: {e}")
+                Log.error(f"Error reading samconfig file {samconfig_path}: {str(e)}")
                 click.echo(Colorize.error("Error reading samconfig file. Check logs for more info."))
                 return None
         return None
@@ -1616,7 +1631,8 @@ class ConfigManager:
             self.check_for_default_json(atlantis_deploy_section.get('atlantis', {}), parameter_values)
             
         except Exception as e:
-            Log.error(f"Error saving configuration: {e}")
+            Log.error(f"Error saving configuration: {str(e)}")
+            Log.error(f"Error occurred at:\n{traceback.format_exc()}")
             click.echo(Colorize.error(f"Error saving configuration. Check logs for more info."))
             sys.exit(1)
 
@@ -1720,7 +1736,7 @@ class ConfigManager:
                         s3_uri = f"s3://{bucket}/{obj['Key']}"
                         templates.append(s3_uri)
             except Exception as e:
-                Log.error(f"Error discovering templates from S3: {e}")
+                Log.error(f"Error discovering templates from S3: {str(e)}")
                 click.echo(Colorize.error("Error discovering templates from S3. Check logs for more info."))
                 raise
 
@@ -2060,6 +2076,7 @@ def main():
 
     except Exception as e:
         ConsoleAndLog.error(f"Unexpected error: {str(e)}")
+        ConsoleAndLog.error(f"Error occurred at:\n{traceback.format_exc()}")
         sys.exit(1)
 
 if __name__ == '__main__':
