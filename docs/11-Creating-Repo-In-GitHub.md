@@ -53,8 +53,6 @@ Or download from GitHub:
 ```bash
 ```
 
-For a list of a
-
 3. Initialize Git repository:
   - Navigate into the extracted directory using cd <directory-name>. 
   - Initialize a Git repository in the current directory: 

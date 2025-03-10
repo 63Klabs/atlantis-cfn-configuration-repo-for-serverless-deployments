@@ -46,8 +46,8 @@ As of right now, only the pipeline role template is available as a starter templ
 To start out, you must determine the following:
 
 - Prefix
-- Role Paths (optional but recommended)
-- S3 Bucket Prefix (optional but recommended)
+- Role Path (optional but recommended)
+- S3 Bucket Name Prefix (optional but recommended)
 - Permission Boundaries (optional)
 
 ### Prefix
@@ -64,3 +64,20 @@ Choose a Prefix that best describes the team, account, department, or function u
 
 Make sure the number of Prefixes you implement remain manageable.
 
+### Role Path
+
+Including `RolePath` will require the `RolePath` parameter be supplied for ALL deployments.
+
+Even though IAM doesn't provide a heirarchical structure for Roles, you can include a role path as a method for providing permissions and organization. For example, you can allow application infrastructure stacks to create Execution Roles only under the RolePath `/app-infra/`. 
+
+### Permissions Boundaries
+
+Permissions Boundaries can be used by administrators to limit what can and cannot be created by a user. If supplied, they must be included for ALL deployments.
+
+### S3 Bucket Name Prefix
+
+This is not to be confused with Prefix or S3 object prefix. This is purely for naming the S3 bucket.
+
+If supplied this will pre-pend this value to all S3 buckets created by infrastructure stacks (as long as it is included in the template). 
+
+This can be used to provide permissions (requires templates to only create S3 buckets under this prefix) and shorten the bucket name. If this is not required and not supplied then bucket names will include the account and region. This makes for a unique but long name. S3 names have a limit of 63 characters. If your organization requires a prefix, it is up to you to make sure they are unique.
