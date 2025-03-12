@@ -2,24 +2,20 @@
 
 ## Config
 
-- Improve code structure
-- Improve Logging
+- Default tags not loading from settings
 - Fix tags - converting back and forth
 
 ## Deploy
 
-- Improve code structure
-- Improve Logging
+- Test
 
 ## Import
 
-- Improve code structure
-- Improve Logging
+- Test
 
 ## Create Repository
 
-- Improve code structure
-- Improve Logging
+- Test
 
 ## Lib
 

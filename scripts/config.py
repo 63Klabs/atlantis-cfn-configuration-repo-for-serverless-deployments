@@ -1460,7 +1460,7 @@ class ConfigManager:
         # if template_file is not s3 it is local and use the local path
         if not template_file.startswith('s3://'):
             # Make template_file_path relative to samconfig_file
-            file_path = f'{self.get_templates_dir()}/{self.infra_type}/{template_file}'
+            file_path = f'{self.get_templates_dir()}/{template_file}'
             template_file = os.path.relpath(file_path, self.get_samconfig_dir())
 
         # Generate stack name
@@ -1535,6 +1535,15 @@ class ConfigManager:
         
         return config
 
+    def get_sam_deploy_command(self, stage_id: str) -> str:
+        ### Get sam deploy command ###
+        return f"sam deploy --config-env {stage_id} --config-file {self.get_samconfig_file_name()} --profile {self.profile}"
+    
+    def get_script_deploy_command(self, stage_id: str) -> str:
+        ### Get the script deploy command ###
+        return f"./scripts/deploy.py {self.infra_type} {self.prefix} {self.project_id} {stage_id} --profile {self.profile}"
+
+
     def save_config(self, config: Dict) -> None:
         """Save configuration to samconfig.toml file"""
 
@@ -1587,11 +1596,19 @@ class ConfigManager:
                     if section != 'default':
                         section_pystr += f" {section}"
 
+                    section_deploy_command = ""
+                    if self.template_file.startswith('s3://'):
+                        section_deploy_command += "# Since template is in S3 you MUST use the python deploy script:\n"
+                        section_deploy_command += f"# {self.get_script_deploy_command(section)}"
+                    else:
+                        section_deploy_command += f"# {self.get_sam_deploy_command(section)}\n# -- OR --\n"
+                        section_deploy_command += f"# {self.get_script_deploy_command(section)}\n"
+                    
                     deploy_section_header = (
                         '# =====================================================\n'
                         f'# {section} Deployment Configuration\n\n'
                         '# Deploy command:\n'
-                        f'# sam deploy --config-env {section} --config-file {self.get_samconfig_file_name()} --profile {self.profile}\n\n'
+                        f'{section_deploy_command}\n\n'
                         '# Do not update this file!\n'
                         '# To update parameter_overrides or tags for this deployment, use the generate script:\n'
                         f'# python3 {section_pystr}\n'
@@ -1622,9 +1639,19 @@ class ConfigManager:
             
             print()
             click.echo(Colorize.output_with_value("Configuration saved to", samconfig_path_relative))
-            click.echo(Colorize.output_bold("Open file for 'sam deploy' commands"))
-            click.echo(Colorize.output_bold(f"You must be in the {saved_dir} directory to run the command"))
-            click.echo(Colorize.output(f"cd {saved_dir}"))
+            click.echo(Colorize.output_bold("Deploy commands are saved in the samconfig file for later reference."))
+
+            # If self.template_file is s3 then display ./scripts/deploy.py message
+            if self.template_file.startswith('s3://'):
+                click.echo(Colorize.output_bold("Since the template is in S3, 'sam deploy' will NOT work."))
+                click.echo(Colorize.output_bold("Use ./scripts/deploy.py instead"))
+            else:
+                click.echo(Colorize.output_bold(f"You must be in the {saved_dir} directory to run the 'sam deploy' command:"))
+                click.echo(Colorize.output(f"cd {saved_dir}"))
+                click.echo(Colorize.output(self.get_sam_deploy_command(self.stage_id)))
+                click.echo(Colorize.output_bold("Otherwise, you can run the ./scripts/deploy.py script from here:"))
+            
+            click.echo(Colorize.output(self.get_script_deploy_command(self.stage_id)))
             print()
 
             # Check if default.json and prefix.json exists
