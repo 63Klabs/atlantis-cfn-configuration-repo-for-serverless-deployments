@@ -18,10 +18,9 @@ __pycache__/
 # -- Items below may be adjusted ----------------------------------------------
 
 
-# Comment out/remove these lines if you want to save your default settings across projects - RECOMMENDED
-defaults/*
-samconfigs/*
-!defaults/settings.json
+# acme is used as examples and we don't want to really use or keep them around
+defaults/**/acme-*
+samconfigs/**/acme-*
 
 # Comment out/remove these lines if you want your configuration imports and script log files in the repo - NOT RECOMMENDED
 # Why? - You can use imports for temporary storage as you work on converting to proper configurations. 
@@ -29,7 +28,7 @@ samconfigs/*
 local-imports
 scripts/logs
 
-# Comment out/remove these lines if you are storing templates in this repo - NOT RECOMMENDED
+# Comment out/remove these lines if you are storing your own templates in this repo - NOT RECOMMENDED
 # Why? - You should really apply versioning to your templates so deploys are consistent.
 #        Check out the Atlantis Template Repository for developing and releasing templates to a versioned S3 bucket.
 local-templates/*
