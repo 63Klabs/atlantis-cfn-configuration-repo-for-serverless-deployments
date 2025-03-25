@@ -333,18 +333,48 @@ class UpdateManager:
                 if tag == "":
                     tag = "main"
                 zipped_dir = f"{repo}-{tag}/"
-            
+
             with zipfile.ZipFile(zip_location, 'r') as zip_ref:
                 # Extract only the directories we want
                 for file_info in zip_ref.filelist:
                     for target_dir in self.target_dirs:
                         src_dir = zipped_dir + target_dir + '/'
                         if file_info.filename.startswith(src_dir):
-                            # Extract the file to the target directory
-                            dest = os.path.join(target_dir, os.path.basename(file_info.filename))
-                            ConsoleAndLog.info(f"Extracting {file_info.filename} to {dest}")
-                            zip_ref.extract(file_info, dest)
-                        
+                            try:
+                                # Get the relative path by removing the source directory prefix
+                                relative_path = file_info.filename[len(src_dir):]
+                                
+                                # Create the full destination path
+                                dest_path = os.path.join(target_dir, relative_path)
+
+                                # Ensure the destination path is safe
+                                dest = os.path.abspath(dest_path)
+                                if not dest.startswith(os.path.abspath(target_dir)):
+                                    raise ValueError("Attempted path traversal in zip file")
+                                
+                                # Create parent directories if they don't exist
+                                os.makedirs(os.path.dirname(dest), exist_ok=True)
+                                
+                                ConsoleAndLog.info(f"Extracting {file_info.filename} to {dest}")
+
+                                # Add your existing extension validation
+                                allowed_extensions = {'.py', '.sh', '.md', '.txt', '.json', '.toml', '.gitignore'}
+                                if not os.path.splitext(file_info.filename)[1].lower() in allowed_extensions:
+                                    ConsoleAndLog.warning(f"Skipping file with unauthorized extension: {file_info.filename}")
+                                    continue
+
+                                # Extract the file content and write it to the correct location
+                                with zip_ref.open(file_info) as source, open(dest, 'wb') as target:
+                                    target.write(source.read())
+
+                            except Exception as e:
+                                ConsoleAndLog.error(f"Failed to extract {file_info.filename}: {str(e)}")
+
+                                # # Extract the file to the target directory
+                                # dest = os.path.join(target_dir, os.path.basename(file_info.filename))
+                                # ConsoleAndLog.info(f"Extracting {file_info.filename} to {dest}")
+                                # zip_ref.extract(file_info, dest)
+                            
         except Exception as e:
             print(f"Error updating from zip: {str(e)}")
             return False
