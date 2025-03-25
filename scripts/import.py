@@ -18,8 +18,6 @@ from typing import Optional, Dict
 from pathlib import Path
 import yaml
 
-#from ruamel.yaml import YAML
-
 from lib.aws_session import AWSSessionManager
 from lib.logger import ScriptLogger, ConsoleAndLog, Log
 from lib.tools import Strings

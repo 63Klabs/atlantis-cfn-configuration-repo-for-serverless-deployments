@@ -35,7 +35,7 @@ ScriptLogger.setup('deploy')
 SAMCONFIG_DIR = "samconfigs"
 
 class TemplateDeployer:
-    def __init__(self, infra_type: str, prefix: str, project_id: str, stage_id: str, profile: Optional[str] = None) -> None:
+    def __init__(self, infra_type: str, prefix: str, project_id: str, stage_id: Optional[str] = "default", profile: Optional[str] = None) -> None:
         self.infra_type = infra_type
         self.prefix = prefix
         self.project_id = project_id
@@ -233,6 +233,7 @@ class TemplateDeployer:
         sam_cmd = [
             "sam.cmd" if os.name == 'nt' else "sam",
             "deploy",
+            "--config-env", self.stage_id,
             "--template-file", str(template_path),
             "--config-file", str(config_path),
             "--no-fail-on-empty-changeset"

@@ -19,6 +19,11 @@
 			"prefix": "atlantis/app-starters/v2"
 		}
 	],
+	"updates": {
+		"src": "https://github.com/chadkluck/atlantis-cfn-configuration-repo-for-serverless-deployments",
+		"ver": "commit:latest",
+		"target_dirs": [ "docs", "scripts" ]
+	},
 	"regions": [
 		"us-east-1", "us-east-2", "us-west-1", "us-west-2",
 		"ca-central-1", "ca-west-1",
