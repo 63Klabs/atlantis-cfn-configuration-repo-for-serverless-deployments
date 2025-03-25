@@ -113,13 +113,15 @@ class UpdateManager:
         if source.endswith(".zip"):
             return "local"
 
-    def get_version(self, source: str, ver: str) -> str:
+    def get_version(self, source: str, src_type: str, ver: str) -> str:
         """Get the version of the source
         For GitHub, this is either "latest", "commit:latest", "release:latest", or "release:<tag>"
         For S3, this is "latest" or the version_id
         For local, this is always "latest"
         """
-        src_type = self.get_type(source)
+
+        if src_type == "":
+            src_type = self.get_type(source)
 
         if src_type == "github":
             if '/archive/refs/heads/' in source:
