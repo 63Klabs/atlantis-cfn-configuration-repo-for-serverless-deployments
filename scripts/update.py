@@ -47,12 +47,12 @@ class UpdateManager:
 
         # Validate and assemble the source info
         update_settings = self.settings.get('updates', {})
+        self.target_dirs = update_settings.get('target_dirs', TARGET_DIRS)
         self.source = update_settings.get('source', DEFAULT_SRC)
         self.src_type = self.get_type(self.source)
         self.src_ver = self.get_version(self.source, self.src_type, update_settings.get('ver', ""))
         self.source = self.update_source(self.source, self.src_type, self.src_ver)
 
-        self.target_dirs = self.settings.get('target_dirs', TARGET_DIRS)
 
         # Check the arguments before moving on
         self._validate_args()
@@ -167,9 +167,9 @@ class UpdateManager:
 
         if src_type == "github":
             # Get owner and repo from source
-            owner = source.split('/')[3]
-            repo = source.split('/')[4]
-            tag = ""
+            result = self.get_github_repo_info(self.source)
+            owner = result['owner']
+            repo = result['repo']
 
             if ver == "commit:latest":
                 return f"https://github.com/{owner}/{repo}/archive/refs/heads/main.zip"
@@ -214,6 +214,38 @@ class UpdateManager:
         else:
             raise click.UsageError(f"Invalid source/ver combo: {ver} from {source}")
 
+    def get_github_repo_info(self, source: str) -> Dict:
+        """
+        Get the owner and repo from a GitHub repository URL
+
+        Args:
+            source (str): GitHub repository URL
+
+        Returns:
+            Dict: Dictionary containing owner and repo
+        """
+        try:
+            # Split the URL into parts
+            parts = source.split('/')
+
+            # Get the owner and repo from the URL
+            owner = parts[3]
+            repo = parts[4]
+            tag = ""
+
+            # if source ends with .zip then it is a release
+            if source.endswith('.zip'):
+                tag = source.split('/')[-1].split('-')[-1].split('.')[0]
+
+            return {
+                'owner': owner,
+                'repo': repo,
+                'tag': tag
+            }
+
+        except IndexError:
+            raise Exception("Invalid GitHub repository URL")
+        
     def get_latest_github_release(owner: str, repo: str) -> str:
         """
         Get the latest release tag from a GitHub repository
@@ -243,6 +275,7 @@ class UpdateManager:
         
     def download_zip(self) -> None:
         # Create a temporary file with .zip extension
+        ConsoleAndLog.info(f"Downloading zip file from {self.source}")
         with tempfile.NamedTemporaryFile(suffix='.zip', delete=False) as temp_zip:
             if self.src_type == "github":
                 try:
@@ -287,18 +320,30 @@ class UpdateManager:
 
     def update_from_zip(self, zip_location):
         """Update specified directories from zip file that was downloaded to temp"""
+        ConsoleAndLog.info(f"Updating from zip file: {zip_location}")
         try:
+
+            # If the zip file is from github, then the extracted base path will be repo-tag
+            zipped_dir = ""
+            if self.src_type == "github":
+                result = self.get_github_repo_info(self.source)
+                repo = result['repo']
+                tag = result['tag']
+
+                if tag == "":
+                    tag = "main"
+                zipped_dir = f"{repo}-{tag}/"
             
             with zipfile.ZipFile(zip_location, 'r') as zip_ref:
                 # Extract only the directories we want
                 for file_info in zip_ref.filelist:
                     for target_dir in self.target_dirs:
-                        if file_info.filename.startswith(target_dir + '/'):
-                            zip_ref.extract(file_info)
-                    
-                    # Extract README.md if it exists
-                    if file_info.filename == 'README.md':
-                        zip_ref.extract(file_info)
+                        src_dir = zipped_dir + target_dir + '/'
+                        if file_info.filename.startswith(src_dir):
+                            # Extract the file to the target directory
+                            dest = os.path.join(target_dir, os.path.basename(file_info.filename))
+                            ConsoleAndLog.info(f"Extracting {file_info.filename} to {dest}")
+                            zip_ref.extract(file_info, dest)
                         
         except Exception as e:
             print(f"Error updating from zip: {str(e)}")
@@ -411,8 +456,12 @@ def main():
         click.echo(Colorize.divider("="))
         print()
 
+        success = False
+
         try:
             update_manager = UpdateManager(args.profile)
+            zip_loc = update_manager.download_zip()
+            success = update_manager.update_from_zip(zip_loc)
         except TokenRetrievalError as e:
             ConsoleAndLog.error(f"AWS authentication error: {str(e)}")
             sys.exit(1)
@@ -420,11 +469,6 @@ def main():
             ConsoleAndLog.error(f"Error initializing update manager: {str(e)}")
             Log.error(f"Error occurred at:\n{traceback.format_exc()}")
             sys.exit(1)
-        
-        success = False
-        
-        zip_loc = update_manager.download_zip()
-        update_manager.update_from_zip(zip_loc)
 
         if success:
             print("Update completed successfully")
