@@ -1,88 +1,440 @@
+#!/usr/bin/env python3
+
+VERSION = "v0.1.0/2025-03-25"
+# Created by Chad Kluck with AI assistance from Amazon Q Developer
+
 import os
-import shutil
+import sys
+import requests
+import tempfile
 import subprocess
+import zipfile
+import click
+import argparse
+import traceback
+from typing import Dict, Optional, List, Tuple
+
 from pathlib import Path
 
-def init_git_repo(repo_url):
-    """Initialize git repository if not already initialized"""
-    if not os.path.exists('.git'):
-        subprocess.run(['git', 'init'])
-        subprocess.run(['git', 'remote', 'add', 'origin', repo_url])
-    
-def update_from_git(target_dirs, repo_url):
-    """Update specified directories from git repository"""
-    try:
-        # Initialize repository if needed
-        init_git_repo(repo_url)
-        
-        # Fetch latest changes
-        subprocess.run(['git', 'fetch', 'origin'])
-        
-        # For each target directory
-        for directory in target_dirs:
-            if os.path.exists(directory):
-                # Checkout the specific directory from origin
-                subprocess.run(['git', 'checkout', 'origin/main', '--', directory])
-        
-        # Specifically update README.md
-        if os.path.exists('README.md'):
-            subprocess.run(['git', 'checkout', 'origin/main', '--', 'README.md'])
-            
-    except Exception as e:
-        print(f"Error updating from git: {str(e)}")
-        return False
-    
-    return True
+from lib.aws_session import AWSSessionManager, TokenRetrievalError
+from lib.logger import ScriptLogger, Log, ConsoleAndLog
+from lib.tools import Colorize
+from lib.atlantis import FileNameListUtils, ConfigLoader, TagUtils, Utils
 
-def update_from_zip(zip_path, target_dirs):
-    """Update specified directories from zip file"""
-    try:
-        import zipfile
+if sys.version_info[0] < 3:
+    sys.stderr.write("Error: Python 3 is required\n")
+    sys.exit(1)
+
+# Initialize logger for this script
+ScriptLogger.setup('update')
+
+# Directories to update
+TARGET_DIRS = ['docs', 'scripts']
+DEFAULT_SRC = "https://github.com/chadkluck/atlantis-cfn-configuration-repo-for-serverless-deployments"
+SETTINGS_DIR = "defaults"
+DEFAULT_S3_PATH = ""
+
+class UpdateManager:
+
+    def __init__(self, profile: Optional[str] = None):
+
+        self.profile = profile
+
+        config_loader = ConfigLoader(
+            settings_dir=self.get_settings_dir()
+        )
+
+        self.settings = config_loader.load_settings()
+
+        # Validate and assemble the source info
+        self.source = self.settings.get('updates', DEFAULT_SRC)
+        self.src_type = self.get_type(self.source)
+        self.src_ver = self.get_version(self.source, self.src_type)
+        self.source = self.update_source(self.source, self.src_type, self.src_ver)
+
+        self.target_dirs = self.settings.get('target_dirs', TARGET_DIRS)
+
+        # Check the arguments before moving on
+        self._validate_args()
+
+        # Set up AWS session and clients
+        self.aws_session = AWSSessionManager(profile)
+        self.s3_client = self.aws_session.get_client('s3')
+
+    def _validate_args(self) -> None:
+        """Validate arguments"""
         
-        with zipfile.ZipFile(zip_path, 'r') as zip_ref:
-            # Extract only the directories we want
-            for file_info in zip_ref.filelist:
-                for target_dir in target_dirs:
-                    if file_info.filename.startswith(target_dir + '/'):
-                        zip_ref.extract(file_info)
-                
-                # Extract README.md if it exists
-                if file_info.filename == 'README.md':
-                    zip_ref.extract(file_info)
-                    
-    except Exception as e:
-        print(f"Error updating from zip: {str(e)}")
-        return False
+        # validate target dirs
+        # Target directories must be a list and can only include strings defined in TARGET_DIRS
+        if not isinstance(self.target_dirs, list):
+            raise click.UsageError(f"target_dirs must be a list")
+        if not all(isinstance(item, str) for item in self.target_dirs):
+            raise click.UsageError(f"target_dirs must be a list of strings")
+        if not all(item in TARGET_DIRS for item in self.target_dirs):
+            raise click.UsageError(f"target_dirs must be a subset of {TARGET_DIRS}")
+        
+        # validate source
+        # Source must be a string and must be either a GitHub URL, S3 location, or local file path
+        if not isinstance(self.source, str):
+            raise click.UsageError(f"source must be a string")
+        if not self.source.startswith(('https://github.com/', 's3://', '/')):
+            raise click.UsageError(f"source must be a valid URL, S3 location, or local file path")
+        
+        # validate profile
+        if self.profile and not isinstance(self.profile, str):
+            raise click.UsageError(f"profile must be a string")
+
+    def get_settings_dir(self) -> Path:
+        """Get the settings directory path"""
+        # Get the script's directory in a cross-platform way
+        script_dir = Path(__file__).resolve().parent
+        return script_dir.parent / SETTINGS_DIR
     
-    return True
+    def get_type(self, source: str) -> str:
+        """Determine the type of the source
+        From the source string, determine if we are going to use a local zip file,
+        download a zip from S3, the GitHub repository main branch, or the GitHub repository release
+        """
+        # Source may be
+        # - a local zip file
+        # - a S3 location
+        # - a GitHub repository main branch
+        # - a GitHub repository release (either latest or a specific release)
+
+        # if source is http/https and ends with .zip, then we can just use it
+        if source.startswith(('https://github.com/')):
+            return "github"
+
+        # If source is an S3 location, then we can just use it
+        if source.startswith('s3://'):
+            return "s3"
+
+        # If source is a local zip file, then we can just use it
+        if source.endswith('.zip'):
+            return "local"
+
+    def get_version(self, source: str, ver: str) -> str:
+        """Get the version of the source
+        For GitHub, this is either "latest", "commit:latest", "release:latest", or "release:<tag>"
+        For S3, this is "latest" or the version_id
+        For local, this is always "latest"
+        """
+        src_type = self.get_type(source)
+
+        if src_type == "github":
+            if '/archive/refs/heads/' in source:
+                return "commit:latest"
+            elif source.endswith('.zip') and '/archive/refs/tags/' in source:
+                # get release tag from source
+                tag = source.split('/')[-1].split('-')[-1].split('.')[0]
+                return f"release:{tag}"
+            elif '/archive/refs/tags/' in source:
+                return "release:latest"
+            elif ver.startswith("release:"):
+                return ver
+            elif ver == "release:latest":
+                return "release:latest"
+            elif ver == "commit:latest":
+                return "commit:latest"
+            elif ver == "":
+                return "release:latest"
+            else:
+                raise click.UsageError(f"Invalid GitHub source/ver combo: {ver} from {source}")
+        elif src_type == "s3":
+            # valid source is:
+            # s3://bucket/path/to/file.zip
+            # s3://bucket/path/to/file.zip?versionId=version_id
+            # s3://bucket
+            if '?versionId=' in source:
+                return source.split('?versionId=')[-1]
+            elif ver != "latest" and ver != "":
+                return ver
+            else:
+                return "latest"
+        elif src_type == "local":
+            return "latest"
+        else:
+            raise click.UsageError(f"Invalid source/ver combo: {ver} from {source}")
+    
+    def update_source(self, source: str, src_type: str, ver: str) -> str:
+        """Using the source, src_type, and ver, generate the full urls needed"""
+
+        # https://github.com/chadkluck/atlantis-cfn-configuration-repo-for-serverless-deployments/archive/refs/heads/main.zip
+        # https://github.com/chadkluck/atlantis-cfn-configuration-repo-for-serverless-deployments/archive/refs/tags/v1.1.4.zip
+        # s3://63klabs/atlantis/utilities/v2/config_scripts.zip
+
+        if src_type == "github":
+            # Get owner and repo from source
+            owner = source.split('/')[3]
+            repo = source.split('/')[4]
+            tag = ""
+
+            if ver == "commit:latest":
+                return f"https://github.com/{owner}/{repo}/archive/refs/heads/main.zip"
+            elif ver.startswith("release:"):
+                if ver == "release:latest":
+                    try:
+                        tag = self.get_latest_github_release(owner, repo)
+                        print(f"Latest release tag: {tag}")
+                    except Exception as e:
+                        print(f"Error: {e}")
+                        return ""
+                else:
+                    tag = ver.split(':')[1]
+
+                return f"https://github.com/{owner}/{repo}/archive/refs/tags/{tag}.zip"
+
+        elif src_type == "s3":
+            if '?versionId=' in source:
+                t_split = source.split('?versionId=')
+                source = t_split[0]
+                ver = source.split('?versionId=')[-1]
+
+            # Get bucket and path from source
+            bucket = source.split('/')[2]
+            path = '/'.join(source.split('/')[3:])
+
+            # if path is blank or / then use default
+            if path == "" or path == "/":
+                path = "/atlantis/utilities/v2/config_scripts.zip"
+
+            if ver == "latest":
+                return f"s3://{bucket}{path}"
+            else:
+                return f"s3://{bucket}{path}?versionId={ver}"
+
+        elif src_type == "local":
+            # if local path exists and ends with zip then return source
+            if os.path.exists(source) and source.endswith('.zip'):
+                return source
+            else:
+                raise click.UsageError(f"Invalid local path: {source}")
+        else:
+            raise click.UsageError(f"Invalid source/ver combo: {ver} from {source}")
+
+    def get_latest_github_release(owner: str, repo: str) -> str:
+        """
+        Get the latest release tag from a GitHub repository
+        
+        Args:
+            owner (str): GitHub repository owner
+            repo (str): GitHub repository name
+        
+        Returns:
+            str: Latest release tag (e.g. 'v1.0.0')
+        """
+        try:
+            # Query the GitHub API for latest release
+            response = requests.get(
+                f"https://api.github.com/repos/{owner}/{repo}/releases/latest",
+                headers={
+                    'Accept': 'application/vnd.github.v3+json'
+                }
+            )
+            response.raise_for_status()
+            
+            # Extract the tag name from the response
+            return response.json()['tag_name']
+            
+        except requests.exceptions.RequestException as e:
+            raise Exception(f"Failed to get latest release: {str(e)}")
+        
+    def download_zip(self) -> None:
+        # Create a temporary file with .zip extension
+        with tempfile.NamedTemporaryFile(suffix='.zip', delete=False) as temp_zip:
+            if self.src_type == "github":
+                try:
+                    response = requests.get(self.source)
+                    response.raise_for_status()
+                    temp_zip.write(response.content)
+                    return temp_zip.name
+                except Exception as e:
+                    print(f"Error downloading zip file: {str(e)}")
+                    return False
+                    
+            elif self.src_type == "s3":
+                try:
+                    # Get bucket and path from source
+                    t_source = self.source.split('?versionId=')
+                    ver = t_source[-1]
+                    bucket = t_source[0].split('/')[2]
+                    path = '/'.join(t_source[0].split('/')[3:])
+
+                    # Get the object from S3
+                    params = {
+                        'Bucket': bucket,
+                        'Key': path
+                    }
+                    if ver:
+                        params['VersionId'] = ver
+                        
+                    response = self.s3_client.get_object(**params)
+                    temp_zip.write(response['Body'].read())
+                    return temp_zip.name
+                except Exception as e:
+                    print(f"Error downloading zip file: {str(e)}")
+                    return False
+            elif self.src_type == "local":
+                # if local path exists and ends with zip then return source
+                if os.path.exists(self.source) and self.source.endswith('.zip'):
+                    return self.source
+                else:
+                    raise click.UsageError(f"Invalid local path: {self.source}")
+            else:
+                raise click.UsageError(f"Invalid source/ver combo: {self.src_ver} from {self.source}")
+
+    def update_from_zip(self, zip_location):
+        """Update specified directories from zip file that was downloaded to temp"""
+        try:
+            
+            with zipfile.ZipFile(zip_location, 'r') as zip_ref:
+                # Extract only the directories we want
+                for file_info in zip_ref.filelist:
+                    for target_dir in self.target_dirs:
+                        if file_info.filename.startswith(target_dir + '/'):
+                            zip_ref.extract(file_info)
+                    
+                    # Extract README.md if it exists
+                    if file_info.filename == 'README.md':
+                        zip_ref.extract(file_info)
+                        
+        except Exception as e:
+            print(f"Error updating from zip: {str(e)}")
+            return False
+        
+        return True
+    
+# =============================================================================
+# ----- Main function ---------------------------------------------------------
+# =============================================================================
+
+EPILOG = """
+Supports both AWS SSO and IAM credentials.
+For SSO users, credentials will be refreshed automatically.
+For IAM users, please ensure your credentials are valid using 'aws configure'.
+
+Update from a zip (S3, local or https), github repo release, or git repository (git)
+
+For settings, update settings.json in the defaults directory.
+
+Examples:
+
+    # Basic
+    update.py 
+    
+    # Use specific AWS profile
+    update.py --profile <yourprofile>
+
+Settings (defaults/settings.json):
+
+-- Update using latest commit from GitHub: --
+
+{
+	"updates": {
+		"src": "https://github.com/chadkluck/atlantis-cfn-configuration-repo-for-serverless-deployments",
+		"ver": "commit:latest",
+		"target_dirs": [ "docs", "scripts" ]
+	}
+}
+
+-- Update using a latest release from GitHub --
+
+{
+	"updates": {
+		"src": "https://github.com/chadkluck/atlantis-cfn-configuration-repo-for-serverless-deployments",
+		"ver": "release:latest",
+		"target_dirs": [ "docs", "scripts" ]
+	}
+}
+
+-- Update using a zip from local, S3, or https (version_id is only available for S3) --
+
+{
+	"updates": {
+		"src": "S3://63klabs/atlantis/utils/config-scripts.zip",
+        "ver": "latest",
+		"target_dirs": [ "docs", "scripts" ]
+	}
+}
+
+Version:
+
+GitHub Commit (archive/refs/head): if using latest commit as source, "commit:latest" 
+GitHub Release (archive/refs/tags): "release:latest" or "release:<version>"
+S3: "latest" or S3 Object Version ID
+
+If a GitHub repo url is used and "ver" is not provided, "release:latest" is default.
+If a S3 location is used and "ver" is not provided, "latest" is default.
+
+ONLY USE TRUSTED SOURCES
+
+Target Directories:
+
+"docs" and "scripts" are the only valid target_dirs. You can include one, both, or leave target_dirs as [] (never update even when script is run)
+
+    - docs : overwrites docs/*
+    - scripts : overwrites scripts/*
+
+It is recommended you store custom docs and scripts outside the provided directories. 
+"""
+
+def parse_args() -> argparse.Namespace:
+
+    parser = argparse.ArgumentParser(
+        description='Update Scripts and Documentation',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=(EPILOG)
+    )
+
+    parser.add_argument('--profile',
+                        required=False,
+                        default=None,
+                        help='AWS credential profile name')
+    
+    args = parser.parse_args()
+        
+    return args
+
 
 def main():
-    # Directories to update
-    target_dirs = ['docs', 'scripts']
-    
-    # Get source type and location from environment variables
-    source_type = os.getenv('UPDATE_SOURCE_TYPE', 'git')  # 'git' or 'zip'
-    source_location = os.getenv('SOURCE_LOCATION')
-    
-    if not source_location:
-        print("Error: SOURCE_LOCATION environment variable not set")
-        return False
-    
-    success = False
-    if source_type.lower() == 'git':
-        success = update_from_git(target_dirs, source_location)
-    elif source_type.lower() == 'zip':
-        success = update_from_zip(source_location, target_dirs)
-    else:
-        print(f"Error: Unknown source type: {source_type}")
-        return False
-    
-    if success:
-        print("Update completed successfully")
-    else:
-        print("Update failed")
-    
-    return success
 
-if __name__ == "__main__":
+    try:
+        args = parse_args()
+        Log.info(f"{sys.argv}")
+        Log.info(f"Version: {VERSION}")
+        
+        print()
+        click.echo(Colorize.divider("="))
+        click.echo(Colorize.output_bold(f"Update Manager ({VERSION})"))
+        click.echo(Colorize.divider("="))
+        print()
+
+        try:
+            update_manager = UpdateManager(args.profile)
+        except TokenRetrievalError as e:
+            ConsoleAndLog.error(f"AWS authentication error: {str(e)}")
+            sys.exit(1)
+        except Exception as e:
+            ConsoleAndLog.error(f"Error initializing configuration manager: {str(e)}")
+            sys.exit(1)
+        
+        success = False
+        
+        zip_loc = update_manager.download_zip()
+        update_manager.update_from_zip(zip_loc)
+
+        if success:
+            print("Update completed successfully")
+        else:
+            print("Update failed")
+        
+        return success
+
+
+    except Exception as e:
+        ConsoleAndLog.error(f"Unexpected error: {str(e)}")
+        ConsoleAndLog.error(f"Error occurred at:\n{traceback.format_exc()}")
+        sys.exit(1)
+
+if __name__ == '__main__':
     main()
