@@ -7,19 +7,18 @@ import os
 import sys
 import requests
 import tempfile
-import subprocess
 import zipfile
 import click
 import argparse
 import traceback
-from typing import Dict, Optional, List, Tuple
+from typing import Dict, Optional, List
 
 from pathlib import Path
 
 from lib.aws_session import AWSSessionManager, TokenRetrievalError
 from lib.logger import ScriptLogger, Log, ConsoleAndLog
 from lib.tools import Colorize
-from lib.atlantis import FileNameListUtils, ConfigLoader, TagUtils, Utils
+from lib.atlantis import ConfigLoader
 
 if sys.version_info[0] < 3:
     sys.stderr.write("Error: Python 3 is required\n")
@@ -47,9 +46,10 @@ class UpdateManager:
         self.settings = config_loader.load_settings()
 
         # Validate and assemble the source info
-        self.source = self.settings.get('updates', DEFAULT_SRC)
+        update_settings = self.settings.get('updates', {})
+        self.source = update_settings.get('source', DEFAULT_SRC)
         self.src_type = self.get_type(self.source)
-        self.src_ver = self.get_version(self.source, self.src_type)
+        self.src_ver = self.get_version(self.source, self.src_type, update_settings.get('ver', ""))
         self.source = self.update_source(self.source, self.src_type, self.src_ver)
 
         self.target_dirs = self.settings.get('target_dirs', TARGET_DIRS)
@@ -100,17 +100,17 @@ class UpdateManager:
         # - a S3 location
         # - a GitHub repository main branch
         # - a GitHub repository release (either latest or a specific release)
-
+        print(source)
         # if source is http/https and ends with .zip, then we can just use it
-        if source.startswith(('https://github.com/')):
+        if source.startswith("https://github.com/"):
             return "github"
 
         # If source is an S3 location, then we can just use it
-        if source.startswith('s3://'):
+        if source.startswith("s3://"):
             return "s3"
 
         # If source is a local zip file, then we can just use it
-        if source.endswith('.zip'):
+        if source.endswith(".zip"):
             return "local"
 
     def get_version(self, source: str, ver: str) -> str:
@@ -415,7 +415,8 @@ def main():
             ConsoleAndLog.error(f"AWS authentication error: {str(e)}")
             sys.exit(1)
         except Exception as e:
-            ConsoleAndLog.error(f"Error initializing configuration manager: {str(e)}")
+            ConsoleAndLog.error(f"Error initializing update manager: {str(e)}")
+            Log.error(f"Error occurred at:\n{traceback.format_exc()}")
             sys.exit(1)
         
         success = False
