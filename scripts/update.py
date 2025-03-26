@@ -28,11 +28,14 @@ if sys.version_info[0] < 3:
 ScriptLogger.setup('update')
 
 # Directories to update
+DEFAULT_GITHUB_REPO = "chadkluck/atlantis-cfn-configuration-repo-for-serverless-deployments"
+DEFAULT_S3_BUCKET = "63klabs"
+DEFAULT_S3_PATH = "/atlantis/utilities/v2/"
+
 TARGET_DIRS = ['docs', 'scripts']
-DEFAULT_SRC = "https://github.com/chadkluck/atlantis-cfn-configuration-repo-for-serverless-deployments"
+DEFAULT_SRC = f"https://github.com/{DEFAULT_GITHUB_REPO}"
 DEFAULT_SRC_VER = "release:latest"
 SETTINGS_DIR = "defaults"
-DEFAULT_S3_PATH = "/atlantis/utilities/v2/"
 
 class UpdateManager:
 
@@ -79,7 +82,7 @@ class UpdateManager:
         # Source must be a string and must be either a GitHub URL, S3 location, or local file path
         if not isinstance(self.source, str):
             raise click.UsageError(f"source must be a string")
-        if not self.source.startswith(('https://github.com/', 's3://', '/')):
+        if not self.source.lower().startswith(('https://github.com/', 's3://', '/')):
             raise click.UsageError(f"source must be a valid URL, S3 location, or local file path")
         
         # validate profile
@@ -411,17 +414,12 @@ Examples:
     # Use specific AWS profile
     update.py --profile <yourprofile>
 
+-----------------
 Settings (defaults/settings.json):
 
--- Update using latest commit from GitHub: --
+The latest release from the GitHub repository will be used by default if no "updates" property is specified in settings.json 
 
-{
-	"updates": {
-		"source": "https://github.com/chadkluck/atlantis-cfn-configuration-repo-for-serverless-deployments",
-		"ver": "commit:latest",
-		"target_dirs": [ "docs", "scripts" ]
-	}
-}
+Otherwise, you can customize where updates are downloaded from:
 
 -- Update using a latest release from GitHub --
 
@@ -429,6 +427,16 @@ Settings (defaults/settings.json):
 	"updates": {
 		"source": "https://github.com/chadkluck/atlantis-cfn-configuration-repo-for-serverless-deployments",
 		"ver": "release:latest",
+		"target_dirs": [ "docs", "scripts" ]
+}
+
+
+}-- Update using latest commit from GitHub: --
+
+{
+	"updates": {
+		"source": "https://github.com/chadkluck/atlantis-cfn-configuration-repo-for-serverless-deployments",
+		"ver": "commit:latest",
 		"target_dirs": [ "docs", "scripts" ]
 	}
 }
@@ -464,6 +472,7 @@ https://github.com/chadkluck/atlantis-cfn-configuration-repo-for-serverless-depl
 s3://63klabs/atlantis/utilities/v2/config_scripts.zip
 s3://63klabs # since this is known, the script will fill in the path itself
 
+------------------
 Version:
 
 GitHub Commit (archive/refs/head): if using latest commit as source, "commit:latest" 
@@ -475,6 +484,7 @@ If a S3 location is used and "ver" is not provided, "latest" is default.
 
 ONLY USE TRUSTED SOURCES - You can host your own s3 bucket or GitHub repository or use the ones offered by 63klabs and chadkluck 
 
+-----------------
 Target Directories:
 
 "docs" and "scripts" are the only valid target_dirs. You can include one, both, or leave target_dirs as [] (never update even when script is run)
@@ -483,6 +493,14 @@ Target Directories:
     - scripts : overwrites scripts/*
 
 It is recommended you store custom docs and scripts OUTSIDE the provided directories. While update.py does not currently delete files, it will replace any with conflicting names.
+
+-----------------
+Self-Hosted ZIPs
+
+The update script will automatically extract files from the "<repository-name>-main" directory within the ZIP when GitHub is the source.
+
+ALL OTHER ZIPS (s3 and locally downloaded) MUST have all files in the base directory of the zip file.
+
 """
 
 def parse_args() -> argparse.Namespace:

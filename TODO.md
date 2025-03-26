@@ -30,7 +30,7 @@
 
 ## AWS Sessions
 
-- Add No browser support (WSL)
+- Test No browser support (WSL)
 
 ## Test
 
