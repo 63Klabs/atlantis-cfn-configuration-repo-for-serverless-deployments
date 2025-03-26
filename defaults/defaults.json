@@ -1,0 +1,22 @@
+{
+	"atlantis": {
+		"s3_bucket": "cf-asdf-deployments",
+		"region": "us-east-2",
+		"confirm_changeset": true
+	},
+	"parameter_overrides": {
+		"S3BucketNameOrgPrefix": "",
+		"RolePath": "/app-role/",
+		"PermissionsBoundaryArn": ""
+	},
+	"tags": [
+		{
+			"Key": "Department",
+			"Value": "Web Services"
+		},
+		{
+			"Key": "CostCenter",
+			"Value": "123D"
+		}
+	]
+}

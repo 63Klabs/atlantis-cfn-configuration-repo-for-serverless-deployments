@@ -1,7 +1,0 @@
-{
-	"atlantis": {},
-	"parameter_overrides": {
-		"ParameterStoreHierarchy": "/applications/acme/ws-sam/"
-	},
-	"tags": []
-}
