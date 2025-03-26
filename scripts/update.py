@@ -11,7 +11,7 @@ import zipfile
 import click
 import argparse
 import traceback
-from typing import Dict, Optional, List
+from typing import Dict, Optional
 
 from pathlib import Path
 
@@ -30,6 +30,7 @@ ScriptLogger.setup('update')
 # Directories to update
 TARGET_DIRS = ['docs', 'scripts']
 DEFAULT_SRC = "https://github.com/chadkluck/atlantis-cfn-configuration-repo-for-serverless-deployments"
+DEFAULT_SRC_VER = "release:latest"
 SETTINGS_DIR = "defaults"
 DEFAULT_S3_PATH = "/atlantis/utilities/v2/"
 
@@ -45,12 +46,13 @@ class UpdateManager:
 
         self.settings = config_loader.load_settings()
 
-        # Validate and assemble the source info
+        # Assemble the source info
         update_settings = self.settings.get('updates', {})
         self.target_dirs = update_settings.get('target_dirs', TARGET_DIRS)
         self.source = update_settings.get('source', DEFAULT_SRC)
+        ver = DEFAULT_SRC_VER if self.source == DEFAULT_SRC else ""
         self.src_type = self.get_type(self.source)
-        self.src_ver = self.get_version(self.source, self.src_type, update_settings.get('ver', ""))
+        self.src_ver = self.get_version(self.source, self.src_type, update_settings.get('ver', ver))
         self.source = self.update_source(self.source, self.src_type, self.src_ver)
 
 
@@ -323,7 +325,7 @@ class UpdateManager:
             else:
                 raise click.UsageError(f"Invalid source/ver combo: {self.src_ver} from {self.source}")
 
-    def update_from_zip(self, zip_location):
+    def update_from_zip(self, zip_location: str ) -> bool:
         """Update specified directories from zip file that was downloaded to temp"""
         ConsoleAndLog.info(f"Updating from zip file: {zip_location}")
         try:
@@ -397,9 +399,9 @@ Supports both AWS SSO and IAM credentials.
 For SSO users, credentials will be refreshed automatically.
 For IAM users, please ensure your credentials are valid using 'aws configure'.
 
-Update from a zip (S3, local or https), github repo release, or git repository (git)
+Update from a zip stored locally or downloaded from s3 or GitHub (commit or release)
 
-For settings, update settings.json in the defaults directory.
+For settings, update settings.json in the defaults directory (see below for samples).
 
 Examples:
 
@@ -415,7 +417,7 @@ Settings (defaults/settings.json):
 
 {
 	"updates": {
-		"src": "https://github.com/chadkluck/atlantis-cfn-configuration-repo-for-serverless-deployments",
+		"source": "https://github.com/chadkluck/atlantis-cfn-configuration-repo-for-serverless-deployments",
 		"ver": "commit:latest",
 		"target_dirs": [ "docs", "scripts" ]
 	}
@@ -425,21 +427,42 @@ Settings (defaults/settings.json):
 
 {
 	"updates": {
-		"src": "https://github.com/chadkluck/atlantis-cfn-configuration-repo-for-serverless-deployments",
+		"source": "https://github.com/chadkluck/atlantis-cfn-configuration-repo-for-serverless-deployments",
 		"ver": "release:latest",
 		"target_dirs": [ "docs", "scripts" ]
 	}
 }
 
--- Update using a zip from local, S3, or https (version_id is only available for S3) --
+-- Update using a zip from local or S3 (version_id is only available for S3) --
 
 {
 	"updates": {
-		"src": "S3://63klabs/atlantis/utils/config-scripts.zip",
+		"source": "s3://63klabs/atlantis/utilities/v2/config_scripts.zip",
         "ver": "latest",
 		"target_dirs": [ "docs", "scripts" ]
 	}
 }
+
+{
+	"updates": {
+		"source": "s3://63klabs/atlantis/utilities/v2/config_scripts.zip",
+        "ver": "74ssh_some-version-12345",
+		"target_dirs": [ "docs", "scripts" ]
+	}
+}
+
+{
+	"updates": {
+		"source": "~/downloaded.zip",
+		"target_dirs": [ "docs", "scripts" ]
+	}
+}
+
+https://github.com/chadkluck/atlantis-cfn-configuration-repo-for-serverless-deployments
+https://github.com/chadkluck/atlantis-cfn-configuration-repo-for-serverless-deployments/archive/refs/heads/main.zip
+https://github.com/chadkluck/atlantis-cfn-configuration-repo-for-serverless-deployments/archive/refs/tags/v0.0.1.zip
+s3://63klabs/atlantis/utilities/v2/config_scripts.zip
+s3://63klabs # since this is known, the script will fill in the path itself
 
 Version:
 
@@ -450,7 +473,7 @@ S3: "latest" or S3 Object Version ID
 If a GitHub repo url is used and "ver" is not provided, "release:latest" is default.
 If a S3 location is used and "ver" is not provided, "latest" is default.
 
-ONLY USE TRUSTED SOURCES
+ONLY USE TRUSTED SOURCES - You can host your own s3 bucket or GitHub repository or use the ones offered by 63klabs and chadkluck 
 
 Target Directories:
 
@@ -459,7 +482,7 @@ Target Directories:
     - docs : overwrites docs/*
     - scripts : overwrites scripts/*
 
-It is recommended you store custom docs and scripts outside the provided directories. 
+It is recommended you store custom docs and scripts OUTSIDE the provided directories. While update.py does not currently delete files, it will replace any with conflicting names.
 """
 
 def parse_args() -> argparse.Namespace:

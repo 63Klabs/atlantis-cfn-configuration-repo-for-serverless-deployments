@@ -21,11 +21,16 @@
 
 - Test Delete downloaded zip
 - Test improved logging
+- Documentation
 
 ## Lib
 
 - Make sure logs are being stored in the right spot
 - Improve Logging
+
+## AWS Sessions
+
+- Add No browser support (WSL)
 
 ## Test
 
