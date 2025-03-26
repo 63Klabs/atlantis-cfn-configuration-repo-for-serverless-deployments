@@ -100,7 +100,7 @@ class UpdateManager:
         # - a S3 location
         # - a GitHub repository main branch
         # - a GitHub repository release (either latest or a specific release)
-        print(source)
+        
         # if source is http/https and ends with .zip, then we can just use it
         if source.startswith("https://github.com/"):
             return "github"
@@ -177,9 +177,10 @@ class UpdateManager:
                 if ver == "release:latest":
                     try:
                         tag = self.get_latest_github_release(owner, repo)
-                        print(f"Latest release tag: {tag}")
+                        ConsoleAndLog.info(f"Latest release tag: {tag}")
                     except Exception as e:
-                        print(f"Error: {e}")
+                        ConsoleAndLog.error(f"Error getting latest release tag: {e}")
+                        Log.error(f"Error occurred at:\n{traceback.format_exc()}")
                         return ""
                 else:
                     tag = ver.split(':')[1]
@@ -244,6 +245,7 @@ class UpdateManager:
             }
 
         except IndexError:
+            ConsoleAndLog.error(f"Invalid GitHub repository URL {source}")
             raise Exception("Invalid GitHub repository URL")
         
     def get_latest_github_release(owner: str, repo: str) -> str:
@@ -271,6 +273,7 @@ class UpdateManager:
             return response.json()['tag_name']
             
         except requests.exceptions.RequestException as e:
+            ConsoleAndLog.error(f"Failed to get latest release {str(e)}");
             raise Exception(f"Failed to get latest release: {str(e)}")
         
     def download_zip(self) -> None:
@@ -284,7 +287,8 @@ class UpdateManager:
                     temp_zip.write(response.content)
                     return temp_zip.name
                 except Exception as e:
-                    print(f"Error downloading zip file: {str(e)}")
+                    ConsoleAndLog.error(f"Error downloading zip file: {str(e)}")
+                    Log.error(f"Error occurred at:\n{traceback.format_exc()}")
                     return False
                     
             elif self.src_type == "s3":
@@ -307,7 +311,8 @@ class UpdateManager:
                     temp_zip.write(response['Body'].read())
                     return temp_zip.name
                 except Exception as e:
-                    print(f"Error downloading zip file: {str(e)}")
+                    ConsoleAndLog.error(f"Error downloading zip file: {str(e)}")
+                    Log.error(f"Error occurred at:\n{traceback.format_exc()}")
                     return False
             elif self.src_type == "local":
                 # if local path exists and ends with zip then return source
@@ -369,6 +374,7 @@ class UpdateManager:
 
                             except Exception as e:
                                 ConsoleAndLog.error(f"Failed to extract {file_info.filename}: {str(e)}")
+                                Log.error(f"Error occurred at:\n{traceback.format_exc()}")
 
                                 # # Extract the file to the target directory
                                 # dest = os.path.join(target_dir, os.path.basename(file_info.filename))
@@ -376,7 +382,8 @@ class UpdateManager:
                                 # zip_ref.extract(file_info, dest)
                             
         except Exception as e:
-            print(f"Error updating from zip: {str(e)}")
+            ConsoleAndLog.error(f"Error updating from zip: {str(e)}")
+            Log.error(f"Error occurred at:\n{traceback.format_exc()}")
             return False
         
         return True
@@ -475,6 +482,9 @@ def parse_args() -> argparse.Namespace:
 
 def main():
 
+    success = False
+    zip_loc = None
+
     try:
         args = parse_args()
         Log.info(f"{sys.argv}")
@@ -486,32 +496,34 @@ def main():
         click.echo(Colorize.divider("="))
         print()
 
-        success = False
-
         try:
             update_manager = UpdateManager(args.profile)
             zip_loc = update_manager.download_zip()
             success = update_manager.update_from_zip(zip_loc)
         except TokenRetrievalError as e:
             ConsoleAndLog.error(f"AWS authentication error: {str(e)}")
+            Log.error(f"Error occurred at:\n{traceback.format_exc()}")
             sys.exit(1)
         except Exception as e:
             ConsoleAndLog.error(f"Error initializing update manager: {str(e)}")
             Log.error(f"Error occurred at:\n{traceback.format_exc()}")
             sys.exit(1)
+        finally:
+            if zip_loc and os.path.exists(zip_loc):
+                os.remove(zip_loc)
+                ConsoleAndLog.info(f"Temporary zip file {zip_loc} removed")
 
         if success:
-            print("Update completed successfully")
+            ConsoleAndLog.info("Update completed successfully!")
         else:
-            print("Update failed")
-        
-        return success
-
+            ConsoleAndLog.error("Update failed!")
 
     except Exception as e:
         ConsoleAndLog.error(f"Unexpected error: {str(e)}")
-        ConsoleAndLog.error(f"Error occurred at:\n{traceback.format_exc()}")
+        Log.error(f"Error occurred at:\n{traceback.format_exc()}")
         sys.exit(1)
+    finally:
+        return success
 
 if __name__ == '__main__':
     main()

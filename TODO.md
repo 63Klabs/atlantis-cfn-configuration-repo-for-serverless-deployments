@@ -17,6 +17,11 @@
 
 - Test
 
+## Update
+
+- Test Delete downloaded zip
+- Test improved logging
+
 ## Lib
 
 - Make sure logs are being stored in the right spot
