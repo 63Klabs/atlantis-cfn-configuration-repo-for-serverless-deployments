@@ -21,6 +21,7 @@
 
 - Test Delete downloaded zip
 - Test improved logging
+- Test git and interactive element (update the ConsoleAndLog to just prompt)
 - Documentation
 
 ## Lib

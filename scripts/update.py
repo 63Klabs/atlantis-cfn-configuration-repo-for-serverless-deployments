@@ -10,6 +10,7 @@ import tempfile
 import zipfile
 import click
 import argparse
+import subprocess
 import traceback
 from typing import Dict, Optional
 
@@ -367,10 +368,9 @@ class UpdateManager:
                                 
                                 ConsoleAndLog.info(f"Extracting {file_info.filename} to {dest}")
 
-                                # Add your existing extension validation
-                                allowed_extensions = {'.py', '.sh', '.md', '.txt', '.json', '.toml', '.gitignore'}
-                                if not os.path.splitext(file_info.filename)[1].lower() in allowed_extensions:
-                                    ConsoleAndLog.warning(f"Skipping file with unauthorized extension: {file_info.filename}")
+                                # Check if we care about the file
+                                if not self.is_allowed_file(file_info.filename):
+                                    ConsoleAndLog.info(f"Skipping file based on extension: {file_info.filename}")
                                     continue
 
                                 # Extract the file content and write it to the correct location
@@ -393,6 +393,129 @@ class UpdateManager:
         
         return True
     
+    def is_allowed_file(self, filename: str) -> bool:
+        # Define allowed files
+        allowed_extensions = {'.py', '.sh', '.md', '.txt', '.json', '.toml'}
+        allowed_filenames = {'.gitignore'}
+        
+        # Check if it's a special filename first
+        if filename in allowed_filenames:
+            return True
+            
+        # Check extensions
+        file_extension = os.path.splitext(filename)[1].lower()
+        return file_extension in allowed_extensions
+    
+# =============================================================================
+# ----- GitOperations Class ---------------------------------------------------
+# =============================================================================
+
+class GitOperationsManager:
+    def __init__(self):
+        self.original_branch = None
+        self.target_branch = None
+
+    def confirm_update(self) -> bool:
+        """Prompt user to confirm the update"""
+        ConsoleAndLog.info("\nWARNING: This will update files in your repository.")
+        ConsoleAndLog.info("Type 'UPDATE' to continue:")
+        response = input().strip()
+        return response == "UPDATE"
+
+    def get_current_branch(self) -> str:
+        """Get the name of the current branch"""
+        try:
+            result = subprocess.run(
+                ["git", "branch", "--show-current"],
+                check=True,
+                capture_output=True,
+                text=True
+            )
+            return result.stdout.strip()
+        except subprocess.CalledProcessError as e:
+            ConsoleAndLog.error(f"Failed to get current branch: {str(e)}")
+            Log.error(f"Error occurred at:\n{traceback.format_exc()}")
+            raise
+
+    def confirm_branch(self) -> bool:
+        """Confirm branch selection and handle branch switching"""
+        try:
+            self.original_branch = self.get_current_branch()
+            ConsoleAndLog.info(f"\nCurrently on branch: {self.original_branch}")
+            ConsoleAndLog.info("Continue with current branch? (Y/N):")
+            
+            if input().strip().lower() != 'y':
+                ConsoleAndLog.info("Enter branch name to checkout:")
+                new_branch = input().strip()
+                
+                # Verify branch exists
+                result = subprocess.run(
+                    ["git", "branch", "--list", new_branch],
+                    check=True,
+                    capture_output=True,
+                    text=True
+                )
+                
+                if not result.stdout.strip():
+                    ConsoleAndLog.info(f"Branch '{new_branch}' does not exist. Create it? (Y/N):")
+                    if input().strip().lower() == 'y':
+                        subprocess.run(
+                            ["git", "checkout", "-b", new_branch],
+                            check=True
+                        )
+                        ConsoleAndLog.info(f"Created and checked out new branch: {new_branch}")
+                    else:
+                        return False
+                else:
+                    subprocess.run(
+                        ["git", "checkout", new_branch],
+                        check=True
+                    )
+                    ConsoleAndLog.info(f"Checked out existing branch: {new_branch}")
+                
+                self.target_branch = new_branch
+            else:
+                self.target_branch = self.original_branch
+            
+            return True
+            
+        except subprocess.CalledProcessError as e:
+            ConsoleAndLog.error(f"Git operation failed: {str(e)}")
+            Log.error(f"Error occurred at:\n{traceback.format_exc()}")
+            return False
+
+    def pull_changes(self) -> bool:
+        """Pull latest changes from remote"""
+        try:
+            ConsoleAndLog.info("\nWould you like to pull latest changes? (Y/N):")
+            if input().strip().lower() == 'y':
+                ConsoleAndLog.info("Pulling latest changes...")
+                subprocess.run(
+                    ["git", "pull"],
+                    check=True
+                )
+                return True
+            return False
+        except subprocess.CalledProcessError as e:
+            ConsoleAndLog.error(f"Failed to pull changes: {str(e)}")
+            Log.error(f"Error occurred at:\n{traceback.format_exc()}")
+            return False
+
+    def cleanup(self) -> None:
+        """Cleanup and restore original branch if needed"""
+        if (self.original_branch and 
+            self.target_branch and 
+            self.original_branch != self.target_branch):
+            try:
+                ConsoleAndLog.info(f"\nSwitching back to original branch: {self.original_branch}")
+                subprocess.run(
+                    ["git", "checkout", self.original_branch],
+                    check=True
+                )
+            except subprocess.CalledProcessError as e:
+                ConsoleAndLog.error(f"Failed to restore original branch: {str(e)}")
+                Log.error(f"Error occurred at:\n{traceback.format_exc()}")
+
 # =============================================================================
 # ----- Main function ---------------------------------------------------------
 # =============================================================================
@@ -520,11 +643,11 @@ def parse_args() -> argparse.Namespace:
         
     return args
 
-
 def main():
 
     success = False
     zip_loc = None
+    git_manager = GitOperationsManager()
 
     try:
         args = parse_args()
@@ -537,6 +660,20 @@ def main():
         click.echo(Colorize.divider("="))
         print()
 
+        # Get confirmation to proceed
+        if not git_manager.confirm_update():
+            ConsoleAndLog.info("Update cancelled by user.")
+            return False
+
+        # Handle branch selection and switching
+        if not git_manager.confirm_branch():
+            ConsoleAndLog.info("Branch operation cancelled by user.")
+            return False
+
+        # Pull changes if requested
+        git_manager.pull_changes()
+
+        # Perform Update
         try:
             update_manager = UpdateManager(args.profile)
             zip_loc = update_manager.download_zip()
@@ -564,6 +701,8 @@ def main():
         Log.error(f"Error occurred at:\n{traceback.format_exc()}")
         sys.exit(1)
     finally:
+        # Always try to restore original branch
+        git_manager.cleanup()
         return success
 
 if __name__ == '__main__':
