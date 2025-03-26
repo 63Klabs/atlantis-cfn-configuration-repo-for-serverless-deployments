@@ -6,6 +6,7 @@
 .vscode
 *.DS_Store
 *desktop.ini
+.venv
 
 # If you need to remove .DS_Store
 # find . -name .DS_Store -print0 | xargs -0 git rm -f --ignore-unmatch
@@ -43,3 +44,4 @@ local-templates/*
 !sample.*
 !README.md
 !.gitignore
+!.github

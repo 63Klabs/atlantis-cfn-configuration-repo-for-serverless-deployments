@@ -31,7 +31,7 @@ ScriptLogger.setup('update')
 TARGET_DIRS = ['docs', 'scripts']
 DEFAULT_SRC = "https://github.com/chadkluck/atlantis-cfn-configuration-repo-for-serverless-deployments"
 SETTINGS_DIR = "defaults"
-DEFAULT_S3_PATH = ""
+DEFAULT_S3_PATH = "/atlantis/utilities/v2/"
 
 class UpdateManager:
 
@@ -198,7 +198,7 @@ class UpdateManager:
 
             # if path is blank or / then use default
             if path == "" or path == "/":
-                path = "/atlantis/utilities/v2/config_scripts.zip"
+                path = f"{DEFAULT_S3_PATH}config_scripts.zip"
 
             if ver == "latest":
                 return f"s3://{bucket}{path}"
