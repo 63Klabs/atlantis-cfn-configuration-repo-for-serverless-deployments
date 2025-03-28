@@ -522,6 +522,71 @@ class GitOperationsManager:
             Log.error(f"Error occurred at:\n{traceback.format_exc()}")
             return False
 
+    def push_changes(self) -> bool:
+        """Push changes to remote repository after user confirmation"""
+        try:
+            # Check if there are any changes to commit
+            status = subprocess.run(
+                ["git", "status", "--porcelain"],
+                check=True,
+                capture_output=True,
+                text=True
+            )
+            
+            if not status.stdout.strip():
+                ConsoleAndLog.info("No changes to commit")
+                return False
+
+            # Show status to user
+            click.echo(Colorize.output_bold("\nChanges to be committed:"))
+            subprocess.run(
+                ["git", "status"],
+                check=True
+            )
+
+            # Prompt until choice is either YES or NO
+            choice = ""
+            while choice not in ['YES', 'NO']:
+                choice = Colorize.prompt("Would you like to commit and push these changes? (YES/NO):", "YES", str)
+                if choice not in ['YES', 'NO']:
+                    click.echo(Colorize.error("Please enter 'YES' or 'NO'"))
+
+            if choice.strip() == 'YES':
+                # Get commit message from user
+                commit_msg = Colorize.prompt("Enter commit message:", "", str, False)
+                if not commit_msg.strip():
+                    click.echo(Colorize.error("Commit message cannot be empty"))
+                    return False
+
+                ConsoleAndLog.info("Committing changes...")
+                subprocess.run(
+                    ["git", "add", "."],
+                    check=True
+                )
+                subprocess.run(
+                    ["git", "commit", "-m", commit_msg],
+                    check=True
+                )
+
+                ConsoleAndLog.info("Pushing changes...")
+                subprocess.run(
+                    ["git", "push", "origin", self.target_branch],
+                    check=True
+                )
+                
+                click.echo(Colorize.success("Changes successfully pushed to repository"))
+                return True
+            
+            ConsoleAndLog.info("Push cancelled by user")
+            return False
+
+        except subprocess.CalledProcessError as e:
+            click.echo(Colorize.error(f"Failed to push changes: {str(e)}"))
+            Log.error(f"Failed to push changes: {str(e)}")
+            Log.error(f"Error occurred at:\n{traceback.format_exc()}")
+            return False
+
+
     def cleanup(self) -> None:
         """Cleanup and restore original branch if needed"""
         if (self.original_branch and 
@@ -719,6 +784,13 @@ def main():
         if success:
             click.echo(Colorize.success("Update completed successfully!"))
             Log.info("Update completed successfully!")
+            
+            # Add push operation
+            if git_manager.push_changes():
+                Log.info("Changes pushed to repository")
+            else:
+                click.echo(Colorize.warning("No changes pushed to repository. Be sure to commit and push changes on your own."))
+                Log.info("No changes pushed to repository")
         else:
             click.echo(Colorize.error("Update failed!"))
             Log.error("Update failed!")
