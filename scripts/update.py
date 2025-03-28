@@ -409,13 +409,17 @@ class UpdateManager:
 # =============================================================================
 
 class GitOperationsManager:
-    def __init__(self):
+    def __init__(self, headless: Optional[bool] = False):
         self.original_branch = None
         self.target_branch = None
+        self.headless = headless
 
     def confirm_update(self) -> bool:
         """Prompt user to confirm the update"""
 
+        if self.headless:
+            return True
+        
         click.echo(Colorize.error("WARNING: This will update files in your repository."))
         choice = Colorize.prompt("Type 'UPDATE' to continue", "", str, False)
         return choice == "UPDATE"
@@ -438,6 +442,10 @@ class GitOperationsManager:
 
     def confirm_branch(self) -> bool:
         """Confirm branch selection and handle branch switching"""
+
+        if self.headless:
+            return True
+
         try:
             self.original_branch = self.get_current_branch()
             click.echo(Colorize.output_with_value("Currently on branch:", self.original_branch))
@@ -500,9 +508,10 @@ class GitOperationsManager:
 
     def pull_changes(self) -> bool:
         """Pull latest changes from remote"""
+
         try:
             # prompt until choice is either YES or NO
-            choice = ""
+            choice = "YES" if self.headless else ""
             while choice not in ['YES', 'NO']:
                 choice = Colorize.prompt("Would you like to pull latest changes from this repository before updating? (YES/NO)", "YES", str)
                 if choice not in ['YES', 'NO']:
@@ -524,6 +533,7 @@ class GitOperationsManager:
 
     def push_changes(self) -> bool:
         """Push changes to remote repository after user confirmation"""
+        
         try:
             # Check if there are any changes to commit
             status = subprocess.run(
@@ -575,7 +585,7 @@ class GitOperationsManager:
             print()
             
             # Prompt until choice is either YES or NO
-            choice = ""
+            choice = "YES" if self.headless else ""
             while choice not in ['YES', 'NO']:
                 choice = Colorize.prompt("Would you like to commit and push these changes? (YES/NO)", "YES", str)
                 if choice not in ['YES', 'NO']:
@@ -637,6 +647,10 @@ class GitOperationsManager:
         Prompt user for final confirmation before proceeding with update.
         Returns True if user confirms, False otherwise.
         """
+
+        if self.headless:
+            return True
+        
         try:
             click.echo(Colorize.output_bold("\nFinal Confirmation"))
             click.echo(Colorize.warning("You are about to update the configuration script files."))
@@ -787,6 +801,14 @@ def parse_args() -> argparse.Namespace:
                         required=False,
                         default=None,
                         help='AWS credential profile name')
+    parser.add_argument('--headless',
+                        action='store_true',  # This makes it a flag
+                        default=False,        # Default value when flag is not used
+                        help='Run with no user interaction. Automation.')
+    parser.add_argument('--dryrun',
+                        action='store_true',  # This makes it a flag
+                        default=False,        # Default value when flag is not used
+                        help='Perform all actions (including git) but do not update files from zip.')
     
     args = parser.parse_args()
         
@@ -796,7 +818,7 @@ def main():
 
     success = False
     zip_loc = None
-    git_manager = GitOperationsManager()
+    git_manager = GitOperationsManager(args.headless)
 
     try:
         args = parse_args()
