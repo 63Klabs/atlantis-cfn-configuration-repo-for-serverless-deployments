@@ -504,7 +504,7 @@ class GitOperationsManager:
             # prompt until choice is either YES or NO
             choice = ""
             while choice not in ['YES', 'NO']:
-                choice = Colorize.prompt("Would you like to pull latest changes from this repository before updating? (YES/NO):", "YES", str)
+                choice = Colorize.prompt("Would you like to pull latest changes from this repository before updating? (YES/NO)", "YES", str)
                 if choice not in ['YES', 'NO']:
                     click.echo(Colorize.error("Please enter 'YES' or 'NO'"))
 
