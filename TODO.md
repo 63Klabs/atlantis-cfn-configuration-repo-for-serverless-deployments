@@ -21,6 +21,7 @@
 
 - Test Delete downloaded zip
 - Test improved logging
+- Test commit
 - Documentation
 
 ## Lib
