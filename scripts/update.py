@@ -484,7 +484,7 @@ class GitOperationsManager:
                         check=True
                     )
                     Log.info(f"Checked out existing branch: {new_branch}")
-                    click.echo(Colorize.output_with_value(f"Created and checked out new branch:", new_branch))
+                    click.echo(Colorize.output_with_value(f"Checked out existing branch:", new_branch))
                 
                 self.target_branch = new_branch
             else:
@@ -645,7 +645,7 @@ class GitOperationsManager:
             # Prompt until valid input is received
             choice = ""
             while choice not in ['CONTINUE', 'CANCEL']:
-                choice = Colorize.prompt("Enter your choice (CONTINUE/CANCEL):", "", str, False)
+                choice = Colorize.prompt("Enter your choice (CONTINUE/CANCEL)", "", str, False)
                 if choice not in ['CONTINUE', 'CANCEL']:
                     click.echo(Colorize.error("Please type either 'CONTINUE' or 'CANCEL'"))
             
