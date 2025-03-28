@@ -632,6 +632,39 @@ class GitOperationsManager:
                 Log.error(f"Failed to restore original branch: {str(e)}")
                 Log.error(f"Error occurred at:\n{traceback.format_exc()}")
 
+    def final_confirm_update(self) -> bool:
+        """
+        Prompt user for final confirmation before proceeding with update.
+        Returns True if user confirms, False otherwise.
+        """
+        try:
+            click.echo(Colorize.output_bold("\nFinal Confirmation"))
+            click.echo(Colorize.warning("You are about to update the configuration script files."))
+            click.echo(Colorize.warning("Type 'CONTINUE' to proceed with the update or 'CANCEL' to exit."))
+            
+            # Prompt until valid input is received
+            choice = ""
+            while choice not in ['CONTINUE', 'CANCEL']:
+                choice = Colorize.prompt("Enter your choice (CONTINUE/CANCEL):", "", str, False)
+                if choice not in ['CONTINUE', 'CANCEL']:
+                    click.echo(Colorize.error("Please type either 'CONTINUE' or 'CANCEL'"))
+            
+            if choice == 'CONTINUE':
+                Log.info("Update confirmed by user")
+                click.echo(Colorize.output("Update confirmed. Proceeding with the update..."))
+                return True
+            
+            Log.info("Update cancelled by user")
+            click.echo(Colorize.warning("Update cancelled."))
+            return False
+                
+        except Exception as e:
+            click.echo(Colorize.error(f"Error during confirmation prompt: {str(e)}"))
+            Log.error(f"Error during confirmation prompt: {str(e)}")
+            Log.error(f"Error occurred at:\n{traceback.format_exc()}")
+            return False
+
+
 # =============================================================================
 # ----- Main function ---------------------------------------------------------
 # =============================================================================
@@ -793,7 +826,21 @@ def main():
         try:
             update_manager = UpdateManager(args.profile)
             zip_loc = update_manager.download_zip()
-            success = update_manager.update_from_zip(zip_loc)
+
+            # After downloading the zip file but before updating
+            if git_manager.final_confirm_update():
+                success = update_manager.update_from_zip(zip_loc)
+                if success:
+                    click.echo(Colorize.success("Update completed successfully!"))
+                    Log.info("Update completed successfully!")
+                    if git_manager.push_changes():
+                        Log.info("Changes pushed to repository")
+                    else:
+                        click.echo(Colorize.warning("No changes pushed to repository."))
+                        click.echo(Colorize.warning("Be sure to push any outstanding changes to the repository."))
+                        Log.info("No changes pushed to repository")
+            else:
+                return False
         except TokenRetrievalError as e:
             click.echo(Colorize.error(f"AWS authentication error: {str(e)}"))
             Log.error(f"AWS authentication error: {str(e)}")
