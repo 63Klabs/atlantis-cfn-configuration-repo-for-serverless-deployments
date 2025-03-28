@@ -504,7 +504,7 @@ class GitOperationsManager:
             # prompt until choice is either YES or NO
             choice = ""
             while choice not in ['YES', 'NO']:
-                choice = Colorize.prompt("Would you like to pull latest changes from repository before updating? (YES/NO):", "YES", str)
+                choice = Colorize.prompt("Would you like to pull latest changes from this repository before updating? (YES/NO):", "YES", str)
                 if choice not in ['YES', 'NO']:
                     click.echo(Colorize.error("Please enter 'YES' or 'NO'"))
 
@@ -537,23 +537,53 @@ class GitOperationsManager:
                 ConsoleAndLog.info("No changes to commit")
                 return False
 
-            # Show status to user
-            click.echo(Colorize.output_bold("\nChanges to be committed:"))
-            subprocess.run(
-                ["git", "status"],
-                check=True
-            )
+            # Parse status output
+            modified_files = []
+            deleted_files = []
+            new_files = []
+            
+            for line in status.stdout.splitlines():
+                if len(line) >= 2:
+                    status_code = line[:2]
+                    file_path = line[3:]
+                    
+                    if status_code == ' M' or status_code == 'M ':
+                        modified_files.append(file_path)
+                    elif status_code == ' D' or status_code == 'D ':
+                        deleted_files.append(file_path)
+                    elif status_code == '??':
+                        new_files.append(file_path)
 
+            # Show organized status to user
+            click.echo(Colorize.output_bold("\nChanges to be committed:"))
+            
+            if modified_files:
+                click.echo(Colorize.output_bold("\nModified files:"))
+                for file in modified_files:
+                    click.echo(Colorize.output_with_value("  ", file))
+                    
+            if deleted_files:
+                click.echo(Colorize.output_bold("\nDeleted files:"))
+                for file in deleted_files:
+                    click.echo(Colorize.output_with_value("  ", file))
+                    
+            if new_files:
+                click.echo(Colorize.output_bold("\nNew files:"))
+                for file in new_files:
+                    click.echo(Colorize.output_with_value("  ", file))
+
+            print()
+            
             # Prompt until choice is either YES or NO
             choice = ""
             while choice not in ['YES', 'NO']:
-                choice = Colorize.prompt("Would you like to commit and push these changes? (YES/NO):", "YES", str)
+                choice = Colorize.prompt("Would you like to commit and push these changes? (YES/NO)", "YES", str)
                 if choice not in ['YES', 'NO']:
                     click.echo(Colorize.error("Please enter 'YES' or 'NO'"))
 
             if choice.strip() == 'YES':
                 # Get commit message from user
-                commit_msg = Colorize.prompt("Enter commit message:", "", str, False)
+                commit_msg = Colorize.prompt("Enter commit message", "chore: Updated scripts with latest release", str)
                 if not commit_msg.strip():
                     click.echo(Colorize.error("Commit message cannot be empty"))
                     return False
@@ -585,7 +615,6 @@ class GitOperationsManager:
             Log.error(f"Failed to push changes: {str(e)}")
             Log.error(f"Error occurred at:\n{traceback.format_exc()}")
             return False
-
 
     def cleanup(self) -> None:
         """Cleanup and restore original branch if needed"""
@@ -782,14 +811,14 @@ def main():
                 Log.info(f"Temporary zip file {zip_loc} removed")
 
         if success:
-            click.echo(Colorize.success("Update completed successfully!"))
+            click.echo(Colorize.success("\nUpdate completed successfully!"))
             Log.info("Update completed successfully!")
             
-            # Add push operation
             if git_manager.push_changes():
                 Log.info("Changes pushed to repository")
             else:
-                click.echo(Colorize.warning("No changes pushed to repository. Be sure to commit and push changes on your own."))
+                click.echo(Colorize.warning("No changes pushed to repository."))
+                click.echo(Colorize.warning("Be sure to push any outstanding changes to the repository."))
                 Log.info("No changes pushed to repository")
         else:
             click.echo(Colorize.error("Update failed!"))
