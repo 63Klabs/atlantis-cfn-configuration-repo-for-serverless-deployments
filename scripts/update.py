@@ -830,15 +830,6 @@ def main():
             # After downloading the zip file but before updating
             if git_manager.final_confirm_update():
                 success = update_manager.update_from_zip(zip_loc)
-                if success:
-                    click.echo(Colorize.success("Update completed successfully!"))
-                    Log.info("Update completed successfully!")
-                    if git_manager.push_changes():
-                        Log.info("Changes pushed to repository")
-                    else:
-                        click.echo(Colorize.warning("No changes pushed to repository."))
-                        click.echo(Colorize.warning("Be sure to push any outstanding changes to the repository."))
-                        Log.info("No changes pushed to repository")
             else:
                 return False
         except TokenRetrievalError as e:
@@ -865,7 +856,6 @@ def main():
                 Log.info("Changes pushed to repository")
             else:
                 click.echo(Colorize.warning("No changes pushed to repository."))
-                click.echo(Colorize.warning("Be sure to push any outstanding changes to the repository."))
                 Log.info("No changes pushed to repository")
         else:
             click.echo(Colorize.error("Update failed!"))
