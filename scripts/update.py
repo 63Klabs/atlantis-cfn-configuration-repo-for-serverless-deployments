@@ -284,7 +284,8 @@ class UpdateManager:
         
     def download_zip(self) -> None:
         # Create a temporary file with .zip extension
-        ConsoleAndLog.info(f"Downloading zip file from {self.source}")
+        click.echo(Colorize.output_with_value("Downloading zip file from ", self.source))
+        Log.info(f"Downloading zip file from {self.source}")
         with tempfile.NamedTemporaryFile(suffix='.zip', delete=False) as temp_zip:
             if self.src_type == "github":
                 try:
@@ -293,7 +294,8 @@ class UpdateManager:
                     temp_zip.write(response.content)
                     return temp_zip.name
                 except Exception as e:
-                    ConsoleAndLog.error(f"Error downloading zip file: {str(e)}")
+                    click.echo(Colorize.error(f"Error downloading zip file: {str(e)}"))
+                    Log.error(f"Error downloading zip file: {str(e)}")
                     Log.error(f"Error occurred at:\n{traceback.format_exc()}")
                     return False
                     
@@ -331,10 +333,11 @@ class UpdateManager:
 
     def update_from_zip(self, zip_location: str ) -> bool:
         """Update specified directories from zip file that was downloaded to temp"""
-        ConsoleAndLog.info(f"Updating from zip file: {zip_location}")
+        click.echo(Colorize.output_with_value("Updating from zip file:", zip_location))
+        Log.info(f"Updating from zip file: {zip_location}")
         try:
 
-            # If the zip file is from github, then the extracted base path will be repo-tag
+            # If the zip file is from github, then the extracted base path will be <repo>-<tag>
             zipped_dir = ""
             if self.src_type == "github":
                 result = self.get_github_repo_info(self.source)
@@ -380,11 +383,6 @@ class UpdateManager:
                             except Exception as e:
                                 ConsoleAndLog.error(f"Failed to extract {file_info.filename}: {str(e)}")
                                 Log.error(f"Error occurred at:\n{traceback.format_exc()}")
-
-                                # # Extract the file to the target directory
-                                # dest = os.path.join(target_dir, os.path.basename(file_info.filename))
-                                # ConsoleAndLog.info(f"Extracting {file_info.filename} to {dest}")
-                                # zip_ref.extract(file_info, dest)
                             
         except Exception as e:
             ConsoleAndLog.error(f"Error updating from zip: {str(e)}")
@@ -417,10 +415,10 @@ class GitOperationsManager:
 
     def confirm_update(self) -> bool:
         """Prompt user to confirm the update"""
-        ConsoleAndLog.info("\nWARNING: This will update files in your repository.")
-        ConsoleAndLog.info("Type 'UPDATE' to continue:")
-        response = input().strip()
-        return response == "UPDATE"
+
+        click.echo(Colorize.error("WARNING: This will update files in your repository."))
+        choice = Colorize.prompt("Type 'UPDATE' to continue", "", str, False)
+        return choice == "UPDATE"
 
     def get_current_branch(self) -> str:
         """Get the name of the current branch"""
@@ -433,7 +431,8 @@ class GitOperationsManager:
             )
             return result.stdout.strip()
         except subprocess.CalledProcessError as e:
-            ConsoleAndLog.error(f"Failed to get current branch: {str(e)}")
+            click.echo(Colorize.error(f"Failed to get current branch: {str(e)}"))
+            Log.error(f"Failed to get current branch: {str(e)}")
             Log.error(f"Error occurred at:\n{traceback.format_exc()}")
             raise
 
@@ -441,12 +440,17 @@ class GitOperationsManager:
         """Confirm branch selection and handle branch switching"""
         try:
             self.original_branch = self.get_current_branch()
-            ConsoleAndLog.info(f"\nCurrently on branch: {self.original_branch}")
-            ConsoleAndLog.info("Continue with current branch? (Y/N):")
+            click.echo(Colorize.output_with_value("Currently on branch:", self.original_branch))
+
+            # prompt until choice is either YES or NO
+            choice = ""
+            while choice not in ['YES', 'NO']:
+                choice = Colorize.prompt("Continue with current branch? (YES/NO)", "", str, False)
+                if choice not in ['YES', 'NO']:
+                    click.echo(Colorize.error("Please enter 'YES' or 'NO'"))
             
-            if input().strip().lower() != 'y':
-                ConsoleAndLog.info("Enter branch name to checkout:")
-                new_branch = input().strip()
+            if choice.strip() != 'YES':
+                new_branch = Colorize.prompt("Enter branch name to checkout", "", str, False)
                 
                 # Verify branch exists
                 result = subprocess.run(
@@ -455,15 +459,23 @@ class GitOperationsManager:
                     capture_output=True,
                     text=True
                 )
-                
+                        
                 if not result.stdout.strip():
-                    ConsoleAndLog.info(f"Branch '{new_branch}' does not exist. Create it? (Y/N):")
-                    if input().strip().lower() == 'y':
+
+                    # prompt until choice is either YES or NO
+                    branch_choice = ""
+                    while branch_choice not in ['YES', 'NO']:
+                        branch_choice = Colorize.prompt(f"Branch '{new_branch}' does not exist. Create it? (YES/NO)", "", str, False)
+                        if branch_choice not in ['YES', 'NO']:
+                            click.echo(Colorize.error("Please enter 'YES' or 'NO'"))
+
+                    if branch_choice.strip() == 'YES':
                         subprocess.run(
                             ["git", "checkout", "-b", new_branch],
                             check=True
                         )
-                        ConsoleAndLog.info(f"Created and checked out new branch: {new_branch}")
+                        Log.info(f"Created and checked out new branch: {new_branch}")
+                        click.echo(Colorize.output_with_value(f"Created and checked out new branch:", new_branch))
                     else:
                         return False
                 else:
@@ -471,7 +483,8 @@ class GitOperationsManager:
                         ["git", "checkout", new_branch],
                         check=True
                     )
-                    ConsoleAndLog.info(f"Checked out existing branch: {new_branch}")
+                    Log.info(f"Checked out existing branch: {new_branch}")
+                    click.echo(Colorize.output_with_value(f"Created and checked out new branch:", new_branch))
                 
                 self.target_branch = new_branch
             else:
@@ -480,15 +493,22 @@ class GitOperationsManager:
             return True
             
         except subprocess.CalledProcessError as e:
-            ConsoleAndLog.error(f"Git operation failed: {str(e)}")
+            click.echo(Colorize.error(f"Git operation failed: {str(e)}"))
+            Log.error(f"Git operation failed: {str(e)}")
             Log.error(f"Error occurred at:\n{traceback.format_exc()}")
             return False
 
     def pull_changes(self) -> bool:
         """Pull latest changes from remote"""
         try:
-            ConsoleAndLog.info("\nWould you like to pull latest changes? (Y/N):")
-            if input().strip().lower() == 'y':
+            # prompt until choice is either YES or NO
+            choice = ""
+            while choice not in ['YES', 'NO']:
+                choice = Colorize.prompt("Would you like to pull latest changes from repository before updating? (YES/NO):", "YES", str)
+                if choice not in ['YES', 'NO']:
+                    click.echo(Colorize.error("Please enter 'YES' or 'NO'"))
+
+            if choice.strip().lower() == 'YES':
                 ConsoleAndLog.info("Pulling latest changes...")
                 subprocess.run(
                     ["git", "pull"],
@@ -497,7 +517,8 @@ class GitOperationsManager:
                 return True
             return False
         except subprocess.CalledProcessError as e:
-            ConsoleAndLog.error(f"Failed to pull changes: {str(e)}")
+            click.echo(Colorize.error(f"Failed to pull changes: {str(e)}"))
+            Log.error(f"Failed to pull changes: {str(e)}")
             Log.error(f"Error occurred at:\n{traceback.format_exc()}")
             return False
 
@@ -513,7 +534,8 @@ class GitOperationsManager:
                     check=True
                 )
             except subprocess.CalledProcessError as e:
-                ConsoleAndLog.error(f"Failed to restore original branch: {str(e)}")
+                click.echo(Colorize.error(f"Failed to restore original branch: {str(e)}"))
+                Log.error(f"Failed to restore original branch: {str(e)}")
                 Log.error(f"Error occurred at:\n{traceback.format_exc()}")
 
 # =============================================================================
@@ -679,30 +701,37 @@ def main():
             zip_loc = update_manager.download_zip()
             success = update_manager.update_from_zip(zip_loc)
         except TokenRetrievalError as e:
-            ConsoleAndLog.error(f"AWS authentication error: {str(e)}")
+            click.echo(Colorize.error(f"AWS authentication error: {str(e)}"))
+            Log.error(f"AWS authentication error: {str(e)}")
             Log.error(f"Error occurred at:\n{traceback.format_exc()}")
             sys.exit(1)
         except Exception as e:
-            ConsoleAndLog.error(f"Error initializing update manager: {str(e)}")
+            click.echo(Colorize.error(f"Error initializing update manager: {str(e)}"))
+            Log.error(f"Error initializing update manager: {str(e)}")
             Log.error(f"Error occurred at:\n{traceback.format_exc()}")
             sys.exit(1)
         finally:
             if zip_loc and os.path.exists(zip_loc):
                 os.remove(zip_loc)
-                ConsoleAndLog.info(f"Temporary zip file {zip_loc} removed")
+                click.echo(Colorize.output_with_value("Temporary zip file removed:", zip_loc))
+                Log.info(f"Temporary zip file {zip_loc} removed")
 
         if success:
-            ConsoleAndLog.info("Update completed successfully!")
+            click.echo(Colorize.success("Update completed successfully!"))
+            Log.info("Update completed successfully!")
         else:
-            ConsoleAndLog.error("Update failed!")
+            click.echo(Colorize.error("Update failed!"))
+            Log.error("Update failed!")
 
     except Exception as e:
-        ConsoleAndLog.error(f"Unexpected error: {str(e)}")
+        click.echo(Colorize.error(f"Unexpected error: {str(e)}"))
+        Log.error(f"Unexpected error: {str(e)}")
         Log.error(f"Error occurred at:\n{traceback.format_exc()}")
         sys.exit(1)
     finally:
         # Always try to restore original branch
         git_manager.cleanup()
+        print()
         return success
 
 if __name__ == '__main__':
