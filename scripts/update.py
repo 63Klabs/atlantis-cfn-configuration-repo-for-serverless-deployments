@@ -400,13 +400,17 @@ class UpdateManager:
         allowed_extensions = {'.py', '.sh', '.md', '.txt', '.json', '.toml'}
         allowed_filenames = {'.gitignore'}
         
+        # Get just the base filename without the path
+        base_filename = os.path.basename(filename)
+        
         # Check if it's a special filename first
-        if filename in allowed_filenames:
+        if base_filename in allowed_filenames:
             return True
             
         # Check extensions
         file_extension = os.path.splitext(filename)[1].lower()
         return file_extension in allowed_extensions
+
     
 # =============================================================================
 # ----- GitOperations Class ---------------------------------------------------
@@ -856,7 +860,7 @@ def main():
 
         # Perform Update
         try:
-            update_manager = UpdateManager(args.profile)
+            update_manager = UpdateManager(args.profile, args.dryrun)
             zip_loc = update_manager.download_zip()
 
             # After downloading the zip file but before updating
