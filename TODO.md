@@ -4,34 +4,35 @@
 
 - Default tags not loading from settings
 - Fix tags - converting back and forth
+- Documentation
 
 ## Deploy
 
 - Test
+- Documentation
 
 ## Import
 
 - Test
+- Documentation
 
 ## Create Repository
 
 - Test
+- Documentation
 
 ## Update
 
-- Test Delete downloaded zip
-- Test improved logging
-- Test commit
 - Documentation
 
 ## Lib
 
 - Make sure logs are being stored in the right spot
-- Improve Logging
 
 ## AWS Sessions
 
-- Test No browser support (WSL)
+- Test No browser support (WSL and UTM) - Maybe just display the link and code
+- UTM has browser support
 
 ## Test
 

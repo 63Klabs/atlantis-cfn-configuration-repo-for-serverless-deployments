@@ -170,9 +170,9 @@ class AWSSessionManager:
         """Execute AWS SSO login command for specific profile with browser fallback"""
         try:
 
-            if not self._can_open_browser():
-                ConsoleAndLog.warning("No display detected. Running in no-browser mode.")
-                self.no_browser = True
+            # if not self._can_open_browser():
+            #     ConsoleAndLog.warning("No display detected. Running in no-browser mode.")
+            #     self.no_browser = True
         
             ConsoleAndLog.info(f"Initiating SSO login for profile {self.profile}")
             
