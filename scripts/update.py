@@ -12,8 +12,8 @@ import click
 import argparse
 import subprocess
 import traceback
-from typing import Dict, Optional
 
+from typing import Dict, Optional
 from pathlib import Path
 
 from lib.aws_session import AWSSessionManager, TokenRetrievalError
@@ -42,7 +42,7 @@ class UpdateManager:
 
     def __init__(self, profile: Optional[str] = None, dryrun: Optional[bool] = False):
 
-        self.profile = profile
+        self.profile = "default" if profile == None else profile
         self.dryrun = dryrun
 
         config_loader = ConfigLoader(
@@ -60,12 +60,11 @@ class UpdateManager:
         self.src_ver = self.get_version(self.source, self.src_type, update_settings.get('ver', ver))
         self.source = self.update_source(self.source, self.src_type, self.src_ver)
 
-
         # Check the arguments before moving on
         self._validate_args()
 
         # Set up AWS session and clients
-        self.aws_session = AWSSessionManager(profile)
+        self.aws_session = AWSSessionManager(self.profile)
         self.s3_client = self.aws_session.get_client('s3')
 
     def _validate_args(self) -> None:
@@ -243,7 +242,8 @@ class UpdateManager:
 
             # if source ends with .zip then it is a release
             if source.endswith('.zip'):
-                tag = source.split('/')[-1].split('-')[-1].split('.')[0]
+                tag = Path(source).stem
+                #tag = source.split('/')[-1].split('-')[-1].split('.')[0]
 
             return {
                 'owner': owner,
@@ -255,7 +255,7 @@ class UpdateManager:
             ConsoleAndLog.error(f"Invalid GitHub repository URL {source}")
             raise Exception("Invalid GitHub repository URL")
         
-    def get_latest_github_release(owner: str, repo: str) -> str:
+    def get_latest_github_release(self, owner: str, repo: str) -> str:
         """
         Get the latest release tag from a GitHub repository
         
@@ -304,7 +304,7 @@ class UpdateManager:
                 try:
                     # Get bucket and path from source
                     t_source = self.source.split('?versionId=')
-                    ver = t_source[-1]
+                    ver = ver = t_source[1] if '?versionId=' in self.source else None
                     bucket = t_source[0].split('/')[2]
                     path = '/'.join(t_source[0].split('/')[3:])
 
@@ -349,6 +349,9 @@ class UpdateManager:
                     tag = "main"
                 zipped_dir = f"{repo}-{tag}/"
 
+            ConsoleAndLog.info(f"Extracted directory: {zipped_dir}")
+            ConsoleAndLog.info(f"Target directories: {self.target_dirs}")
+
             with zipfile.ZipFile(zip_location, 'r') as zip_ref:
                 # Extract only the directories we want
                 for file_info in zip_ref.filelist:
@@ -375,14 +378,18 @@ class UpdateManager:
                                     ConsoleAndLog.info(f"Skipping file based on extension: {file_info.filename}")
                                     continue
 
+                                shortened_path = str(Path(*Path(file_info.filename).parts[-2:]))
+                                dest_shortend_path = str(Path(*Path(dest).parts[-2:]))
+
                                 if not self.dryrun:
-                                    ConsoleAndLog.info(f"Extracting {file_info.filename} to {dest}")
+
+                                    ConsoleAndLog.info(f"Extracting {shortened_path} to {dest_shortend_path}")
 
                                     # Extract the file content and write it to the correct location
                                     with zip_ref.open(file_info) as source, open(dest, 'wb') as target:
                                         target.write(source.read())
                                 else:
-                                    ConsoleAndLog.info(f"Would extract {file_info.filename} to {dest} (DRYRUN)")
+                                    ConsoleAndLog.info(f"Would extract {shortened_path} to {dest_shortend_path} (DRYRUN)")
 
                             except Exception as e:
                                 ConsoleAndLog.error(f"Failed to extract {file_info.filename}: {str(e)}")
@@ -600,7 +607,7 @@ class GitOperationsManager:
                 default_commit_msg = "chore: Updated scripts with latest release"
                 commit_msg = default_commit_msg if self.headless else ""
                 # Get commit message from user
-                while commit_msg is "":
+                while commit_msg == "":
                     commit_msg = Colorize.prompt("Enter commit message", default_commit_msg, str)
                     if not commit_msg.strip():
                         click.echo(Colorize.error("Commit message cannot be empty"))

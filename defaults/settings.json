@@ -21,7 +21,7 @@
 	],
 	"updates": {
 		"source": "https://github.com/chadkluck/atlantis-cfn-configuration-repo-for-serverless-deployments",
-		"ver": "commit:latest",
+		"ver": "release:latest",
 		"target_dirs": ["docs", "scripts"]
 	},
 	"regions": [
