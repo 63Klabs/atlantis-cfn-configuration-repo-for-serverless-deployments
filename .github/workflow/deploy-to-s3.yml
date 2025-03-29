@@ -31,4 +31,4 @@ jobs:
           zip -r release.zip ./*
           
           # Copy to S3
-          aws s3 cp release.zip s3://${{ secrets.AWS_RELEASE_BUCKET }}/${{ secrets.AWS_RELEASE_BUCKET_UTILS_PATH }}/${ZIP_FILE_NAME}.zip
+          aws s3 cp release.zip s3://${{ vars.AWS_RELEASE_BUCKET }}${{ vars.AWS_RELEASE_BUCKET_UTILS_PATH }}${ZIP_FILE_NAME}.zip
