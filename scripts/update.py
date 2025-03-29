@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-VERSION = "v0.1.0/2025-03-25"
+VERSION = "v0.1.0/2025-03-30"
 # Created by Chad Kluck with AI assistance from Amazon Q Developer
 
 import os
@@ -589,11 +589,13 @@ class GitOperationsManager:
                     click.echo(Colorize.error("Please enter 'YES' or 'NO'"))
 
             if choice.strip() == 'YES':
+                default_commit_msg = "chore: Updated scripts with latest release"
+                commit_msg = default_commit_msg if self.headless else ""
                 # Get commit message from user
-                commit_msg = Colorize.prompt("Enter commit message", "chore: Updated scripts with latest release", str)
-                if not commit_msg.strip():
-                    click.echo(Colorize.error("Commit message cannot be empty"))
-                    return False
+                while commit_msg is "":
+                    commit_msg = Colorize.prompt("Enter commit message", default_commit_msg, str)
+                    if not commit_msg.strip():
+                        click.echo(Colorize.error("Commit message cannot be empty"))
 
                 ConsoleAndLog.info("Committing changes...")
                 subprocess.run(
