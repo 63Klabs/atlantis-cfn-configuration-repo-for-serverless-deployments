@@ -1,5 +1,18 @@
 name: Deploy Release to S3
 
+# This script creates a zip file and uploads to s3
+# An IAM role must present to provide permissions 
+
+# Set the following in GitHub environment secrets and variables:
+# Secrets:
+#   AWS_RELEASE_ACCT
+#   AWS_RELEASE_REGION
+# Variables:
+#   AWS_RELEASE_BUCKET - bucket to upload artifact to
+#   AWS_RELEASE_BUCKET_UTILS_PATH - Must be single / or begin and end with /
+#
+
+
 on:
   release:
     types: [published]
