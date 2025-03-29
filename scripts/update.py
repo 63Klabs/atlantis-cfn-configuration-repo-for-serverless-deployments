@@ -443,15 +443,12 @@ class GitOperationsManager:
     def confirm_branch(self) -> bool:
         """Confirm branch selection and handle branch switching"""
 
-        if self.headless:
-            return True
-
         try:
             self.original_branch = self.get_current_branch()
             click.echo(Colorize.output_with_value("Currently on branch:", self.original_branch))
 
             # prompt until choice is either YES or NO
-            choice = ""
+            choice = "YES" if self.headless else ""
             while choice not in ['YES', 'NO']:
                 choice = Colorize.prompt("Continue with current branch? (YES/NO)", "", str, False)
                 if choice not in ['YES', 'NO']:
@@ -816,12 +813,12 @@ def parse_args() -> argparse.Namespace:
 
 def main():
 
+    args = parse_args()
     success = False
     zip_loc = None
     git_manager = GitOperationsManager(args.headless)
 
     try:
-        args = parse_args()
         Log.info(f"{sys.argv}")
         Log.info(f"Version: {VERSION}")
         
