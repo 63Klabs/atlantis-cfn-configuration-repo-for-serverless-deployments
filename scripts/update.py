@@ -40,9 +40,10 @@ SETTINGS_DIR = "defaults"
 
 class UpdateManager:
 
-    def __init__(self, profile: Optional[str] = None):
+    def __init__(self, profile: Optional[str] = None, dryrun: Optional[bool] = False):
 
         self.profile = profile
+        self.dryrun = dryrun
 
         config_loader = ConfigLoader(
             settings_dir=self.get_settings_dir()
@@ -369,16 +370,19 @@ class UpdateManager:
                                 # Create parent directories if they don't exist
                                 os.makedirs(os.path.dirname(dest), exist_ok=True)
                                 
-                                ConsoleAndLog.info(f"Extracting {file_info.filename} to {dest}")
-
                                 # Check if we care about the file
                                 if not self.is_allowed_file(file_info.filename):
                                     ConsoleAndLog.info(f"Skipping file based on extension: {file_info.filename}")
                                     continue
 
-                                # Extract the file content and write it to the correct location
-                                with zip_ref.open(file_info) as source, open(dest, 'wb') as target:
-                                    target.write(source.read())
+                                if not self.dryrun:
+                                    ConsoleAndLog.info(f"Extracting {file_info.filename} to {dest}")
+
+                                    # Extract the file content and write it to the correct location
+                                    with zip_ref.open(file_info) as source, open(dest, 'wb') as target:
+                                        target.write(source.read())
+                                else:
+                                    ConsoleAndLog.info(f"Would extract {file_info.filename} to {dest} (DRYRUN)")
 
                             except Exception as e:
                                 ConsoleAndLog.error(f"Failed to extract {file_info.filename}: {str(e)}")
@@ -699,6 +703,13 @@ Examples:
     # Use specific AWS profile
     update.py --profile <yourprofile>
 
+    # Optional flags:
+    --headless
+        Run with no user interaction for automated tasks.
+    --dryrun
+        Perform all actions (including git) but do not update files from zip.
+
+
 -----------------
 Settings (defaults/settings.json):
 
@@ -803,7 +814,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('--headless',
                         action='store_true',  # This makes it a flag
                         default=False,        # Default value when flag is not used
-                        help='Run with no user interaction. Automation.')
+                        help='Run with no user interaction for automated tasks.')
     parser.add_argument('--dryrun',
                         action='store_true',  # This makes it a flag
                         default=False,        # Default value when flag is not used
