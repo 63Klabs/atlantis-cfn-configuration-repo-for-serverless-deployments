@@ -374,14 +374,15 @@ class UpdateManager:
                                 
                                 # Create parent directories if they don't exist
                                 os.makedirs(os.path.dirname(dest), exist_ok=True)
-                                
-                                # Check if we care about the file
-                                if not self.is_allowed_file(file_info.filename):
-                                    ConsoleAndLog.info(f"Skipping file based on extension: {file_info.filename}")
-                                    continue
 
                                 shortened_path = str(Path(*Path(file_info.filename).parts[-2:]))
                                 dest_shortend_path = str(Path(*Path(dest).parts[-2:]))
+                                
+                                # Check if we care about the file
+                                if not self.is_allowed_file(file_info.filename):
+                                    ConsoleAndLog.info(f"Skipping file based on extension: {shortened_path}")
+                                    continue
+
 
                                 if not self.dryrun:
 
