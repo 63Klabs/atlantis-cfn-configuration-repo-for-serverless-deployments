@@ -146,6 +146,8 @@ class UpdateManager:
                 return "commit:latest"
             elif ver == "":
                 return "release:latest"
+            elif ver == "latest":
+                return "release:latest"
             else:
                 raise click.UsageError(f"Invalid GitHub source/ver combo: {ver} from {source}")
         elif src_type == "s3":
