@@ -2,7 +2,8 @@
 
 ## Config
 
-- Default tags not loading from settings
+- Default tags not saving to settings
+- Save service role after service role deploy and make sure it is loaded in
 - Fix tags - converting back and forth
 - Documentation
 
