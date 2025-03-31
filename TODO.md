@@ -24,6 +24,7 @@
 
 ## Update
 
+- Make prompts prettier
 - Documentation
 
 ## Lib

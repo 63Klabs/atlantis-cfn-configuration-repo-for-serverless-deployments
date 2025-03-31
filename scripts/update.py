@@ -19,7 +19,7 @@ from pathlib import Path
 from lib.aws_session import AWSSessionManager, TokenRetrievalError
 from lib.logger import ScriptLogger, Log, ConsoleAndLog
 from lib.tools import Colorize
-from lib.atlantis import ConfigLoader
+from lib.atlantis import DefaultsLoader
 
 if sys.version_info[0] < 3:
     sys.stderr.write("Error: Python 3 is required\n")
@@ -45,7 +45,7 @@ class UpdateManager:
         self.profile = "default" if profile == None else profile
         self.dryrun = dryrun
 
-        config_loader = ConfigLoader(
+        config_loader = DefaultsLoader(
             settings_dir=self.get_settings_dir()
         )
 

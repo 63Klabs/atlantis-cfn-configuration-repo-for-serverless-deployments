@@ -28,7 +28,7 @@ from botocore.exceptions import ClientError
 from lib.aws_session import AWSSessionManager, TokenRetrievalError
 from lib.logger import ScriptLogger, Log, ConsoleAndLog
 from lib.tools import Colorize
-from lib.atlantis import FileNameListUtils, ConfigLoader, TagUtils, Utils
+from lib.atlantis import FileNameListUtils, DefaultsLoader, TagUtils, Utils
 
 if sys.version_info[0] < 3:
     sys.stderr.write("Error: Python 3 is required\n")
@@ -104,7 +104,7 @@ class ConfigManager:
         self.template_hash_id: Optional[str] = None
         self.template_file: Optional[str] = None
 
-        config_loader = ConfigLoader(
+        config_loader = DefaultsLoader(
             settings_dir=self.get_settings_dir(),
             prefix=self.prefix,
             project_id=self.project_id,
@@ -774,6 +774,8 @@ class ConfigManager:
         
         # Initialize variables to track user choices
         save_region = False
+        save_role_path = False
+        save_service_role_path = False
         region = atlantis.get('deploy', {}).get('parameters', {}).get('region')
         
         # Check for defaults.json
@@ -783,24 +785,43 @@ class ConfigManager:
             print()
             
             click.echo(Colorize.output_with_value("Current region:", region))
-            save_choice = click.confirm(
+            save_region = click.confirm(
                 Colorize.question("Would you like to save this region as the default?"),
                 default=True
             )
-            
-            if save_choice:
-                save_region = True
-                defaults_data = {
-                    "atlantis": {
-                        "region": region
-                    }
-                }
-            else:
-                defaults_data = {
-                    "atlantis": {},
-                    "parameter_overrides": {},
-                    "tags": []
-                }
+
+            print(atlantis.get('deploy', {}).get('parameter_overrides', {}))
+
+            role_path = atlantis.get('deploy', {}).get('parameter_overrides', {}).get('RolePath')
+            if role_path:
+                click.echo(Colorize.output_with_value("Current RolePath:", role_path))
+                save_role_path = click.confirm(
+                    Colorize.question("Would you like to save this RolePath as the default?"),
+                    default=True
+                )
+
+            service_role_path = atlantis.get('deploy', {}).get('parameter_overrides', {}).get('ServiceRolePath')
+            if service_role_path:
+                click.echo(Colorize.output_with_value("Current ServiceRolePath:", service_role_path))
+                save_service_role_path = click.confirm(
+                    Colorize.question("Would you like to save this ServiceRolePath as the default?"),
+                    default=True
+                )
+
+            defaults_data = {
+                "atlantis": {},
+                "parameter_overrides": {},
+                "tags": []
+            }
+
+            if save_region:
+                defaults_data["atlantis"]["region"] = region
+
+            if save_role_path:
+                defaults_data["parameter_overrides"]["RolePath"] = role_path
+
+            if save_service_role_path:
+                defaults_data["parameter_overrides"]["ServiceRolePath"] = service_role_path
 
             # Save defaults.json
             try:
@@ -838,7 +859,7 @@ class ConfigManager:
                         "atlantis": {},
 	                    "parameter_overrides": {},
 	                    "tags": []
-                    }
+            }
             
             # Prompt for s3_bucket
             s3_bucket = atlantis.get('deploy', {}).get('parameters', {}).get('s3_bucket')
@@ -852,7 +873,7 @@ class ConfigManager:
                 if save_bucket:
                     prefix_defaults_data["atlantis"]["s3_bucket"] = s3_bucket
             
-            # Prompt for region if not saved in defaults.json
+            # Prompt for region if not saved in prefix-defaults.json
             if not save_region and region:
                 click.echo(Colorize.output_with_value("Current region:", region))
                 save_region_prefix = click.confirm(
@@ -863,19 +884,32 @@ class ConfigManager:
                 if save_region_prefix:
                     prefix_defaults_data["atlantis"]["region"] = region
 
+            role_arn = atlantis.get('deploy', {}).get('parameters', {}).get('role_arn')
+            # Prompt for role_arn if not saved in prefix-defaults.json
+            if role_arn:
+                click.echo(Colorize.output_with_value(f"Current {self.infra_type.capitalize()} Service Role ARN:", role_arn))
+                save_role_arn_prefix = click.confirm(
+                    Colorize.question(f"Would you like to save this {self.infra_type.capitalize()} Service Role ARN as the default for this prefix?"),
+                    default=True
+                )
+                
+                if save_role_arn_prefix:
+                    prefix_defaults_data["atlantis"]["role_arn"] = { self.infra_type: role_arn}
+
             # Prompt for specific parameter overrides such as RolePath, PermissionsBoundaryArn, S3BucketNameOrgPrefix, ParameterStoreHierarchy
             possible_defaults = ['RolePath', 'PermissionsBoundaryArn', 'S3BucketNameOrgPrefix', 'ParameterStoreHierarchy']
             for param in possible_defaults:
                 if param in parameter_overrides:
-                    print()
-                    click.echo(Colorize.output_with_value(f"Current {param}:", parameter_overrides[param]))
-                    save_param = click.confirm(
-                        Colorize.question(f"Would you like to save this '{param}' value as the default for the '{self.prefix}' prefix?"),
-                        default=True
-                    )
+                    if parameter_overrides[param]:
+                        print()
+                        click.echo(Colorize.output_with_value(f"Current {param}:", parameter_overrides[param]))
+                        save_param = click.confirm(
+                            Colorize.question(f"Would you like to save this '{param}' value as the default for the '{self.prefix}' prefix?"),
+                            default=True
+                        )
 
-                    if save_param:
-                        prefix_defaults_data["parameter_overrides"][param] = parameter_overrides[param]
+                        if save_param:
+                            prefix_defaults_data["parameter_overrides"][param] = parameter_overrides[param]
             
             # Save prefix-defaults.json
             try:

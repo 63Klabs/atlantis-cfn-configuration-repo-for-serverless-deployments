@@ -417,9 +417,9 @@ class FileNameListUtils:
 # - Configuration Loader
 # -------------------------------------------------------------------------
 
-class ConfigLoader:
+class DefaultsLoader:
     def __init__(self, settings_dir: Path, prefix: str = "", project_id: str = "", infra_type: str = ""):
-        """Initialize the ConfigLoader
+        """Initialize the DefaultsLoader
         
         Args:
             settings_dir (Path): Base directory for configuration files

@@ -27,7 +27,7 @@ import click
 from lib.aws_session import AWSSessionManager, TokenRetrievalError
 from lib.logger import ScriptLogger, Log, ConsoleAndLog
 from lib.tools import Colorize
-from lib.atlantis import FileNameListUtils, ConfigLoader, TagUtils
+from lib.atlantis import FileNameListUtils, DefaultsLoader, TagUtils
 
 if sys.version_info[0] < 3:
     sys.stderr.write("Error: Python 3 is required\n")
@@ -52,7 +52,7 @@ class RepositoryCreator:
         self.s3_client = self.aws_session.get_client('s3', self.region)
         self.codecommit_client = self.aws_session.get_client('codecommit', self.region)
 
-        config_loader = ConfigLoader(
+        config_loader = DefaultsLoader(
             settings_dir=self.get_settings_dir(),
             prefix=self.prefix,
             project_id=None,
