@@ -775,53 +775,75 @@ class ConfigManager:
         # Initialize variables to track user choices
         save_region = False
         save_role_path = False
+        save_s3_bucket = False
         save_service_role_path = False
+
         region = atlantis.get('deploy', {}).get('parameters', {}).get('region')
-        
+        s3_bucket = atlantis.get('deploy', {}).get('parameters', {}).get('s3_bucket')
+        role_path = atlantis.get('deploy', {}).get('parameter_overrides', {}).get('RolePath')
+        service_role_path = atlantis.get('deploy', {}).get('parameter_overrides', {}).get('ServiceRolePath')
+
+
+        print(f"Atlantis {atlantis}")
+        print(f"Param Overrides {parameter_overrides}")
+
+        current_params = {
+            "atlantis": atlantis.get('deploy', {}).get('parameters', {}),
+            "parameter_overrides": parameter_overrides
+        }
         # Check for defaults.json
-        if not os.path.exists(defaults_path) and region:
+        if not os.path.exists(defaults_path) and (region or s3_bucket or role_path or service_role_path):
             click.echo(Colorize.divider())
             click.echo(Colorize.output_bold("Atlantis Configuration Defaults:"))
             print()
+
+            defaults_data = self.set_future_defaults(current_params, [], 'ALL')
             
-            click.echo(Colorize.output_with_value("Current region:", region))
-            save_region = click.confirm(
-                Colorize.question("Would you like to save this region as the default?"),
-                default=True
-            )
+            # if region:
+            #     click.echo(Colorize.output_with_value("Current region:", region))
+            #     save_region = click.confirm(
+            #         Colorize.question("Would you like to save this region as the default option for ALL configurations?"),
+            #         default=True
+            #     )
+                
+            # if s3_bucket:
+            #     click.echo(Colorize.output_with_value("Current S3 bucket:", s3_bucket))
+            #     save_s3_bucket = click.confirm(
+            #         Colorize.question("Would you like to save this S3 bucket as the default option for ALL configurations?"),
+            #         default=True
+            #     )
+                
+            # if role_path:
+            #     click.echo(Colorize.output_with_value("Current RolePath:", role_path))
+            #     save_role_path = click.confirm(
+            #         Colorize.question("Would you like to save this RolePath as the default option for ALL configurations?"),
+            #         default=True
+            #     )
 
-            print(atlantis.get('deploy', {}).get('parameter_overrides', {}))
+            # if service_role_path:
+            #     click.echo(Colorize.output_with_value("Current ServiceRolePath:", service_role_path))
+            #     save_service_role_path = click.confirm(
+            #         Colorize.question("Would you like to save this ServiceRolePath as the default option for ALL configurations?"),
+            #         default=True
+            #     )
 
-            role_path = atlantis.get('deploy', {}).get('parameter_overrides', {}).get('RolePath')
-            if role_path:
-                click.echo(Colorize.output_with_value("Current RolePath:", role_path))
-                save_role_path = click.confirm(
-                    Colorize.question("Would you like to save this RolePath as the default?"),
-                    default=True
-                )
+            # defaults_data = {
+            #     "atlantis": {},
+            #     "parameter_overrides": {},
+            #     "tags": []
+            # }
 
-            service_role_path = atlantis.get('deploy', {}).get('parameter_overrides', {}).get('ServiceRolePath')
-            if service_role_path:
-                click.echo(Colorize.output_with_value("Current ServiceRolePath:", service_role_path))
-                save_service_role_path = click.confirm(
-                    Colorize.question("Would you like to save this ServiceRolePath as the default?"),
-                    default=True
-                )
+            # if save_region:
+            #     defaults_data["atlantis"]["region"] = region
 
-            defaults_data = {
-                "atlantis": {},
-                "parameter_overrides": {},
-                "tags": []
-            }
+            # if save_s3_bucket:
+            #     defaults_data["atlantis"]["s3_bucket"] = s3_bucket
 
-            if save_region:
-                defaults_data["atlantis"]["region"] = region
+            # if save_role_path:
+            #     defaults_data["parameter_overrides"]["RolePath"] = role_path
 
-            if save_role_path:
-                defaults_data["parameter_overrides"]["RolePath"] = role_path
-
-            if save_service_role_path:
-                defaults_data["parameter_overrides"]["ServiceRolePath"] = service_role_path
+            # if save_service_role_path:
+            #     defaults_data["parameter_overrides"]["ServiceRolePath"] = service_role_path
 
             # Save defaults.json
             try:
@@ -855,34 +877,55 @@ class ConfigManager:
             click.echo(Colorize.output_bold(f"Prefix Defaults ({self.prefix}):"))
             print()
             
-            prefix_defaults_data = {
-                        "atlantis": {},
-	                    "parameter_overrides": {},
-	                    "tags": []
-            }
-            
-            # Prompt for s3_bucket
-            s3_bucket = atlantis.get('deploy', {}).get('parameters', {}).get('s3_bucket')
-            if s3_bucket:
-                click.echo(Colorize.output_with_value("Current S3 bucket:", s3_bucket))
-                save_bucket = click.confirm(
-                    Colorize.question("Would you like to save this S3 bucket as the default for this prefix?"),
-                    default=True
-                )
+            # if not save_region and region:
+            #     click.echo(Colorize.output_with_value("Current region:", region))
+            #     save_region = click.confirm(
+            #         Colorize.question("Would you like to save this region as the default option for ALL configurations?"),
+            #         default=True
+            #     )
+            # else:
+            #     save_region = False
                 
-                if save_bucket:
-                    prefix_defaults_data["atlantis"]["s3_bucket"] = s3_bucket
-            
-            # Prompt for region if not saved in prefix-defaults.json
-            if not save_region and region:
-                click.echo(Colorize.output_with_value("Current region:", region))
-                save_region_prefix = click.confirm(
-                    Colorize.question("Would you like to save this region as the default for this prefix?"),
-                    default=True
-                )
+            # if not save_s3_bucket and s3_bucket:
+            #     click.echo(Colorize.output_with_value("Current S3 bucket:", s3_bucket))
+            #     save_bucket = click.confirm(
+            #         Colorize.question("Would you like to save this S3 bucket as the default option for ALL configurations?"),
+            #         default=True
+            #     )
+            # else:
+            #     save_s3_bucket = False
                 
-                if save_region_prefix:
-                    prefix_defaults_data["atlantis"]["region"] = region
+            # if not save_role_path and role_path:
+            #     click.echo(Colorize.output_with_value("Current RolePath:", role_path))
+            #     save_role_path = click.confirm(
+            #         Colorize.question("Would you like to save this RolePath as the default option for ALL configurations?"),
+            #         default=True
+            #     )
+            # else:
+            #     save_role_path = False
+
+            # if not save_service_role_path and service_role_path:
+            #     click.echo(Colorize.output_with_value("Current ServiceRolePath:", service_role_path))
+            #     save_service_role_path = click.confirm(
+            #         Colorize.question("Would you like to save this ServiceRolePath as the default option for ALL configurations?"),
+            #         default=True
+            #     )
+            # else:
+            #     save_service_role_path = False
+
+            # if save_region:
+            #     prefix_defaults_data["atlantis"]["region"] = region
+
+            # if save_s3_bucket:
+            #     prefix_defaults_data["atlantis"]["s3_bucket"] = s3_bucket
+
+            # if save_role_path:
+            #     prefix_defaults_data["parameter_overrides"]["RolePath"] = role_path
+
+            # if save_service_role_path:
+            #     prefix_defaults_data["parameter_overrides"]["ServiceRolePath"] = service_role_path
+
+            prefix_defaults_data = self.set_future_defaults(current_params, [], self.prefix)
 
             role_arn = atlantis.get('deploy', {}).get('parameters', {}).get('role_arn')
             # Prompt for role_arn if not saved in prefix-defaults.json
@@ -896,21 +939,6 @@ class ConfigManager:
                 if save_role_arn_prefix:
                     prefix_defaults_data["atlantis"]["role_arn"] = { self.infra_type: role_arn}
 
-            # Prompt for specific parameter overrides such as RolePath, PermissionsBoundaryArn, S3BucketNameOrgPrefix, ParameterStoreHierarchy
-            possible_defaults = ['RolePath', 'PermissionsBoundaryArn', 'S3BucketNameOrgPrefix', 'ParameterStoreHierarchy']
-            for param in possible_defaults:
-                if param in parameter_overrides:
-                    if parameter_overrides[param]:
-                        print()
-                        click.echo(Colorize.output_with_value(f"Current {param}:", parameter_overrides[param]))
-                        save_param = click.confirm(
-                            Colorize.question(f"Would you like to save this '{param}' value as the default for the '{self.prefix}' prefix?"),
-                            default=True
-                        )
-
-                        if save_param:
-                            prefix_defaults_data["parameter_overrides"][param] = parameter_overrides[param]
-            
             # Save prefix-defaults.json
             try:
                 with open(prefix_defaults_path, 'w') as f:
@@ -922,7 +950,52 @@ class ConfigManager:
                 click.echo(Colorize.error(f"Error creating {prefix_defaults_path}"))
                 Log.error(f"Error creating {prefix_defaults_path}: {str(e)}")
                 return
+        
+    def set_future_defaults(self, current_params: Dict, skip: List, scope: str = None) -> Dict:
+        """Set the default parameters for the repository
 
+        Args:
+            atlantis (Dict): The atlantis configuration
+            scope (str, optional): The scope of the configuration. Defaults to None.
+        """
+        # Prompt for specific parameter overrides such as RolePath, PermissionsBoundaryArn, S3BucketNameOrgPrefix, ParameterStoreHierarchy
+        defaults_data = {
+            "atlantis": {},
+            "parameter_overrides": {},
+            "tags": []
+        }
+
+        if scope == None or (scope != 'ALL' and scope != self.prefix):
+            scope = 'ALL'
+
+        possible_defaults = [ 
+            {'name': 'atlantis', 'params': ['region', 's3_bucket'] },
+            {'name': 'parameter_overrides', 'params': ['RolePath', 'ServiceRolePath', 'PermissionsBoundaryArn', 'S3BucketNameOrgPrefix', 'ParameterStoreHierarchy'] }
+        ]
+
+        print(f"Atlantis: {current_params}")
+        for section in possible_defaults:
+            print(f"Section Name: {section['name']}")
+            section_name = section['name']
+            section_params = section['params']
+            curr_deploy_params_for_section = current_params.get(section_name, {})
+
+            for param in section_params:
+                print(curr_deploy_params_for_section)
+                if param in curr_deploy_params_for_section:
+                    if curr_deploy_params_for_section[param]:
+                        print()
+                        click.echo(Colorize.output_with_value(f"Current {param}:", curr_deploy_params_for_section[param]))
+                        save_param = click.confirm(
+                            Colorize.question(f"Would you like to save this '{param}' value as the default choice for '{scope}' configurations?"),
+                            default=True
+                        )
+
+                        if save_param:
+                            defaults_data[section_name][param] = curr_deploy_params_for_section[param]
+
+        return defaults_data
+            
     # -------------------------------------------------------------------------
     # - Prompts: Tags
     # -------------------------------------------------------------------------
