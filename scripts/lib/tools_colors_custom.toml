@@ -2,3 +2,4 @@
 COLOR_PROMPT = "cyan"
 COLOR_SUCCESS = "green"
 # Only need to specify colors you want to override
+# Refer to tools_colors.toml for options

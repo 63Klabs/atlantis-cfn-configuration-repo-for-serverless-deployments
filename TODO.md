@@ -4,11 +4,13 @@
 
 - Default tags not saving to settings - Test prefix defaults, fix spacing, and showing of prefix heading when not needed.
 - Save service role after service role deploy and make sure it is loaded in
+- Add Pull and Commit
 - Fix tags - converting back and forth
 - Documentation
 
 ## Deploy
 
+- Add Pull and Commit
 - Test
 - Documentation
 
@@ -25,11 +27,12 @@
 ## Update
 
 - Make prompts prettier
+- Skip _custom. files
 - Documentation
 
 ## Lib
 
-- Make sure logs are being stored in the right spot
+- Make sure logs are being stored in the right spot when current working dir is not repo root
 
 ## AWS Sessions
 

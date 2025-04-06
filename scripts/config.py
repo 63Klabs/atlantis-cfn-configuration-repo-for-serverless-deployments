@@ -794,6 +794,7 @@ class ConfigManager:
         else:
             click.echo(Colorize.error(f"Failed to save default configuration to {defaults_path}"))
 
+        print()
         click.echo(Colorize.divider())
         click.echo(Colorize.output_bold(f"Prefix Defaults ({self.prefix}):"))
         print()
