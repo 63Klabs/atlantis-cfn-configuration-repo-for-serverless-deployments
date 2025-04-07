@@ -64,7 +64,7 @@ class ConfigManager:
         template_hash_id (str): Identifier based on template hash
         template_file (str): Name of the template file being used
     """
-    def __init__(self, infra_type: str, prefix: str, project_id: str, stage_id: Optional[str] = None, profile: Optional[str] = None, region: Optional[str] = None, check_stack: Optional[bool] = False):
+    def __init__(self, infra_type: str, prefix: str, project_id: str, stage_id: Optional[str] = None, profile: Optional[str] = None, region: Optional[str] = None, check_stack: Optional[bool] = False, no_browser: Optional[bool] = False):
         """
         Initialize a new ConfigManager instance.
 
@@ -94,7 +94,7 @@ class ConfigManager:
         self._validate_args()
 
         # Set up AWS session and clients
-        self.aws_session = AWSSessionManager(profile, region)
+        self.aws_session = AWSSessionManager(profile, region, no_browser)
         self.s3_client = self.aws_session.get_client('s3', region)
         self.cfn_client = self.aws_session.get_client('cloudformation', region)
 
@@ -1973,7 +1973,13 @@ Examples:
     config.py <infra_type> <prefix> <project_id> [<stage_id>] --profile <yourprofile>
         
     # Check saved configuration against deployed stack
-    config.py <infra_type> <prefix> <project_id> [<stage_id>] --profile <yourprofile> --check-stack            
+    config.py <infra_type> <prefix> <project_id> [<stage_id>] --profile <yourprofile> --check-stack    
+
+    # Optional flags:
+    --check-stack
+        Compare a deployed stack against current sam configuration file 
+    --no-browser
+        For an AWS SSO login session, whether or not to set the --no-browser flag.        
 """
 
 def parse_args() -> argparse.Namespace:
@@ -1984,6 +1990,7 @@ def parse_args() -> argparse.Namespace:
         epilog=(EPILOG)
     )
 
+    # Positional arguments
     parser.add_argument('infra_type',
                         type=str,
                         choices=VALID_INFRA_TYPES,
@@ -1999,6 +2006,8 @@ def parse_args() -> argparse.Namespace:
                         nargs='?',  # Makes it optional
                         default=None,
                         help="Deployment stage identifier (e.g. 'test', 'beta', 'stage', 'prod')")
+    
+    # Optional Named Arguments
     parser.add_argument('--profile',
                         required=False,
                         default=None,
@@ -2007,10 +2016,16 @@ def parse_args() -> argparse.Namespace:
                         required=False,
                         default=None,
                         help='AWS region (e.g. us-east-1)')
+    
+    # Optional Flags
     parser.add_argument('--check-stack',
                         action='store_true',  # This makes it a flag
                         default=False,        # Default value when flag is not used
                         help='Compare saved configuration against deployed stack.')
+    parser.add_argument('--no-browser',
+                        action='store_true',  # This makes it a flag
+                        default=False,        # Default value when flag is not used
+                        help='For an AWS SSO login session, whether or not to set the --no-browser flag.')
     
     args = parser.parse_args()
         
@@ -2032,10 +2047,13 @@ def main():
             
     
         try:
-            config_manager = ConfigManager(args.infra_type, args.prefix, 
-                                        args.project_id, args.stage_id, 
-                                        args.profile, args.region, 
-                                        args.check_stack)
+            config_manager = ConfigManager(
+                args.infra_type, args.prefix, 
+                args.project_id, args.stage_id, 
+                args.profile, args.region, 
+                args.check_stack, args.no_browser
+            )
+
         except TokenRetrievalError as e:
             ConsoleAndLog.error(f"AWS authentication error: {str(e)}")
             sys.exit(1)

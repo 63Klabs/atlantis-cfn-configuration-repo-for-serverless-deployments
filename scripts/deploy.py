@@ -35,14 +35,14 @@ ScriptLogger.setup('deploy')
 SAMCONFIG_DIR = "samconfigs"
 
 class TemplateDeployer:
-    def __init__(self, infra_type: str, prefix: str, project_id: str, stage_id: Optional[str] = "default", profile: Optional[str] = None) -> None:
+    def __init__(self, infra_type: str, prefix: str, project_id: str, stage_id: Optional[str] = "default", profile: Optional[str] = None, no_browser: Optional[bool] = False) -> None:
         self.infra_type = infra_type
         self.prefix = prefix
         self.project_id = project_id
         self.stage_id = stage_id
         self.profile = profile
 
-        self.aws_session = AWSSessionManager(profile)
+        self.aws_session = AWSSessionManager(profile, None, no_browser)
         self.s3_client = self.aws_session.get_client('s3')
 
     def get_template_from_config(self) -> str:
@@ -297,6 +297,10 @@ Examples:
 
     # With different AWS profile
     deploy.py service-role acme project123 --profile myprofile
+
+    # Optional flags:
+    --no-browser
+        For an AWS SSO login session, whether or not to set the --no-browser flag. 
 """
         
 def parse_args() -> argparse.Namespace:
@@ -311,21 +315,27 @@ def parse_args() -> argparse.Namespace:
     
     # Positional arguments
     parser.add_argument('infra_type',
-                       help='Type of infrastructure to deploy (e.g., pipeline)')
+                        help='Type of infrastructure to deploy (e.g., pipeline)')
     parser.add_argument('prefix',
-                       help='Prefix/org unit (e.g., acme)')
+                        help='Prefix/org unit (e.g., acme)')
     parser.add_argument('project_id',
-                       help='Project ID')
+                        help='Project ID')
     parser.add_argument('stage_id',
-                       nargs='?',  # Makes it optional
-                       default='default',
-                       help='Stage ID (optional, defaults to "default")')
+                        nargs='?',  # Makes it optional
+                        default='default',
+                        help='Stage ID (optional, defaults to "default")')
     
-    # Optional arguments
+    # Optional Named Arguments
     parser.add_argument('--profile', 
-                       help='AWS profile name to use',
-                       default=None)
+                        help='AWS profile name to use',
+                        default=None)
     
+    # Optional Flags
+    parser.add_argument('--no-browser',
+                        action='store_true',  # This makes it a flag
+                        default=False,        # Default value when flag is not used
+                        help='For an AWS SSO login session, whether or not to set the --no-browser flag.')
+
     args = parser.parse_args()
     
     return args
@@ -337,7 +347,11 @@ def main() -> int:
     Log.info(f"Version: {VERSION}")
 
     # Initialize deployer with profile if specified
-    deployer = TemplateDeployer(args.infra_type, args.prefix, args.project_id, args.stage_id, args.profile)
+    deployer = TemplateDeployer(
+        args.infra_type, args.prefix, 
+        args.project_id, args.stage_id, 
+        args.profile, args.no_browser
+    )
     
     # Run deployment
     try:

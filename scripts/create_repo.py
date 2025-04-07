@@ -40,7 +40,7 @@ SETTINGS_DIR = "defaults"
 
 class RepositoryCreator:
 
-    def __init__(self, repo_name: str, s3_uri: Optional[str] = None, region:  Optional[str] = None, profile: Optional[str] = None, prefix: Optional[str] = None) -> None:
+    def __init__(self, repo_name: str, s3_uri: Optional[str] = None, region:  Optional[str] = None, profile: Optional[str] = None, prefix: Optional[str] = None, no_browser: Optional[bool] = False) -> None:
         self.repo_name = repo_name
         self.s3_uri = s3_uri
         self.region = region
@@ -48,7 +48,7 @@ class RepositoryCreator:
         self.prefix = prefix
         self.tags = {}
         
-        self.aws_session = AWSSessionManager(self.profile, self.region)
+        self.aws_session = AWSSessionManager(self.profile, self.region, no_browser)
         self.s3_client = self.aws_session.get_client('s3', self.region)
         self.codecommit_client = self.aws_session.get_client('codecommit', self.region)
 
@@ -639,6 +639,10 @@ Examples:
 
     # Create repository and load code from zip using profile
     create_repo.py <repo-name> --s3-uri <s3://bucket/path/to/file.zip> --profile <profile>
+
+    # Optional flags:
+    --no-browser
+        For an AWS SSO login session, whether or not to set the --no-browser flag. 
 """
 
 def parse_args() -> argparse.Namespace:
@@ -648,9 +652,13 @@ def parse_args() -> argparse.Namespace:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=(EPILOG)
     )
+
+    # Positional arguments
     parser.add_argument('repository_name',
                         type=str,
                         help='Name of the CodeCommit repository to create')
+    
+    # Optional Named Arguments
     parser.add_argument('--s3-uri',
                         type=str,
                         required=False,
@@ -671,6 +679,12 @@ def parse_args() -> argparse.Namespace:
                         default=None,
                         help='Prefix to use for default tags. The repository name DOES NOT need the prefix.')
     
+    # Optional Flags
+    parser.add_argument('--no-browser',
+                        action='store_true',  # This makes it a flag
+                        default=False,        # Default value when flag is not used
+                        help='For an AWS SSO login session, whether or not to set the --no-browser flag.')
+
     args = parser.parse_args()
         
     return args
@@ -689,12 +703,11 @@ def main():
 
     try:
         repo_creator = RepositoryCreator(
-            args.repository_name, 
-            args.s3_uri, 
-            args.region, 
-            args.profile, 
-            args.prefix
+            args.repository_name, args.s3_uri, 
+            args.region, args.profile, 
+            args.prefix, args.no_browser
         )
+        
     except TokenRetrievalError as e:
         ConsoleAndLog.error(f"AWS authentication error: {str(e)}")
         sys.exit(1)

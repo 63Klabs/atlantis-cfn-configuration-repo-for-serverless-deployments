@@ -40,7 +40,7 @@ SETTINGS_DIR = "defaults"
 
 class UpdateManager:
 
-    def __init__(self, profile: Optional[str] = None, dryrun: Optional[bool] = False):
+    def __init__(self, profile: Optional[str] = None, dryrun: Optional[bool] = False, no_browser: Optional[bool] = False):
 
         self.profile = "default" if profile == None else profile
         self.dryrun = dryrun
@@ -64,7 +64,7 @@ class UpdateManager:
         self._validate_args()
 
         # Set up AWS session and clients
-        self.aws_session = AWSSessionManager(self.profile)
+        self.aws_session = AWSSessionManager(self.profile, None, no_browser)
         self.s3_client = self.aws_session.get_client('s3')
 
     def _validate_args(self) -> None:
@@ -722,7 +722,8 @@ Examples:
         Run with no user interaction for automated tasks.
     --dryrun
         Perform all actions (including git) but do not update files from zip.
-
+    --no-browser
+        For an AWS SSO login session, whether or not to set the --no-browser flag.
 
 -----------------
 Settings (defaults/settings.json):
@@ -821,10 +822,16 @@ def parse_args() -> argparse.Namespace:
         epilog=(EPILOG)
     )
 
+    # Positional arguments
+    # - there are no positional arguments for this script
+
+    # Optional Named Arguments
     parser.add_argument('--profile',
                         required=False,
                         default=None,
                         help='AWS credential profile name')
+    
+    # Optional Flags
     parser.add_argument('--headless',
                         action='store_true',  # This makes it a flag
                         default=False,        # Default value when flag is not used
@@ -833,7 +840,11 @@ def parse_args() -> argparse.Namespace:
                         action='store_true',  # This makes it a flag
                         default=False,        # Default value when flag is not used
                         help='Perform all actions (including git) but do not update files from zip.')
-    
+    parser.add_argument('--no-browser',
+                        action='store_true',  # This makes it a flag
+                        default=False,        # Default value when flag is not used
+                        help='For an AWS SSO login session, whether or not to set the --no-browser flag.')
+        
     args = parser.parse_args()
         
     return args
@@ -870,7 +881,11 @@ def main():
 
         # Perform Update
         try:
-            update_manager = UpdateManager(args.profile, args.dryrun)
+            update_manager = UpdateManager(
+                args.profile, args.dryrun,
+                args.no_browser
+            )
+
             zip_loc = update_manager.download_zip()
 
             # After downloading the zip file but before updating

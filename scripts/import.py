@@ -37,7 +37,7 @@ IMPORT_DIR = "local-imports"
 YAML_EXT = "yml"
 
 class ConfigImporter:
-    def __init__(self, stack_name: str, region: Optional[str] = None, profile: Optional[str] = None) -> None:
+    def __init__(self, stack_name: str, region: Optional[str] = None, profile: Optional[str] = None, no_browser: Optional[bool] = False) -> None:
         self.stack_name = stack_name
         self.region = region
         self.profile = profile
@@ -46,7 +46,7 @@ class ConfigImporter:
         self.parameters = {}
         self.capabilities = []
 
-        self.aws_session = AWSSessionManager(self.profile, self.region)
+        self.aws_session = AWSSessionManager(self.profile, self.region, no_browser)
         self.cfn_client = self.aws_session.get_client('cloudformation', self.region)
 
     # -------------------------------------------------------------------------
@@ -285,6 +285,13 @@ Examples:
 
     # Import template as well (YAML)
     import.py acme-blue-test-pipeline --template
+
+    
+    # Optional flags:
+    --template
+        Import the template as well (YAML)
+    --no-browser
+        For an AWS SSO login session, whether or not to set the --no-browser flag. 
 """
 
 def parse_args() -> argparse.Namespace:
@@ -294,8 +301,12 @@ def parse_args() -> argparse.Namespace:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=(EPILOG)
     )
+
+    # Positional arguments
     parser.add_argument('stack_name',
                         help='Name of the existing CloudFormation stack')
+    
+    # Optional Named Arguments
     parser.add_argument('--profile',
                         required=False,
                         help='AWS profile name')
@@ -303,11 +314,17 @@ def parse_args() -> argparse.Namespace:
                         required=False,
                         default=None,
                         help='AWS region (default: us-east-1)')
+    
+    # Optional Flags
     parser.add_argument('--template',
                         action='store_true',  # This makes it a flag
                         default=False,        # Default value when flag is not used
                         help='Import template')
-    
+    parser.add_argument('--no-browser',
+                        action='store_true',  # This makes it a flag
+                        default=False,        # Default value when flag is not used
+                        help='For an AWS SSO login session, whether or not to set the --no-browser flag.')
+        
     args = parser.parse_args()
         
     return args
@@ -317,7 +334,10 @@ def main():
     Log.info(f"{sys.argv}")
     Log.info(f"Version: {VERSION}")
 
-    importer = ConfigImporter(args.stack_name, args.region, args.profile)
+    importer = ConfigImporter(
+        args.stack_name, args.region, 
+        args.profile, args.no_browser
+    )
     
     try:
 
