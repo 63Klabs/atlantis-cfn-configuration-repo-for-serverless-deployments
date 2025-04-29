@@ -16,20 +16,20 @@ Initialize a new repository and download and extract the Atlantis CloudFormation
 
 ```bash
 # 
-curl -L -o repo.zip "https://github.com/chadkluck/atlantis-cfn-configuration-repo-for-serverless-deployments/archive/refs/heads/main.zip" && unzip -o -v repo.zip && mv */docs . && mv */scripts . && mv */README.md . 2>/dev/null && rm -rf repo.zip && rm -rf */
+curl -L -o repo.zip "https://github.com/chadkluck/atlantis-cfn-configuration-repo-for-serverless-deployments/archive/refs/heads/main.zip" && unzip -o -v repo.zip && mv */docs . && mv */cli . && mv */README.md . 2>/dev/null && rm -rf repo.zip && rm -rf */
 
 ```
 
-This repository will host the scripts and deployment configurations for storage, network, pipeline, and IAM roles. Developers will use the scripts to manage their deployment configurations and commit and push their changes into the repository.
+This repository will host the cli and deployment configurations for storage, network, pipeline, and IAM roles. Developers will use the cli to manage their deployment configurations and commit and push their changes into the repository.
 
-Make the scripts executable:
+Make the cli executable:
 
 ```bash
-chmod +x ./scripts/*.py
-chmod +x ./scripts/*.sh
+chmod +x ./cli/*.py
+chmod +x ./cli/*.sh
 ```
 
-> It is important to **pull** any changes to the local machine, **configure** and **deploy** an infrastructure stack using the scripts, and then **commit** and **push** the configuration changes back to the remote repository for proper version control.
+> It is important to **pull** any changes to the local machine, **configure** and **deploy** an infrastructure stack using the cli, and then **commit** and **push** the configuration changes back to the remote repository for proper version control.
 
 ## 2. Configure CloudFormation Roles for Developers
 

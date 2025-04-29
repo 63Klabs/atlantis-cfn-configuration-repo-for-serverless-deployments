@@ -21,16 +21,16 @@ The `63klabs` (released) and `63klabz` (beta) buckets are default and publicly a
 
 ```bash
 # You may need to add --profile yourprofile if not using the default AWS CLI profile
-# Python scripts will automatically check for current credentials an initiate a login if necessary.
+# Python cli will automatically check for current credentials an initiate a login if necessary.
 
 # See options
-./scripts/create_repo.py -h
+./cli/create_repo.py -h
 
 # Create a CodeCommit repository and seed it with an application starter from a list of choices
-./scripts/create_repo.py your-repo-name --profile yourprofile
+./cli/create_repo.py your-repo-name --profile yourprofile
 
 # Create a CodeCommit repository and seed it with an application starter from a zip in S3
-./scripts/create_repo.py your-repo-name --s3-uri s3://bucket/path/to/file.zip --profile yourprofile
+./cli/create_repo.py your-repo-name --s3-uri s3://bucket/path/to/file.zip --profile yourprofile
 ```
 
 Choose the application starter and fill in the prompts.

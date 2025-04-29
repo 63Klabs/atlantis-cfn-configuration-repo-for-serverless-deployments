@@ -4,7 +4,7 @@ VERSION = "v0.1.0/2025-02-28"
 # Developed by Chad Kluck with AI assistance from Amazon Q Developer
 
 """
-Logger functions for command line scripts.
+Logger functions for command line cli.
 
 Usage Example:
 
@@ -35,7 +35,7 @@ class ScriptLogger:
         raise RuntimeError("Use ScriptLogger.setup() or ScriptLogger.get_logger()")
     
     @classmethod
-    def setup(cls, script_name: str, log_dir: str = "scripts/logs") -> logging.Logger:
+    def setup(cls, script_name: str, log_dir: str = "cli/logs") -> logging.Logger:
         """Initialize the logger for a specific script
         
         Args:

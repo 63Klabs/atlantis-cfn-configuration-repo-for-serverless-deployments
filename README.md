@@ -1,12 +1,12 @@
 # Atlantis Configuration Repository for Serverless Deployments using AWS SAM
 
-A central repository structure and scripts to store, manage, and deploy supporting SAM configuration files for serverless infrastructure (such as pipelines). Various scripts allow for importing existing stack configurations, creating and seeding application repositories, managing tags, and updating multi-stage deployments all while using standard `samconfig` files.
+A central repository structure and cli to store, manage, and deploy supporting SAM configuration files for serverless infrastructure (such as pipelines). Various cli allow for importing existing stack configurations, creating and seeding application repositories, managing tags, and updating multi-stage deployments all while using standard `samconfig` files.
 
 While applications should be deployed using automated pipelines, those pipelines need to be created and managed. In addition to pipelines, applications may also have persistent S3, DynamoDb, Route53, and CloudFront resources outside of the main application stack.
 
 SAM configuration files (`samconfig`) can handle stack configurations but cannot scale to handle tags and parameter overrides among multiple deployment stages. SAM config files also do not support utilizing templates stored in S3.
 
-These scripts and templates overcome those limitations and establish a structured approach to managing deployments.
+These cli and templates overcome those limitations and establish a structured approach to managing deployments.
 
 ## Prerequisites
 
@@ -24,56 +24,56 @@ These instructions assume you have an AWS account, AWS CLI, SAM, and profile con
 **If you are a developer** your organization should already have the configuration repository established. Obtain necessary information about the repository location, prefix, cf bucket, and other requirements from your administrator. If you do not yet have an AWS development environment set up see [Set-Up-Local-Environment](./docs/00-Set-Up-Local-Environment.md).
 
 1. Clone this repository from your organization's version control system
-2. Make scripts executable
+2. Make cli executable
 
 ```bash
-chmod +x ./scripts/*.py
-chmod +x ./scripts/*.sh
+chmod +x ./cli/*.py
+chmod +x ./cli/*.sh
 ```
 
 ## Basic Usage Examples
 
 ```bash
 # You may need to add --profile yourprofile if not using the default AWS CLI profile
-# Python scripts will automatically check for current credentials an initiate a login if necessary.
+# Python cli will automatically check for current credentials an initiate a login if necessary.
 
 # Create a CodeCommit repository and seed it with an application starter from a list of choices
-./scripts/create_repo.py your-repo-name
+./cli/create_repo.py your-repo-name
 
 # Create a CodeCommit repository and seed it with an application starter from a zip in S3
-./scripts/create_repo.py your-repo-name --s3-uri s3://bucket/path/to/file.zip
+./cli/create_repo.py your-repo-name --s3-uri s3://bucket/path/to/file.zip
 
 # Create a GitHub repository and seed it with an application starter from a zip in S3 (requires GitHub CLI)
-./scripts/create-gh-repo.sh your-repo-name s3://bucket/path/to/file.zip
+./cli/create-gh-repo.sh your-repo-name s3://bucket/path/to/file.zip
 
 # Create a GitHub repository and seed it with an application starter from a GitHub repository (requires GitHub CLI)
-./scripts/create-gh-repo.sh your-repo-name https://github.com/someacct/some-repository
+./cli/create-gh-repo.sh your-repo-name https://github.com/someacct/some-repository
 
 # Create/Manage a pipeline infrastructure stack for your application's test branch
-./scripts/config.py pipeline acme your-webapp test
+./cli/config.py pipeline acme your-webapp test
 
 # Deploy a pipeline infrastructure stack for your application's test branch
-./scripts/deploy.py pipeline acme your-webapp test # we do this instead of sam deploy because it can handle templates in S3
+./cli/deploy.py pipeline acme your-webapp test # we do this instead of sam deploy because it can handle templates in S3
 
 # Import an existing stack
-./scripts/import.py stack-to-import
+./cli/import.py stack-to-import
 
 # Import an existing stack with template
-./scripts/import.py acme-blue-test-pipeline --template
+./cli/import.py acme-blue-test-pipeline --template
 ```
 
 ### Create a New Repository for Your Application
 
 Various serverless application starters are available to seed your repository depending on what type of application you wish to build.
 
-Two scripts (one for CodeCommit, one for GitHub) are provided that will automatically create your repository and seed it with the necessary code files.
+Two cli (one for CodeCommit, one for GitHub) are provided that will automatically create your repository and seed it with the necessary code files.
 
 #### CodeCommit
 
 Starting a new application using a CodeCommit repository is as simple as:
 
 ```bash
-./scripts/create_repo.py your-webapp --profile yourprofile
+./cli/create_repo.py your-webapp --profile yourprofile
 ```
 
 Where `your-webapp` is the name of your repository and `yourprofile` is the AWS profile to use (it may be `default`).
@@ -85,7 +85,7 @@ You will then be prompted to choose an application starter followed by additiona
 Starting a new application using a GitHub repository is as simple as:
 
 ```bash
-./scripts/create-gh-repo.sh your-webapp s3://your-template-bucket/path/to/app-starter.zip yourprofile
+./cli/create-gh-repo.sh your-webapp s3://your-template-bucket/path/to/app-starter.zip yourprofile
 ```
 
 This assumes you have GitHub CLI (`gh`) installed and valid GitHub and AWS credentials.
@@ -111,7 +111,7 @@ We need to create a pipeline to monitor changes pushed to the test branch and th
 You can use the configure script to manage your pipeline.
 
 ```bash
-./scripts/config.py pipeline acme your-webservice test --profile yourprofile
+./cli/config.py pipeline acme your-webservice test --profile yourprofile
 ```
 
 Where `pipeline` is the type of infrastructure you are creating (more on that later), `acme` is your Prefix, `your-webservice` is your application Project Identifier, `test` is the branch/deployment stage identifier, and profile is your configured profile.
@@ -125,7 +125,7 @@ The script will then ask you to choose a template, add application deployment in
 To deploy the pipeline infrastructure stack:
 
 ```bash
-./scripts/deploy.py acme your-webservice test --profile yourprofile
+./cli/deploy.py acme your-webservice test --profile yourprofile
 ```
 
 This will then utilize the stored configuration and deploy the pipeline stack using `sam deploy` on your behalf. 
@@ -147,7 +147,7 @@ To maintain CloudFormation best practices, and to avoid monolithic architecture,
 2. pipeline: Code Pipeline, Code Build, Code Deploy (developer or dev/ops role)
 3. network: CloudFront, Route53, Certificate Manager (operations role)
 
-Through the use of scripts you can manage these stacks and store their configurations in this repository. They do not change as frequently as your application, are relatively static, do not rely on Git-based pipelines, and may be handled by different roles within your organization.
+Through the use of cli you can manage these stacks and store their configurations in this repository. They do not change as frequently as your application, are relatively static, do not rely on Git-based pipelines, and may be handled by different roles within your organization.
 
 #### Storage
 
@@ -157,7 +157,7 @@ Because it is managed externally of your application stack, it does not have a S
 
 ```bash
 # Storage
-./scripts/config.py storage your-webservice --profile yourprofile
+./cli/config.py storage your-webservice --profile yourprofile
 ```
 
 #### Network
@@ -166,7 +166,7 @@ We separate out domain names (Route53) and Content Delivery Network (CloudFormat
 
 ```bash
 # Network
-./scripts/config.py network your-webservice test --profile yourprofile
+./cli/config.py network your-webservice test --profile yourprofile
 ```
 
 ## Templates Should Utilize the Principle of Least Privilege
@@ -179,7 +179,7 @@ For example, the CloudFormation pipeline templates can only create a pipeline fo
 
 > Still in development
 
-To update the scripts and documentation from the GitHub repository run the `update.py` script.
+To update the cli and documentation from the GitHub repository run the `update.py` script.
 
 The following settings will eventually be moved to the `defaults/settings.json` directory. For now you will need to update environment variables. You can also download a zip file (such as a prior release) and update from there.
 

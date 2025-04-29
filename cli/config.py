@@ -1557,7 +1557,7 @@ class ConfigManager:
     
     def get_script_deploy_command(self, stage_id: str) -> str:
         ### Get the script deploy command ###
-        return f"./scripts/deploy.py {self.infra_type} {self.prefix} {self.project_id} {stage_id} --profile {self.profile}"
+        return f"./cli/deploy.py {self.infra_type} {self.prefix} {self.project_id} {stage_id} --profile {self.profile}"
 
 
     def save_config(self, config: Dict) -> None:
@@ -1657,15 +1657,15 @@ class ConfigManager:
             click.echo(Colorize.output_with_value("Configuration saved to", samconfig_path_relative))
             click.echo(Colorize.output_bold("Deploy commands are saved in the samconfig file for later reference."))
 
-            # If self.template_file is s3 then display ./scripts/deploy.py message
+            # If self.template_file is s3 then display ./cli/deploy.py message
             if self.template_file.startswith('s3://'):
                 click.echo(Colorize.output_bold("Since the template is in S3, 'sam deploy' will NOT work."))
-                click.echo(Colorize.output_bold("Use ./scripts/deploy.py instead"))
+                click.echo(Colorize.output_bold("Use ./cli/deploy.py instead"))
             else:
                 click.echo(Colorize.output_bold(f"You must be in the {saved_dir} directory to run the 'sam deploy' command:"))
                 click.echo(Colorize.output(f"cd {saved_dir}"))
                 click.echo(Colorize.output(self.get_sam_deploy_command(self.stage_id)))
-                click.echo(Colorize.output_bold("Otherwise, you can run the ./scripts/deploy.py script from here:"))
+                click.echo(Colorize.output_bold("Otherwise, you can run the ./cli/deploy.py script from here:"))
             
             click.echo(Colorize.output(self.get_script_deploy_command(self.stage_id)))
             print()

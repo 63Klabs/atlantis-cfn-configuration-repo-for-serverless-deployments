@@ -250,7 +250,7 @@ class RepositoryCreator:
                             '.php', '.phtml', '.php3', '.php4',      # PHP
                             '.go', '.rs', '.r', '.pl', '.pm',        # Go, Rust, R, Perl
                             
-                            # Shell and Scripts
+                            # Shell and cli
                             '.sh', '.bash', '.zsh', '.fish',
                             '.bat', '.cmd', '.ps1', '.psm1',
                             

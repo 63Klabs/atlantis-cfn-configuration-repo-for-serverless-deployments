@@ -4,7 +4,7 @@ It is recommend you utilize a separate repository and S3 bucket to store your te
 
 It is best practice to keep your templates and configuration files separate, version them, and to limit the number of users who have access to change the templates.
 
-> The [Atlantis Template Repository for Serverless Deployments using AWS SAM](https://github.com/chadkluck/atlantis-template-repo-for-serverless-deployments) provides scripts and AWS CloudFormation templates for managing an S3 template bucket with versioning.
+> The [Atlantis Template Repository for Serverless Deployments using AWS SAM](https://github.com/chadkluck/atlantis-template-repo-for-serverless-deployments) provides cli and AWS CloudFormation templates for managing an S3 template bucket with versioning.
 
 By default, all templates in this directory are git ignored! Comment out the appropriate lines in .gitignore to include them.
 

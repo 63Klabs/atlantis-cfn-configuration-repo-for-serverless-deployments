@@ -4,7 +4,7 @@ VERSION = "v0.1.0/2025-02-28"
 # Developed by Chad Kluck with AI assistance from Amazon Q Developer
 
 """
-Tools specific to Atlantis scripts
+Tools specific to Atlantis cli
 """
 
 import json

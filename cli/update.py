@@ -33,7 +33,7 @@ DEFAULT_GITHUB_REPO = "chadkluck/atlantis-cfn-configuration-repo-for-serverless-
 DEFAULT_S3_BUCKET = "63klabs"
 DEFAULT_S3_PATH = "/atlantis/utilities/v2/"
 
-TARGET_DIRS = ['docs', 'scripts']
+TARGET_DIRS = ['docs', 'cli']
 DEFAULT_SRC = f"https://github.com/{DEFAULT_GITHUB_REPO}"
 DEFAULT_SRC_VER = "release:latest"
 SETTINGS_DIR = "defaults"
@@ -171,7 +171,7 @@ class UpdateManager:
 
         # https://github.com/chadkluck/atlantis-cfn-configuration-repo-for-serverless-deployments/archive/refs/heads/main.zip
         # https://github.com/chadkluck/atlantis-cfn-configuration-repo-for-serverless-deployments/archive/refs/tags/v1.1.4.zip
-        # s3://63klabs/atlantis/utilities/v2/config_scripts.zip
+        # s3://63klabs/atlantis/utilities/v2/config_cli.zip
 
         if src_type == "github":
             # Get owner and repo from source
@@ -207,7 +207,7 @@ class UpdateManager:
 
             # if path is blank or / then use default
             if path == "" or path == "/":
-                path = f"{DEFAULT_S3_PATH}config_scripts.zip"
+                path = f"{DEFAULT_S3_PATH}config_cli.zip"
 
             if ver == "latest":
                 return f"s3://{bucket}{path}"
@@ -607,7 +607,7 @@ class GitOperationsManager:
                     click.echo(Colorize.error("Please enter 'YES' or 'NO'"))
 
             if choice.strip() == 'YES':
-                default_commit_msg = "chore: Updated scripts with latest release"
+                default_commit_msg = "chore: Updated cli with latest release"
                 commit_msg = default_commit_msg if self.headless else ""
                 # Get commit message from user
                 while commit_msg == "":
@@ -738,7 +738,7 @@ Otherwise, you can customize where updates are downloaded from:
 	"updates": {
 		"source": "https://github.com/chadkluck/atlantis-cfn-configuration-repo-for-serverless-deployments",
 		"ver": "release:latest",
-		"target_dirs": [ "docs", "scripts" ]
+		"target_dirs": [ "docs", "cli" ]
 }
 
 
@@ -748,7 +748,7 @@ Otherwise, you can customize where updates are downloaded from:
 	"updates": {
 		"source": "https://github.com/chadkluck/atlantis-cfn-configuration-repo-for-serverless-deployments",
 		"ver": "commit:latest",
-		"target_dirs": [ "docs", "scripts" ]
+		"target_dirs": [ "docs", "cli" ]
 	}
 }
 
@@ -756,31 +756,31 @@ Otherwise, you can customize where updates are downloaded from:
 
 {
 	"updates": {
-		"source": "s3://63klabs/atlantis/utilities/v2/config_scripts.zip",
+		"source": "s3://63klabs/atlantis/utilities/v2/config_cli.zip",
         "ver": "latest",
-		"target_dirs": [ "docs", "scripts" ]
+		"target_dirs": [ "docs", "cli" ]
 	}
 }
 
 {
 	"updates": {
-		"source": "s3://63klabs/atlantis/utilities/v2/config_scripts.zip",
+		"source": "s3://63klabs/atlantis/utilities/v2/config_cli.zip",
         "ver": "74ssh_some-version-12345",
-		"target_dirs": [ "docs", "scripts" ]
+		"target_dirs": [ "docs", "cli" ]
 	}
 }
 
 {
 	"updates": {
 		"source": "~/downloaded.zip",
-		"target_dirs": [ "docs", "scripts" ]
+		"target_dirs": [ "docs", "cli" ]
 	}
 }
 
 https://github.com/chadkluck/atlantis-cfn-configuration-repo-for-serverless-deployments
 https://github.com/chadkluck/atlantis-cfn-configuration-repo-for-serverless-deployments/archive/refs/heads/main.zip
 https://github.com/chadkluck/atlantis-cfn-configuration-repo-for-serverless-deployments/archive/refs/tags/v0.0.1.zip
-s3://63klabs/atlantis/utilities/v2/config_scripts.zip
+s3://63klabs/atlantis/utilities/v2/config_cli.zip
 s3://63klabs # since this is known, the script will fill in the path itself
 
 ------------------
@@ -798,12 +798,12 @@ ONLY USE TRUSTED SOURCES - You can host your own s3 bucket or GitHub repository 
 -----------------
 Target Directories:
 
-"docs" and "scripts" are the only valid target_dirs. You can include one, both, or leave target_dirs as [] (never update even when script is run)
+"docs" and "cli" are the only valid target_dirs. You can include one, both, or leave target_dirs as [] (never update even when script is run)
 
     - docs : overwrites docs/*
-    - scripts : overwrites scripts/*
+    - cli : overwrites cli/*
 
-It is recommended you store custom docs and scripts OUTSIDE the provided directories. While update.py does not currently delete files, it will replace any with conflicting names.
+It is recommended you store custom docs and cli OUTSIDE the provided directories. While update.py does not currently delete files, it will replace any with conflicting names.
 
 -----------------
 Self-Hosted ZIPs
@@ -817,7 +817,7 @@ ALL OTHER ZIPS (s3 and locally downloaded) MUST have all files in the base direc
 def parse_args() -> argparse.Namespace:
 
     parser = argparse.ArgumentParser(
-        description='Update Scripts and Documentation',
+        description='Update cli and Documentation',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=(EPILOG)
     )

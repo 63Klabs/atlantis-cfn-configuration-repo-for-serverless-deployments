@@ -1,1 +1,1 @@
-See [CHANGELOG](./scripts/CHANGELOG.md) in scripts directory.
+See [CHANGELOG](./cli/CHANGELOG.md) in cli directory.

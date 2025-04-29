@@ -29,7 +29,7 @@ samconfigs/xcme
 # Why? - You can use imports for temporary storage as you work on converting to proper configurations. 
 #        Logs can easily conflict and provide no usable info across developers.
 local-imports
-scripts/logs
+cli/logs
 
 # Comment out/remove these lines if you are storing your own templates in this repo - NOT RECOMMENDED
 # Why? - You should really apply versioning to your templates so deploys are consistent.

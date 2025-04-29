@@ -1,8 +1,8 @@
 # Local Environment Requirements
 
-The commands and scripts used in these tutorials assume a Linux-like environment and some familarity with Command Line Interface (CLI) via the terminal. On Windows, [Git for Windows](https://gitforwindows.org/) or [Windows Subsystem for Linux (WSL)](https://learn.microsoft.com/en-us/windows/wsl/about) can be used.
+The commands and cli used in these tutorials assume a Linux-like environment and some familarity with Command Line Interface (CLI) via the terminal. On Windows, [Git for Windows](https://gitforwindows.org/) or [Windows Subsystem for Linux (WSL)](https://learn.microsoft.com/en-us/windows/wsl/about) can be used.
 
-> Note: If you already have AWS CLI and SAM installed, skip to the Python section as you will need to use `pip` to install some Python libraries used by the scripts.
+> Note: If you already have AWS CLI and SAM installed, skip to the Python section as you will need to use `pip` to install some Python libraries used by the cli.
 
 ## AWS CLI Installation:
 
@@ -62,15 +62,15 @@ Make sure you have appropriate AWS credentials and permissions set up to use the
 
 ## If Using GitHub
 
-If you are using GitHub for your repositories, in order to use the GitHub scripts provided you must have GitHub CLI installed.
+If you are using GitHub for your repositories, in order to use the GitHub cli provided you must have GitHub CLI installed.
 
 ## Set Up Python
 
-Make sure you have at least Python 3.12 installed. The scripts use the `python3` command to execute. So you will need to set up an alias for `python3` if you currently use `py` or `python`.
+Make sure you have at least Python 3.12 installed. The cli use the `python3` command to execute. So you will need to set up an alias for `python3` if you currently use `py` or `python`.
 
-This repository contains a variety of scripts which use Python libraries.
+This repository contains a variety of cli which use Python libraries.
 
-All the libraries necessary are listed in `./scripts/requirements.txt`.
+All the libraries necessary are listed in `./cli/requirements.txt`.
 
 Depending on how your system is set up, you can use one of two methods to install the required libraries via `pip`.
 

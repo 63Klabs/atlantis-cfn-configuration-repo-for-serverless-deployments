@@ -4,7 +4,7 @@ VERSION = "v0.1.0/2025-02-28"
 # Developed by Chad Kluck with AI assistance from Amazon Q Developer
 
 """
-AWS Session Manager for scripts using boto3
+AWS Session Manager for cli using boto3
 Automatically detects if a session needs to be refreshed and (if SSO) invokes the sso login
 
 Usage:
