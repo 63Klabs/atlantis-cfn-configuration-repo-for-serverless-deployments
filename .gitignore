@@ -25,7 +25,7 @@ defaults/**/xcme-*
 samconfigs/acme
 samconfigs/xcme
 
-# Comment out/remove these lines if you want your configuration imports and script log files in the repo - NOT RECOMMENDED
+# Comment out/remove these lines if you want your configuration imports and cli log files in the repo - NOT RECOMMENDED
 # Why? - You can use imports for temporary storage as you work on converting to proper configurations. 
 #        Logs can easily conflict and provide no usable info across developers.
 local-imports

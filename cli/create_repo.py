@@ -469,7 +469,7 @@ class RepositoryCreator:
 
     def get_settings_dir(self) -> Path:
         """Get the settings directory path"""
-        # Get the script's directory in a cross-platform way
+        # Get the cli directory in a cross-platform way
         script_dir = Path(__file__).resolve().parent
         return script_dir.parent / SETTINGS_DIR
     

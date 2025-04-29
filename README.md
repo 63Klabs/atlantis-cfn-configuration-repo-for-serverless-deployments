@@ -78,7 +78,7 @@ Starting a new application using a CodeCommit repository is as simple as:
 
 Where `your-webapp` is the name of your repository and `yourprofile` is the AWS profile to use (it may be `default`).
 
-You will then be prompted to choose an application starter followed by additional information such as tags for your repository. The script will then create the repository, place the application starter code in it, and provide you with the clone url.
+You will then be prompted to choose an application starter followed by additional information such as tags for your repository. The cli will then create the repository, place the application starter code in it, and provide you with the clone url.
 
 #### GitHub
 
@@ -94,7 +94,7 @@ Replace `your-webapp` is the name of your repository followed by source url and 
 
 > NOTE: The source url may be either a full S3 path to a zip file, or the GitHub URL of the repository to use. (Just include the repository URL, NOT the ZIP download URL)
 
-The script will then create the repository, place the application starter code in it, and provide you with the clone url.
+The cli will then create the repository, place the application starter code in it, and provide you with the clone url.
 
 ### Configure a Pipeline for Automated Deployments
 
@@ -108,7 +108,7 @@ As you start to develop new features you will begin with a `dev` branch. You wil
 
 We need to create a pipeline to monitor changes pushed to the test branch and then perform the deployment process. Luckily we have pipeline templates to use and a simple procedure to create that pipeline.
 
-You can use the configure script to manage your pipeline.
+You can use the configure cli script to manage your pipeline.
 
 ```bash
 ./cli/config.py pipeline acme your-webservice test --profile yourprofile
@@ -116,7 +116,7 @@ You can use the configure script to manage your pipeline.
 
 Where `pipeline` is the type of infrastructure you are creating (more on that later), `acme` is your Prefix, `your-webservice` is your application Project Identifier, `test` is the branch/deployment stage identifier, and profile is your configured profile.
 
-The script will then ask you to choose a template, add application deployment information, what repository and branch to monitor, and tags.
+The cli will then ask you to choose a template, add application deployment information, what repository and branch to monitor, and tags.
 
 > Note: Current pipeline templates only utilize CodeCommit repositories. You can download and modify an existing template to use a GitHub or other provider as a Code Source. Store the template in the `./local-templates/pipeline` directory. When you run config.py with the `pipeline` infrastructure type, it will present you with the option to use your custom, local template.
 
@@ -132,11 +132,11 @@ This will then utilize the stored configuration and deploy the pipeline stack us
 
 After the deployment is complete you should commit your configuration changes back to the central repository.
 
-You'll notice that all the `samconfig` files are stored in the `samconfig` directory. The `deploy.py` script provides additional functionality that `sam deploy` doesn't provide (such as S3 urls for template source).
+You'll notice that all the `samconfig` files are stored in the `samconfig` directory. The `deploy.py` cli provides additional functionality that `sam deploy` doesn't provide (such as S3 urls for template source).
 
 Remember:
 
-- Even though we are utilizing `samconfig` files to store configurations, do not edit them directly. Utilize the `config.py` script as it will prevent `toml` format errors and can handle `parameter_overrides`, `tags`, and multiple deployment stages.
+- Even though we are utilizing `samconfig` files to store configurations, do not edit them directly. Utilize the `config.py` cli as it will prevent `toml` format errors and can handle `parameter_overrides`, `tags`, and multiple deployment stages.
 - Always commit and push your configuration changes back to the repository so that it remains current.
 
 ### Additional Infrastructure
@@ -179,7 +179,7 @@ For example, the CloudFormation pipeline templates can only create a pipeline fo
 
 > Still in development
 
-To update the cli and documentation from the GitHub repository run the `update.py` script.
+To update the cli and documentation from the GitHub repository run the `update.py` cli script.
 
 The following settings will eventually be moved to the `defaults/settings.json` directory. For now you will need to update environment variables. You can also download a zip file (such as a prior release) and update from there.
 

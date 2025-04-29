@@ -16,7 +16,7 @@ If if you wish to keep a local copy of a template from `s3://63klabs` or other p
 aws s3 cp s3://63klabs/atlantis/templates/v2/service-role/template-service-role.yml ./templates/service-role/ --profile yourprofile
 ```
 
-Templates stored locally must be in their infrastructure type directory in order to be located and used by the `config.py` script.
+Templates stored locally must be in their infrastructure type directory in order to be located and used by the `config.py` cli.
 
 For a list of templates and versions:
 
