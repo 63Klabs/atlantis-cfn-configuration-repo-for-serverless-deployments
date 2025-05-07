@@ -186,7 +186,7 @@ The following settings will eventually be moved to the `defaults/settings.json` 
 ```bash
 # For Git repository
 export UPDATE_SOURCE_TYPE=git
-export SOURCE_LOCATION=https://github.com/chadkluck/atlantis-cfn-configuration-repo-for-serverless-deployments.git
+export SOURCE_LOCATION=https://github.com/63klabs/atlantis-cfn-configuration-repo-for-serverless-deployments.git
 # OR for CodeCommit
 export SOURCE_LOCATION=https://git-codecommit.region.amazonaws.com/v1/repos/your-repo
 

@@ -12,7 +12,7 @@ The CloudFormation templates for each application feature definitions for CloudW
 
 Start Here: 
 
-- [00 Basic API Gateway Lambda Node.js](https://github.com/chadkluck/atlantis-app-starter-00-basic-apigw-lambda-nodejs/).
+- [00 Basic API Gateway Lambda Node.js](https://github.com/63klabs/atlantis-app-starter-00-basic-apigw-lambda-nodejs/).
 
 Then try the near production-ready application starters (recommended order):
 

@@ -16,7 +16,7 @@ Initialize a new repository and download and extract the Atlantis CloudFormation
 
 ```bash
 # 
-curl -L -o repo.zip "https://github.com/chadkluck/atlantis-cfn-configuration-repo-for-serverless-deployments/archive/refs/heads/main.zip" && unzip -o -v repo.zip && mv */docs . && mv */cli . && mv */README.md . 2>/dev/null && rm -rf repo.zip && rm -rf */
+curl -L -o repo.zip "https://github.com/63klabs/atlantis-cfn-configuration-repo-for-serverless-deployments/archive/refs/heads/main.zip" && unzip -o -v repo.zip && mv */docs . && mv */cli . && mv */README.md . 2>/dev/null && rm -rf repo.zip && rm -rf */
 
 ```
 
