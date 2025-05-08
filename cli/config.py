@@ -1004,18 +1004,39 @@ class ConfigManager:
                 "Key": "AlarmNotificationEmail",
                 "Value": parameters['AlarmNotificationEmail']
             })
+        # Add Repository if defined
+        if parameters.get('Repository'):
+            tags.append({
+                "Key": "Repository",
+                "Value": parameters['Repository']
+            })
+
+        # Add RepositoryBranch if defined
+        if parameters.get('RepositoryBranch'):
+            tags.append({
+                "Key": "RepositoryBranch",
+                "Value": parameters['RepositoryBranch']
+            })
 
         # Add CodeCommitRepository if defined
-        if parameters.get('Repository'):
+        if parameters.get('CodeCommitRepository'):
             tags.append({
                 "Key": "CodeCommitRepository",
                 "Value": parameters['CodeCommitRepository']
             })
+            tags.append({
+                "Key": "Repository",
+                "Value": parameters['CodeCommitRepository']
+            })
 
         # Add CodeCommitBranch if defined
-        if parameters.get('RepositoryBranch'):
+        if parameters.get('CodeCommitBranch'):
             tags.append({
                 "Key": "CodeCommitBranch",
+                "Value": parameters['CodeCommitBranch']
+            })
+            tags.append({
+                "Key": "RepositoryBranch",
                 "Value": parameters['CodeCommitBranch']
             })
 
