@@ -1996,11 +1996,6 @@ Examples:
     # Check saved configuration against deployed stack
     config.py <infra_type> <prefix> <project_id> [<stage_id>] --profile <yourprofile> --check-stack    
 
-    # Optional flags:
-    --check-stack
-        Compare a deployed stack against current sam configuration file 
-    --no-browser
-        For an AWS SSO login session, whether or not to set the --no-browser flag.        
 """
 
 def parse_args() -> argparse.Namespace:
@@ -2015,7 +2010,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('infra_type',
                         type=str,
                         choices=VALID_INFRA_TYPES,
-                        help="Type of infrastructure (e.g., 'storage', 'pipeline', 'network')")
+                        help=f"Type of infrastructure to deploy: ${VALID_INFRA_TYPES}")
     parser.add_argument('prefix',
                         type=str,
                         help='The prefix to use for stack names and resources')
@@ -2042,7 +2037,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('--check-stack',
                         action='store_true',  # This makes it a flag
                         default=False,        # Default value when flag is not used
-                        help='Compare saved configuration against deployed stack.')
+                        help='Compare a deployed stack against current sam configuration file.')
     parser.add_argument('--no-browser',
                         action='store_true',  # This makes it a flag
                         default=False,        # Default value when flag is not used

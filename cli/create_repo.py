@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-VERSION = "v0.1.0/2025-02-28"
+VERSION = "v0.1.1/2025-05-20"
 # Created by Chad Kluck with AI assistance from Amazon Q Developer
 # GitHub Copilot assisted in color formats of output and prompts
 
@@ -37,16 +37,19 @@ if sys.version_info[0] < 3:
 ScriptLogger.setup('create_repo')
 
 SETTINGS_DIR = "defaults"
+VALID_PROVIDERS = ['codecommit', 'github']
 
 class RepositoryCreator:
 
-    def __init__(self, repo_name: str, s3_uri: Optional[str] = None, region:  Optional[str] = None, profile: Optional[str] = None, prefix: Optional[str] = None, no_browser: Optional[bool] = False) -> None:
+    def __init__(self, repo_name: str, source: Optional[str] = None, region:  Optional[str] = None, profile: Optional[str] = None, prefix: Optional[str] = None, provider: Optional[str] = None, no_browser: Optional[bool] = False) -> None:
         self.repo_name = repo_name
-        self.s3_uri = s3_uri
+        # self.s3_uri = s3_uri
         self.region = region
         self.profile = profile
         self.prefix = prefix
         self.tags = {}
+
+        self.source, self.source_type = self._determine_source(source)
         
         self.aws_session = AWSSessionManager(self.profile, self.region, no_browser)
         self.s3_client = self.aws_session.get_client('s3', self.region)
@@ -79,6 +82,28 @@ class RepositoryCreator:
         except ValueError as e:
             click.echo(Colorize.error(f"Error parsing S3 URL: {str(e)}"))
             Log.error(f"Error: {str(e)}")
+            sys.exit(1)
+
+    def _determine_source(self, source: Optional[str]) -> (str, str):
+        """Determine the source type and return the source URL and type"""
+        if source is None:
+            return None, None
+
+        # Check if the source is a valid S3 URL
+        if source.startswith('s3://'):
+            return source, 's3'
+
+        # Check if the source is a valid GitHub release URL
+        elif re.match(r'https?://(www\.)?github\.com/.+/.+/releases(/tag)?/.+', source):
+            return source, 'github_release'
+        
+        # Check if the source is a valid GitHub URL
+        elif re.match(r'https?://(www\.)?github\.com/.+/.+', source):
+            return source, 'github'
+
+        else:
+            click.echo(Colorize.error(f"Invalid source URL: {source}"))
+            Log.error(f"Error: Invalid source URL: {source}")
             sys.exit(1)
 
     # -------------------------------------------------------------------------
@@ -638,11 +663,16 @@ Examples:
     create_repo.py <repo-name> --s3-uri <s3://bucket/path/to/file.zip>
 
     # Create repository and load code from zip using profile
-    create_repo.py <repo-name> --s3-uri <s3://bucket/path/to/file.zip> --profile <profile>
+    create_repo.py <repo-name> --source <s3://bucket/path/to/file.zip> --profile <profile>
 
-    # Optional flags:
-    --no-browser
-        For an AWS SSO login session, whether or not to set the --no-browser flag. 
+    # Create repository and load code from GitHub repo
+    create_repo.py <repo-name> --source https://github.com/<user>/<repo>
+
+    # Create repository and load code from GitHub latest release
+    create_repo.py <repo-name> --source https://github.com/<user>/<repo>/releases/
+
+    # Create repository and load code from GitHub specific release
+    create_repo.py <repo-name> --source https://github.com/<user>/<repo>/releases/tag/<tag>
 """
 
 def parse_args() -> argparse.Namespace:
@@ -659,10 +689,11 @@ def parse_args() -> argparse.Namespace:
                         help='Name of the CodeCommit repository to create')
     
     # Optional Named Arguments
-    parser.add_argument('--s3-uri',
+    parser.add_argument('--source',
                         type=str,
                         required=False,
-                        help='S3 URL of the zip file (e.g., s3://bucket-name/path/to/file.zip)')
+                        help='S3 URL of the zip file, GitHub repository URL, or GitHub release URL')
+
     parser.add_argument('--profile',
                         type=str,
                         required=False,
@@ -678,13 +709,19 @@ def parse_args() -> argparse.Namespace:
                         required=False,
                         default=None,
                         help='Prefix to use for default tags. The repository name DOES NOT need the prefix.')
+    parser.add_argument('--provider',
+                        type=str,
+                        required=False,
+                        choices=VALID_PROVIDERS,
+                        default=None,
+                        help=f'Type of repository to create. ${VALID_PROVIDERS}.')
     
     # Optional Flags
     parser.add_argument('--no-browser',
                         action='store_true',  # This makes it a flag
                         default=False,        # Default value when flag is not used
                         help='For an AWS SSO login session, whether or not to set the --no-browser flag.')
-
+    
     args = parser.parse_args()
         
     return args
