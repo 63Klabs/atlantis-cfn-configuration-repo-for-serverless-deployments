@@ -249,7 +249,7 @@ class Strings:
 class GitHubApi:
 
     @staticmethod
-    def parse_repo_info_from_url(url: str) -> Dict[str, str, str]:
+    def parse_repo_info_from_url(url: str) -> Dict[str, str]:
         """
         Parse GitHub repository information from a URL.
         
@@ -257,7 +257,7 @@ class GitHubApi:
             url (str): GitHub repository URL
         
         Returns:
-            Dict[str, str, str]: Dictionary containing 'owner', 'repo', and 'tag' keys
+            Dict[str, str]: Dictionary containing 'owner', 'repo', and 'tag' keys
         """
         # Remove the protocol (http/https) and split by '/'
         parts = url.split("://")[-1].split("/")
