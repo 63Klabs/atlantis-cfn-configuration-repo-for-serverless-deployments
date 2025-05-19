@@ -102,12 +102,12 @@ class RepositoryCreator:
                 sys.exit(1)
         
         # If it is from GitHub and it ends with .zip, we assume it's a zip file
-        elif re.match(r'https?://(www\.)?github\.com/.+/.+\.zip', source):
+        elif re.match(r'https?:\/\/(www\.)?github\.com\/.+\/.+\.zip', source):
             # We need to determine the zip URL
             return source, 'github'
 
         # Check if the source is a valid GitHub release URL
-        elif re.match(r'https?://(www\.)?github\.com/.+/.+/releases(/tag)?/.+', source):
+        elif re.match(r'https?:\/\/(www\.)?github\.com\/.+\/.+\/(releases(\/tag)?|tags)(\/.*)?', source):
             # We need to determine the zip URL
             # To clean the URL we will break down to the base repository URL and then add the release path (either latest or specific tag)
             result = GitHubApi.parse_repo_info_from_url(source)
@@ -123,7 +123,7 @@ class RepositoryCreator:
             return source, 'github'
         
         # Check if the source is a valid GitHub Repository URL
-        elif re.match(r'https?://(www\.)?github\.com/.+/.+', source) and source.endswith('.zip'):
+        elif re.match(r'https?:\/\/(www\.)?github\.com\/.+\/.+(\/\.*)*?', source):
             # Convert URL from https://github.com/owner/repo to https://github.com/owner/repo/archive/refs/heads/main.zip
 
             result = GitHubApi.parse_repo_info_from_url(source)
