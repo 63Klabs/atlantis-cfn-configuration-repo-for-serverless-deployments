@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-VERSION = "v0.1.0/2025-02-28"
+VERSION = "v0.1.1/2025-05-20"
 # Developed by Chad Kluck with AI assistance from Amazon Q Developer
 # GitHub Copilot assisted in color formats of output and prompts
 
@@ -11,7 +11,13 @@ Provides consistent formatting, terminal handling, and common string operations.
 
 import os
 import click
-from typing import Dict, List
+import requests
+import datetime
+import random
+import string
+import tempfile
+
+from typing import Dict, List, Optional
 
 from lib.tools_colors import (
     COLOR_PROMPT,
@@ -181,8 +187,7 @@ class Strings:
         Returns:
             str: Random string of specified length
         """
-        import random
-        import string
+
         return ''.join(random.choice(string.ascii_letters) for i in range(length))
 
     @classmethod
@@ -196,7 +201,6 @@ class Strings:
         Returns:
             str: Formatted date/time stamp
         """
-        import datetime
         return datetime.datetime.now().strftime(format)
 
     @staticmethod
@@ -238,7 +242,107 @@ class Strings:
         """
         return text.ljust(str_length)
 
+# =============================================================================
+# ----- GITHUB API ------------------------------------------------------------
+# =============================================================================
 
+class GitHubApi:
+
+    @staticmethod
+    def parse_repo_info_from_url(url: str) -> Dict[str, str, str]:
+        """
+        Parse GitHub repository information from a URL.
+        
+        Args:
+            url (str): GitHub repository URL
+        
+        Returns:
+            Dict[str, str, str]: Dictionary containing 'owner', 'repo', and 'tag' keys
+        """
+        # Remove the protocol (http/https) and split by '/'
+        parts = url.split("://")[-1].split("/")
+
+        owner = None
+        repo = None
+        tag = None
+        
+        if parts[0] == "github.com":
+        # Extract owner and repo name
+            if len(parts) >= 3:
+                owner = parts[1]
+                repo = parts[2]
+                # Extract tag if present: https://github.com/63Klabs/atlantis-cfn-configuration-repo-for-serverless-deployments/releases/tag/0.0.8-beta
+                if len(parts) >= 5 and parts[3] == "releases" and parts[4] == "tag":
+                    tag = parts[5]
+                # https://github.com/63Klabs/atlantis-cfn-configuration-repo-for-serverless-deployments/archive/refs/tags/0.0.8-beta.zip
+                elif len(parts) >= 7 and parts[3] == "archive" and parts[4] == "refs" and parts[5] == "tags":
+                    tag = parts[6].split(".")[0]
+
+                return {
+                    "owner": owner,
+                    "repo": repo,
+                    "tag": tag
+                }
+            else:
+                raise ValueError("Invalid GitHub URL format")
+        else:
+            raise ValueError("Invalid GitHub URL format")
+
+
+    @staticmethod
+    def get_latest_release(owner: str, repo: str) -> str:
+        """
+        Get the latest release tag from a GitHub repository
+        
+        Args:
+            owner (str): GitHub repository owner
+            repo (str): GitHub repository name
+        
+        Returns:
+            str: Latest release tag (e.g. 'v1.0.0')
+        """
+        try:
+            # Query the GitHub API for latest release
+            response = requests.get(
+                f"https://api.github.com/repos/{owner}/{repo}/releases/latest",
+                headers={
+                    'Accept': 'application/vnd.github.v3+json'
+                }
+            )
+            response.raise_for_status()
+            
+            # Extract the tag name from the response
+            return response.json()['tag_name']
+            
+        except requests.exceptions.RequestException as e:
+            raise Exception(f"Failed to get latest release: {str(e)}")
+        
+    @staticmethod
+    def download_zip_from_url(url: str, zip_path: Optional[str] = None) -> str:
+        """
+        Download a ZIP file from a GitHub repository URL
+        Args:
+            url (str): GitHub repository URL
+        Returns:
+            str: Path to the downloaded ZIP file
+        """
+
+        # Create a temporary file path with .zip extension
+        if zip_path is None:
+            zip_path = tempfile.mktemp(suffix='.zip')
+       
+        try:
+            response = requests.get(url, stream=True)
+            response.raise_for_status()  # Raise an exception for HTTP errors
+            with open(zip_path, 'wb') as f:
+                for chunk in response.iter_content(chunk_size=8192):
+                    f.write(chunk)
+            return zip_path
+        except requests.exceptions.RequestException as e:
+            raise Exception(f"Failed to download ZIP file: {str(e)}")
+
+        
+        
 # =============================================================================
 # ----- TERMINAL COLORS -------------------------------------------------------
 # =============================================================================

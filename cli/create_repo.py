@@ -26,7 +26,7 @@ import click
 
 from lib.aws_session import AWSSessionManager, TokenRetrievalError
 from lib.logger import ScriptLogger, Log, ConsoleAndLog
-from lib.tools import Colorize
+from lib.tools import Colorize, GitHubApi
 from lib.atlantis import FileNameListUtils, DefaultsLoader, TagUtils
 
 if sys.version_info[0] < 3:
@@ -43,13 +43,15 @@ class RepositoryCreator:
 
     def __init__(self, repo_name: str, source: Optional[str] = None, region:  Optional[str] = None, profile: Optional[str] = None, prefix: Optional[str] = None, provider: Optional[str] = None, no_browser: Optional[bool] = False) -> None:
         self.repo_name = repo_name
-        # self.s3_uri = s3_uri
         self.region = region
         self.profile = profile
         self.prefix = prefix
+        self.provider = provider
         self.tags = {}
 
-        self.source, self.source_type = self._determine_source(source)
+        self.source_type = None
+        self.source = None
+        self.set_source(source)
         
         self.aws_session = AWSSessionManager(self.profile, self.region, no_browser)
         self.s3_client = self.aws_session.get_client('s3', self.region)
@@ -84,21 +86,52 @@ class RepositoryCreator:
             Log.error(f"Error: {str(e)}")
             sys.exit(1)
 
-    def _determine_source(self, source: Optional[str]) -> (str, str):
+    def _determine_source(self, source: Optional[str]) -> tuple[str, str]:
         """Determine the source type and return the source URL and type"""
         if source is None:
             return None, None
 
-        # Check if the source is a valid S3 URL
+        # Check if the source is a valid S3 URL, ends with .zip or ?versionId=
         if source.startswith('s3://'):
-            return source, 's3'
+
+            if re.match(r's3://.+/.+\.zip(\?versionId=.+)?', source):
+                return source, 's3'
+            else:
+                click.echo(Colorize.error(f"Invalid S3 URL: {source}"))
+                Log.error(f"Error: Invalid S3 URL: {source}")
+                sys.exit(1)
+        
+        # If it is from GitHub and it ends with .zip, we assume it's a zip file
+        elif re.match(r'https?://(www\.)?github\.com/.+/.+\.zip', source):
+            # We need to determine the zip URL
+            return source, 'github'
 
         # Check if the source is a valid GitHub release URL
         elif re.match(r'https?://(www\.)?github\.com/.+/.+/releases(/tag)?/.+', source):
-            return source, 'github_release'
+            # We need to determine the zip URL
+            # To clean the URL we will break down to the base repository URL and then add the release path (either latest or specific tag)
+            result = GitHubApi.parse_repo_info_from_url(source)
+            owner = result['owner']
+            repo = result['repo']
+            tag = result['tag']
+            
+            if tag == None:
+                tag = GitHubApi.get_latest_release(owner, repo)
+
+            source = f"https://github.com/{owner}/{repo}/archive/refs/tags/{tag}.zip"
+
+            return source, 'github'
         
-        # Check if the source is a valid GitHub URL
-        elif re.match(r'https?://(www\.)?github\.com/.+/.+', source):
+        # Check if the source is a valid GitHub Repository URL
+        elif re.match(r'https?://(www\.)?github\.com/.+/.+', source) and source.endswith('.zip'):
+            # Convert URL from https://github.com/owner/repo to https://github.com/owner/repo/archive/refs/heads/main.zip
+
+            result = GitHubApi.parse_repo_info_from_url(source)
+            owner = result['owner']
+            repo = result['repo']
+
+            source = f"https://github.com/{owner}/{repo}/archive/refs/heads/main.zip"
+
             return source, 'github'
 
         else:
@@ -117,7 +150,7 @@ class RepositoryCreator:
         # Create branch structure
         self._create_dev_test_branches()
         
-        if (self.s3_uri):
+        if (self.source):
             # Download and extract files
             temp_dir = self._download_and_extract()
             
@@ -131,7 +164,7 @@ class RepositoryCreator:
             Log.info(f"Creating repository: {self.repo_name}")
             response = self.codecommit_client.create_repository(
                 repositoryName=self.repo_name,
-                repositoryDescription=f'Repository seeded from {self.s3_uri}',
+                repositoryDescription=f'Repository seeded from {self.source}',
                 tags=self.tags
             )
             click.echo(Colorize.output_with_value("Repository created:", response['repositoryMetadata']['cloneUrlHttp']))
@@ -151,9 +184,9 @@ class RepositoryCreator:
             readme_content = "# Hello, World\n"
             readme_content += "\nThe main and test branches are intentionally left blank except for this file.\n\nCheck out the dev branch to get started.\n"
 
-            if self.s3_uri:
+            if self.source:
                 readme_content += "\nThe dev branch of this repository was seeded from the following S3 location:\n"
-                readme_content += f"{self.s3_uri}\n"
+                readme_content += f"{self.source}\n"
             
             # Add clone info
             try:
@@ -237,13 +270,24 @@ class RepositoryCreator:
     def _download_and_extract(self):
         temp_dir = tempfile.mkdtemp()
         zip_path = os.path.join(temp_dir, 'source.zip')
-        s3_bucket, s3_key = self.parse_s3_url(self.s3_uri)
-        
-        try:
-            click.echo(Colorize.output_with_value("Downloading zip from S3:", self.s3_uri))
-            Log.info(f"Downloading zip from S3: {self.s3_uri}")
+
+        if self.source_type == 's3':
+            s3_bucket, s3_key = self.parse_s3_url(self.source)
+            click.echo(Colorize.output_with_value("Downloading zip from S3:", self.source))
+            Log.info(f"Downloading zip from S3: {self.source}")
             self.s3_client.download_file(s3_bucket, s3_key, zip_path)
-            
+        elif self.source_type == 'github':
+            click.echo(Colorize.output_with_value("Downloading zip from GitHub:", self.source))
+            Log.info(f"Downloading zip from GitHub: {self.source}")
+            # Download the zip file from GitHub
+            GitHubApi.download_zip_from_url(self.source, zip_path)
+        else:
+            click.echo(Colorize.error(f"Invalid source type: {self.source_type}"))
+            Log.error(f"Error: Invalid source type: {self.source_type}")
+            sys.exit(1)
+
+        try:
+
             with zipfile.ZipFile(zip_path, 'r') as zip_ref:
                 for zip_info in zip_ref.filelist:
                     output_path = Path(temp_dir) / zip_info.filename
@@ -606,9 +650,9 @@ class RepositoryCreator:
     # - Setters
     # -------------------------------------------------------------------------
 
-    def set_s3_uri(self, s3_uri: str) -> None:
-        """Set the S3 URI for the repository"""
-        self.s3_uri = s3_uri
+    def set_source(self, source: str) -> None:
+        """Set the zip source for the repository"""
+        self.source, self.source_type = self._determine_source(source)
 
     def set_tags(self, tags: Union[Dict, List]) -> Dict:
         """Set the tags for the repository
@@ -714,7 +758,7 @@ def parse_args() -> argparse.Namespace:
                         required=False,
                         choices=VALID_PROVIDERS,
                         default=None,
-                        help=f'Type of repository to create. ${VALID_PROVIDERS}.')
+                        help=f'Type of repository to create. {VALID_PROVIDERS}.')
     
     # Optional Flags
     parser.add_argument('--no-browser',
@@ -740,9 +784,10 @@ def main():
 
     try:
         repo_creator = RepositoryCreator(
-            args.repository_name, args.s3_uri, 
+            args.repository_name, args.source, 
             args.region, args.profile, 
-            args.prefix, args.no_browser
+            args.prefix, args.provider,
+            args.no_browser
         )
         
     except TokenRetrievalError as e:
@@ -758,12 +803,12 @@ def main():
         click.echo(Colorize.error(f"Repository {args.repository_name} already exists"))
         sys.exit(1)
     
-    # prompt for starter app if no args.s3_uri
+    # prompt for starter app if no args.source
     try:
-        if args.s3_uri is None:
+        if args.source is None:
             file_list = repo_creator.discover_s3_file_list()
             app_starter_file = FileNameListUtils.select_from_file_list(file_list, True, heading_text="Available application starters", prompt_text="Enter an app starter number")
-            repo_creator.set_s3_uri(app_starter_file)
+            repo_creator.set_source(app_starter_file)
     except KeyboardInterrupt:
         ConsoleAndLog.info("Repository creation cancelled")
         sys.exit(1)
