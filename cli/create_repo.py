@@ -94,7 +94,7 @@ class RepositoryCreator:
         # Check if the source is a valid S3 URL, ends with .zip or ?versionId=
         if source.startswith('s3://'):
 
-            if re.match(r's3://.+/.+\.zip(\?versionId=.+)?', source):
+            if re.match(r's3:\/\/.+\/.+\.zip(\?versionId=.+)?', source):
                 return source, 's3'
             else:
                 click.echo(Colorize.error(f"Invalid S3 URL: {source}"))
