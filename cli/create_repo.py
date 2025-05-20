@@ -287,10 +287,42 @@ class RepositoryCreator:
             sys.exit(1)
 
         try:
-
             with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+                # For GitHub sources, identify the common prefix (outer directory)
+                common_prefix = None
+                if self.source_type == 'github':
+                    for zip_info in zip_ref.filelist:
+                        if zip_info.filename.endswith('/'):
+                            # Skip directories for prefix detection
+                            continue
+                        
+                        # Get the top-level directory
+                        parts = zip_info.filename.split('/', 1)
+                        if len(parts) > 1:
+                            prefix = parts[0] + '/'
+                            if common_prefix is None:
+                                common_prefix = prefix
+                            elif common_prefix != prefix:
+                                common_prefix = None
+                                break
+                
+                # Extract all files
                 for zip_info in zip_ref.filelist:
-                    output_path = Path(temp_dir) / zip_info.filename
+                    # For GitHub sources, handle the outer directory
+                    if self.source_type == 'github':
+                        # Skip the root directory entry itself
+                        if common_prefix and zip_info.filename == common_prefix:
+                            continue
+                            
+                        # Remove the common prefix if it exists
+                        if common_prefix and zip_info.filename.startswith(common_prefix):
+                            rel_path = zip_info.filename[len(common_prefix):]
+                            output_path = Path(temp_dir) / rel_path
+                        else:
+                            output_path = Path(temp_dir) / zip_info.filename
+                    else:
+                        # Standard path for non-GitHub sources
+                        output_path = Path(temp_dir) / zip_info.filename
                     
                     if zip_info.filename.endswith('/'):
                         output_path.mkdir(parents=True, exist_ok=True)
@@ -371,8 +403,87 @@ class RepositoryCreator:
                                 output_path.write_bytes(content)
                         else:
                             output_path.write_bytes(content)
+                        
+                        text_extensions = {
+                            # Documentation and Markup
+                            '.txt', '.md', '.markdown', '.rst', '.adoc', '.asciidoc', '.wiki',
+                            
+                            # Web and Styling
+                            '.html', '.htm', '.xhtml', '.css', '.scss', '.sass', '.less',
+                            '.svg', '.xml', '.xsl', '.xslt', '.wsdl', '.dtd',
+                            
+                            # Programming Languages
+                            '.py', '.pyw', '.py3', '.pyi', '.pyx',  # Python
+                            '.js', '.jsx', '.ts', '.tsx', '.mjs',    # JavaScript/TypeScript
+                            '.java', '.kt', '.kts', '.groovy',       # JVM
+                            '.c', '.h', '.cpp', '.hpp', '.cc',       # C/C++
+                            '.cs', '.csx',                           # C#
+                            '.rb', '.rbw', '.rake', '.gemspec',      # Ruby
+                            '.php', '.phtml', '.php3', '.php4',      # PHP
+                            '.go', '.rs', '.r', '.pl', '.pm',        # Go, Rust, R, Perl
+                            
+                            # Shell and cli
+                            '.sh', '.bash', '.zsh', '.fish',
+                            '.bat', '.cmd', '.ps1', '.psm1',
+                            
+                            # Configuration
+                            '.json', '.yaml', '.yml', '.toml', '.tml',
+                            '.ini', '.cfg', '.conf', '.config',
+                            '.env', '.properties', '.prop',
+                            '.xml', '.plist',
+                            
+                            # Build and Project
+                            '.gradle', '.maven', '.pom',
+                            '.project', '.classpath',
+                            '.editorconfig', '.gitignore', '.gitattributes',
+                            'Dockerfile', 'Makefile', 'Jenkinsfile',
+                            
+                            # Data Formats
+                            '.csv', '.tsv', '.sql', '.graphql', '.gql',
+                            
+                            # Lock Files
+                            '.lock', '.lockfile',
+                            
+                            # Template Files
+                            '.template', '.tmpl', '.j2', '.jinja', '.jinja2',
+                            
+                            # AWS and Cloud
+                            '.tf', '.tfvars',              # Terraform
+                            '.template-config',            # AWS CloudFormation
+                            '.cfn.yaml', '.cfn.json',     # AWS CloudFormation
+                            '.sam.yaml', '.sam.json',      # AWS SAM
+                            
+                            # Misc
+                            '.log', '.diff', '.patch',
+                            '.lst', '.tex', '.bib',
+                            '.manifest', '.pdl', '.po'
+                        }
+
+                        is_text_file = (output_path.suffix.lower() in text_extensions and 
+                                        not self._is_binary_string(content))
+
+                        
+                        if output_path.exists():
+                            output_path.unlink()
+                        
+                        if is_text_file:
+                            try:
+                                decoded_content = content.decode('utf-8')
+                                output_path.write_text(decoded_content, encoding='utf-8')
+                            except UnicodeDecodeError:
+                                output_path.write_bytes(content)
+                        else:
+                            output_path.write_bytes(content)
                             
             os.remove(zip_path)
+            
+            # Log the number of extracted files
+            file_count = 0
+            for _, _, files in os.walk(temp_dir):
+                file_count += len(files)
+            Log.info(f"Extracted {file_count} files to {temp_dir}")
+            click.echo(Colorize.output_with_value("Extracted files:", str(file_count)))
+            
             return temp_dir
             
         except Exception as e:
