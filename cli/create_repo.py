@@ -26,8 +26,9 @@ import click
 
 from lib.aws_session import AWSSessionManager, TokenRetrievalError
 from lib.logger import ScriptLogger, Log, ConsoleAndLog
-from lib.tools import Colorize, GitHubApi
+from lib.tools import Colorize
 from lib.atlantis import FileNameListUtils, DefaultsLoader, TagUtils
+from lib.gh_utils import GitHubUtils
 
 if sys.version_info[0] < 3:
     sys.stderr.write("Error: Python 3 is required\n")
@@ -110,13 +111,13 @@ class RepositoryCreator:
         elif re.match(r'https?:\/\/(www\.)?github\.com\/.+\/.+\/(releases(\/tag)?|tags)(\/.*)?', source):
             # We need to determine the zip URL
             # To clean the URL we will break down to the base repository URL and then add the release path (either latest or specific tag)
-            result = GitHubApi.parse_repo_info_from_url(source)
+            result = GitHubUtils.parse_repo_info_from_url(source)
             owner = result['owner']
             repo = result['repo']
             tag = result['tag']
             
             if tag == None:
-                tag = GitHubApi.get_latest_release(owner, repo)
+                tag = GitHubUtils.get_latest_release(owner, repo)
 
             source = f"https://github.com/{owner}/{repo}/archive/refs/tags/{tag}.zip"
 
@@ -126,7 +127,7 @@ class RepositoryCreator:
         elif re.match(r'https?:\/\/(www\.)?github\.com\/.+\/.+(\/\.*)*?', source):
             # Convert URL from https://github.com/owner/repo to https://github.com/owner/repo/archive/refs/heads/main.zip
 
-            result = GitHubApi.parse_repo_info_from_url(source)
+            result = GitHubUtils.parse_repo_info_from_url(source)
             owner = result['owner']
             repo = result['repo']
 
@@ -179,22 +180,22 @@ class RepositoryCreator:
 
     def _create_repository_codecommit(self):
         try:
-            click.echo(Colorize.output_with_value("Creating repository:", self.repo_name))
-            Log.info(f"Creating repository: {self.repo_name}")
+            click.echo(Colorize.output_with_value("Creating CodeCommit repository:", self.repo_name))
+            Log.info(f"Creating CodeCommit repository: {self.repo_name}")
             response = self.codecommit_client.create_repository(
                 repositoryName=self.repo_name,
                 repositoryDescription=f'Repository seeded from {self.source}',
                 tags=self.tags
             )
-            click.echo(Colorize.output_with_value("Repository created:", response['repositoryMetadata']['cloneUrlHttp']))
-            Log.info(f"Repository created: {response['repositoryMetadata']['cloneUrlHttp']}")
+            click.echo(Colorize.output_with_value("CodeCommit Repository created:", response['repositoryMetadata']['cloneUrlHttp']))
+            Log.info(f"CodeCommit Repository created: {response['repositoryMetadata']['cloneUrlHttp']}")
         except self.codecommit_client.exceptions.RepositoryNameExistsException:
-            click.echo(Colorize.error(f"Repository {self.repo_name} already exists"))
-            Log.error(f"Error: Repository {self.repo_name} already exists")
+            click.echo(Colorize.error(f"CodeCommit Repository {self.repo_name} already exists"))
+            Log.error(f"Error: CodeCommit Repository {self.repo_name} already exists")
             sys.exit(1)
         except Exception as e:
-            click.echo(Colorize.error(f"Error creating repository: {str(e)}"))
-            Log.error(f"Error creating repository: {str(e)}")
+            click.echo(Colorize.error(f"Error creating CodeCommit repository: {str(e)}"))
+            Log.error(f"Error creating CodeCommit repository: {str(e)}")
             sys.exit(1)
 
     def _create_repository_github(self):
@@ -203,43 +204,55 @@ class RepositoryCreator:
             Log.info(f"Creating GitHub repository: {self.repo_name}")
 
             # Create repository
-            response = GitHubApi.create_repo(self.repo_name, True, "asdf")
+            success = GitHubUtils.create_repo(self.repo_name, True, "asdf")
 
-            print(response)
+            response = {}
 
-            # Set the clone URLs
-            self.clone_url_ssh = response['clone_url_ssh']
-            self.clone_url_https = response['clone_url_https']
-
-            click.echo(Colorize.output_with_value("Repository created:", self.clone_url_https))
-            Log.info(f"Repository created: {self.clone_url_https}")
+            if success:
+                response = self.get_repository()
+                click.echo(Colorize.output_with_value("GitHub Repository created:", response['repositoryMetadata']['url']))
+                Log.info(f"GitHub Repository created: {response['repositoryMetadata']['url']}")
+            else:
+                click.echo(Colorize.error(f"Error creating GitHub repository: {str(e)}"))
+                Log.error(f"Error creating GitHub repository: {str(e)}")
+                sys.exit(1)
+            
+            return response
+        
         except Exception as e:
-            click.echo(Colorize.error(f"Error creating repository: {str(e)}"))
-            Log.error(f"Error creating repository: {str(e)}")
+            click.echo(Colorize.error(f"Error creating GitHub repository: {str(e)}"))
+            Log.error(f"Error creating GitHub repository: {str(e)}")
             sys.exit(1)
     
+    def _create_init_readme(self):
+                    # Create README.md content for main branch
+        readme_content = "# Hello, World\n"
+        readme_content += "\nThe main and test branches are intentionally left blank except for this file.\n\nCheck out the dev branch to get started.\n"
+
+        if self.source:
+            readme_content += "\nThe dev branch of this repository was seeded from the following S3 location:\n"
+            readme_content += f"{self.source}\n"
+        
+        # Add clone info
+        try:
+            clone_urls = self.get_clone_urls()
+            readme_content += f"\nClone URL (HTTPS): {clone_urls.get('https', '')}\n"
+            readme_content += f"\nClone URL (SSH): {clone_urls.get('ssh', '')}\n"
+        except Exception as e:
+            Log.error(f"Error getting repository clone urls: {str(e)}")
+
+        # Create initial commit on main branch with README
+        click.echo(Colorize.output("Creating initial README.md on main branch"))
+        Log.info("Creating initial README.md on main branch")
+
+        return readme_content
+
+
     def _create_dev_test_branches_codecommit(self):
         try:
-            # Create README.md content for main branch
-            readme_content = "# Hello, World\n"
-            readme_content += "\nThe main and test branches are intentionally left blank except for this file.\n\nCheck out the dev branch to get started.\n"
 
-            if self.source:
-                readme_content += "\nThe dev branch of this repository was seeded from the following S3 location:\n"
-                readme_content += f"{self.source}\n"
-            
-            # Add clone info
-            try:
-                clone_urls = self.get_clone_urls()
-                readme_content += f"\nClone URL (HTTPS): {clone_urls.get('https', '')}\n"
-                readme_content += f"\nClone URL (SSH): {clone_urls.get('ssh', '')}\n"
-            except Exception as e:
-                Log.error(f"Error getting repository clone urls: {str(e)}")
+            readme_content = self._create_init_readme()
 
-            # Create initial commit on main branch with README
-            click.echo(Colorize.output("Creating initial README.md on main branch"))
-            Log.info("Creating initial README.md on main branch")
-            
             try:
                 # Try to get main branch info
                 branch_info = self.codecommit_client.get_branch(
@@ -308,7 +321,21 @@ class RepositoryCreator:
             sys.exit(1)
 
     def _create_dev_test_branches_github(self):
-        print("Not yet implemented")
+        try:
+            readme_content = self._create_init_readme()
+            author = self.get_init_commit_author()
+            email = self.get_init_commit_email()
+            click.echo(Colorize.output("Creating main, test, and dev branches on GitHub"))
+            Log.info("Creating main, test, and dev branches on GitHub")
+            GitHubUtils.create_branch_structure(self.repo_name, readme_content, author, email)
+            click.echo(Colorize.output("Successfully created branch structure"))
+            Log.info("Successfully created branch structure")
+        except Exception as e:
+            click.echo(Colorize.error("Error creating branch structure. Check logs for more information."))
+            Log.error(f"Error creating branch structure: {str(e)}")
+            # Optionally: delete the repo using gh CLI if you want to clean up
+            sys.exit(1)
+
 
     def _download_and_extract(self):
         temp_dir = tempfile.mkdtemp()
@@ -323,7 +350,7 @@ class RepositoryCreator:
             click.echo(Colorize.output_with_value("Downloading zip from GitHub:", self.source))
             Log.info(f"Downloading zip from GitHub: {self.source}")
             # Download the zip file from GitHub
-            GitHubApi.download_zip_from_url(self.source, zip_path)
+            GitHubUtils.download_zip_from_url(self.source, zip_path)
         else:
             click.echo(Colorize.error(f"Invalid source type: {self.source_type}"))
             Log.error(f"Error: Invalid source type: {self.source_type}")
@@ -631,7 +658,12 @@ class RepositoryCreator:
     def get_repository(self) -> Dict:
         # get repository information
         try:
-            return self.codecommit_client.get_repository(repositoryName=self.repo_name)
+            if self.provider == "codecommit":
+                return self.codecommit_client.get_repository(repositoryName=self.repo_name)
+            elif self.provider == "github":
+                return GitHubUtils.get_repository(self.repo_name)
+            else:
+                raise ValueError(f"Invalid provider: {self.provider}")
         except Exception as e:
             Log.error(f"Error getting repository information: {e}")
             raise
@@ -675,7 +707,7 @@ class RepositoryCreator:
                 raise
         elif self.provider == "github":
             try:
-                return GitHubApi.repository_exists(self.repo_name)
+                return GitHubUtils.repository_exists(self.repo_name)
             except Exception as e:
                 Log.error(f"Error checking GitHub repository existence: {e}")
                 raise
