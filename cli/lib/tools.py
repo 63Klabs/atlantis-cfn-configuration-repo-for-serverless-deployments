@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-VERSION = "v0.1.1/2025-05-20"
+VERSION = "v0.1.2/2025-05-21"
 # Developed by Chad Kluck with AI assistance from Amazon Q Developer
 # GitHub Copilot assisted in color formats of output and prompts
 
@@ -16,6 +16,9 @@ import datetime
 import random
 import string
 import tempfile
+import subprocess
+import json
+
 
 from typing import Dict, List, Optional
 
@@ -341,6 +344,69 @@ class GitHubApi:
         except requests.exceptions.RequestException as e:
             raise Exception(f"Failed to download ZIP file: {str(e)}")
 
+    @staticmethod
+    def create_repo(repo_name: str, private: bool = True, description: str = None) -> Dict:
+        """
+        Create a GitHub repository using the GitHub CLI
+
+        Args:
+            repo_name (str): Repository name
+            private (bool): Whether the repository should be private
+            description (str): Repository description
+
+        Returns:
+            Dict: Dictionary containing 'clone_url_https' and 'clone_url_ssh' keys
+        """
+        try:
+            
+            # Build the command
+            cmd = ["gh", "repo", "create", repo_name]
+            
+            if private:
+                cmd.append("--private")
+            else:
+                cmd.append("--public")
+                
+            if description:
+                cmd.extend(["--description", description])
+                            
+            # Execute the command
+            result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+            
+            # Parse the JSON output
+            output = json.loads(result.stdout)
+            print(output)
+            
+            return {
+                "clone_url_https": output["url"],
+                "clone_url_ssh": output["sshUrl"]
+            }
+        except subprocess.CalledProcessError as e:
+            raise Exception(f"Failed to create repository: {e.stderr}")
+        except Exception as e:
+            raise Exception(f"Failed to create repository: {str(e)}")
+        
+    @staticmethod
+    def repository_exists(repo_name: str) -> bool:
+        """
+        Check if a GitHub repository exists
+        Args:
+            repo_name (str): Repository name
+        
+        Returns:
+            bool: True if repository exists, False otherwise
+        """
+        try:
+            # Query the GitHub API for the repository
+            response = requests.get(
+                f"https://api.github.com/repos/{repo_name}",
+                headers={
+                    'Accept': 'application/vnd.github.v3+json'
+                }
+            )
+            return response.status_code == 200
+        except requests.exceptions.RequestException as e:
+            raise Exception(f"Failed to check repository existence: {str(e)}")
         
         
 # =============================================================================

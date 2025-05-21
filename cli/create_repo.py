@@ -159,6 +159,25 @@ class RepositoryCreator:
 
 
     def _create_repository(self):
+        # Create the repository based on the provider
+        if self.provider == 'codecommit':
+            self._create_repository_codecommit()
+        elif self.provider == 'github':
+            self._create_repository_github()
+
+    def _create_dev_test_branches(self):
+        if self.provider == 'codecommit':
+            self._create_dev_test_branches_codecommit()
+        elif self.provider == 'github':
+            self._create_dev_test_branches_github()
+
+    def _seed_repository(self, temp_dir: str):
+        if self.provider == 'codecommit':
+            self._seed_repository_codecommit(temp_dir)
+        elif self.provider == 'github':
+            self._seed_repository_github(temp_dir)
+
+    def _create_repository_codecommit(self):
         try:
             click.echo(Colorize.output_with_value("Creating repository:", self.repo_name))
             Log.info(f"Creating repository: {self.repo_name}")
@@ -177,8 +196,29 @@ class RepositoryCreator:
             click.echo(Colorize.error(f"Error creating repository: {str(e)}"))
             Log.error(f"Error creating repository: {str(e)}")
             sys.exit(1)
+
+    def _create_repository_github(self):
+        try:
+            click.echo(Colorize.output_with_value("Creating GitHub repository:", self.repo_name))
+            Log.info(f"Creating GitHub repository: {self.repo_name}")
+
+            # Create repository
+            response = GitHubApi.create_repo(self.repo_name, True, "asdf")
+
+            print(response)
+
+            # Set the clone URLs
+            self.clone_url_ssh = response['clone_url_ssh']
+            self.clone_url_https = response['clone_url_https']
+
+            click.echo(Colorize.output_with_value("Repository created:", self.clone_url_https))
+            Log.info(f"Repository created: {self.clone_url_https}")
+        except Exception as e:
+            click.echo(Colorize.error(f"Error creating repository: {str(e)}"))
+            Log.error(f"Error creating repository: {str(e)}")
+            sys.exit(1)
     
-    def _create_dev_test_branches(self):
+    def _create_dev_test_branches_codecommit(self):
         try:
             # Create README.md content for main branch
             readme_content = "# Hello, World\n"
@@ -266,6 +306,9 @@ class RepositoryCreator:
             Log.error(f"Error creating branch structure: {str(e)}")
             self.codecommit_client.delete_repository(repositoryName=self.repo_name)
             sys.exit(1)
+
+    def _create_dev_test_branches_github(self):
+        print("Not yet implemented")
 
     def _download_and_extract(self):
         temp_dir = tempfile.mkdtemp()
@@ -391,78 +434,6 @@ class RepositoryCreator:
                         is_text_file = (output_path.suffix.lower() in text_extensions and 
                                         not self._is_binary_string(content))
 
-                        
-                        if output_path.exists():
-                            output_path.unlink()
-                        
-                        if is_text_file:
-                            try:
-                                decoded_content = content.decode('utf-8')
-                                output_path.write_text(decoded_content, encoding='utf-8')
-                            except UnicodeDecodeError:
-                                output_path.write_bytes(content)
-                        else:
-                            output_path.write_bytes(content)
-                        
-                        text_extensions = {
-                            # Documentation and Markup
-                            '.txt', '.md', '.markdown', '.rst', '.adoc', '.asciidoc', '.wiki',
-                            
-                            # Web and Styling
-                            '.html', '.htm', '.xhtml', '.css', '.scss', '.sass', '.less',
-                            '.svg', '.xml', '.xsl', '.xslt', '.wsdl', '.dtd',
-                            
-                            # Programming Languages
-                            '.py', '.pyw', '.py3', '.pyi', '.pyx',  # Python
-                            '.js', '.jsx', '.ts', '.tsx', '.mjs',    # JavaScript/TypeScript
-                            '.java', '.kt', '.kts', '.groovy',       # JVM
-                            '.c', '.h', '.cpp', '.hpp', '.cc',       # C/C++
-                            '.cs', '.csx',                           # C#
-                            '.rb', '.rbw', '.rake', '.gemspec',      # Ruby
-                            '.php', '.phtml', '.php3', '.php4',      # PHP
-                            '.go', '.rs', '.r', '.pl', '.pm',        # Go, Rust, R, Perl
-                            
-                            # Shell and cli
-                            '.sh', '.bash', '.zsh', '.fish',
-                            '.bat', '.cmd', '.ps1', '.psm1',
-                            
-                            # Configuration
-                            '.json', '.yaml', '.yml', '.toml', '.tml',
-                            '.ini', '.cfg', '.conf', '.config',
-                            '.env', '.properties', '.prop',
-                            '.xml', '.plist',
-                            
-                            # Build and Project
-                            '.gradle', '.maven', '.pom',
-                            '.project', '.classpath',
-                            '.editorconfig', '.gitignore', '.gitattributes',
-                            'Dockerfile', 'Makefile', 'Jenkinsfile',
-                            
-                            # Data Formats
-                            '.csv', '.tsv', '.sql', '.graphql', '.gql',
-                            
-                            # Lock Files
-                            '.lock', '.lockfile',
-                            
-                            # Template Files
-                            '.template', '.tmpl', '.j2', '.jinja', '.jinja2',
-                            
-                            # AWS and Cloud
-                            '.tf', '.tfvars',              # Terraform
-                            '.template-config',            # AWS CloudFormation
-                            '.cfn.yaml', '.cfn.json',     # AWS CloudFormation
-                            '.sam.yaml', '.sam.json',      # AWS SAM
-                            
-                            # Misc
-                            '.log', '.diff', '.patch',
-                            '.lst', '.tex', '.bib',
-                            '.manifest', '.pdl', '.po'
-                        }
-
-                        is_text_file = (output_path.suffix.lower() in text_extensions and 
-                                        not self._is_binary_string(content))
-
-                        
                         if output_path.exists():
                             output_path.unlink()
                         
@@ -493,7 +464,7 @@ class RepositoryCreator:
             shutil.rmtree(temp_dir, ignore_errors=True)
             sys.exit(1)
 
-    def _seed_repository(self, temp_dir):
+    def _seed_repository_codecommit(self, temp_dir):
         try:
             # Collect all files to be processed
             all_files = []
@@ -586,6 +557,10 @@ class RepositoryCreator:
             sys.exit(1)
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
+
+    def _seed_repository_github(self, temp_dir):
+        print("Not yet implemented")
+
 
     def _is_binary_string(self, bytes_data, sample_size=1024):
         """Returns true if the bytes_data appears to be binary rather than text."""
@@ -689,14 +664,21 @@ class RepositoryCreator:
         Returns:
             bool: True if repository exists, False otherwise
         """
-        try:
-            self.codecommit_client.get_repository(repositoryName=self.repo_name)
-            return True
-        except self.codecommit_client.exceptions.RepositoryDoesNotExistException:
-            return False
-        except Exception as e:
-            Log.error(f"Error checking repository existence: {str(e)}")
-            raise
+        if self.provider == "codecommit":
+            try:
+                self.codecommit_client.get_repository(repositoryName=self.repo_name)
+                return True
+            except self.codecommit_client.exceptions.RepositoryDoesNotExistException:
+                return False
+            except Exception as e:
+                Log.error(f"Error checking CodeCommit repository existence: {str(e)}")
+                raise
+        elif self.provider == "github":
+            try:
+                return GitHubApi.repository_exists(self.repo_name)
+            except Exception as e:
+                Log.error(f"Error checking GitHub repository existence: {e}")
+                raise
 
     def get_creator_tag(self) -> str:
         """Access the Creator tag if there is one. Can be used for the initial commit
