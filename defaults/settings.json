@@ -19,6 +19,9 @@
 			"prefix": "atlantis/app-starters/v2"
 		}
 	],
+	"repositories": {
+		"provider": "codecommit"
+	},
 	"updates": {
 		"source": "https://github.com/63klabs/atlantis-cfn-configuration-repo-for-serverless-deployments",
 		"ver": "release:latest",

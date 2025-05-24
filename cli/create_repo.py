@@ -22,6 +22,8 @@ from pathlib import Path
 from typing import Optional, List, Dict, Union
 from urllib.parse import urlparse
 
+import boto3
+import botocore
 import click
 
 from lib.aws_session import AWSSessionManager, TokenRetrievalError
@@ -70,6 +72,12 @@ class RepositoryCreator:
 
         self.settings = config_loader.load_settings()
         self.defaults = config_loader.load_defaults()
+
+        self.provider = provider if provider else self.settings.get('repositories', {}).get('provider', 'codecommit')
+        if self.provider not in VALID_PROVIDERS:
+            click.echo(Colorize.error(f"Invalid provider: {self.provider}. Valid providers are: {', '.join(VALID_PROVIDERS)}"))
+            Log.error(f"Error: Invalid provider: {self.provider}. Valid providers are: {', '.join(VALID_PROVIDERS)}")
+            sys.exit(1)
 
     # -------------------------------------------------------------------------
     # - Utility
@@ -345,7 +353,9 @@ class RepositoryCreator:
             s3_bucket, s3_key = self.parse_s3_url(self.source)
             click.echo(Colorize.output_with_value("Downloading zip from S3:", self.source))
             Log.info(f"Downloading zip from S3: {self.source}")
-            self.s3_client.download_file(s3_bucket, s3_key, zip_path)
+            # Use anonymous client for public buckets
+            anon_s3_client = boto3.client('s3', config=botocore.client.Config(signature_version=botocore.UNSIGNED))
+            anon_s3_client.download_file(s3_bucket, s3_key, zip_path)
         elif self.source_type == 'github':
             click.echo(Colorize.output_with_value("Downloading zip from GitHub:", self.source))
             Log.info(f"Downloading zip from GitHub: {self.source}")
@@ -615,7 +625,9 @@ class RepositoryCreator:
                 bucket = s3_file_list_location['bucket']
                 prefix = s3_file_list_location['prefix'].strip('/')
                 Log.info(f"Discovering app starters from s3://{bucket}/{prefix}")
-                response = self.s3_client.list_objects_v2(Bucket=bucket, Prefix=f"{prefix}")
+                # Use anonymous client for public buckets
+                anon_s3_client = boto3.client('s3', config=botocore.client.Config(signature_version=botocore.UNSIGNED))
+                response = anon_s3_client.list_objects_v2(Bucket=bucket, Prefix=f"{prefix}")
                 for obj in response.get('Contents', []):
                     if obj['Key'].endswith('.zip'):
                         #Log.info(f"Found app starter: {obj}")
