@@ -21,6 +21,9 @@ from pathlib import Path
 from typing import Optional
 from botocore.exceptions import ClientError
 
+import boto3
+import botocore
+
 from lib.aws_session import AWSSessionManager
 from lib.logger import ScriptLogger, ConsoleAndLog, Log
 
@@ -44,6 +47,8 @@ class TemplateDeployer:
 
         self.aws_session = AWSSessionManager(profile, None, no_browser)
         self.s3_client = self.aws_session.get_client('s3')
+        # self.s3_client_anonymous = self.aws_session.get_client('s3', config=botocore.client.Config(signature_version=botocore.UNSIGNED))
+        self.s3_client_anonymous = boto3.client('s3', config=botocore.client.Config(signature_version=botocore.UNSIGNED))
 
     def get_template_from_config(self) -> str:
         """
@@ -133,12 +138,16 @@ class TemplateDeployer:
         Returns:
             bool: True if object exists and is accessible, False otherwise
         """
+
+        # Switch to anonymous client if the bucket is public
+        s3_client = self.s3_client if not self.is_bucket_public(bucket) else self.s3_client_anonymous
+
         try:
             params = {'Bucket': bucket, 'Key': key}
             if version_id:
                 params['VersionId'] = version_id
             
-            self.s3_client.head_object(**params)
+            s3_client.head_object(**params)
             return True
         except ClientError as e:
             error_code = e.response.get('Error', {}).get('Code')
@@ -169,6 +178,7 @@ class TemplateDeployer:
             if template_path.startswith('s3://'):
                 # Handle S3 template
                 bucket, key, version_id = self.parse_s3_url(template_path)
+
                 
                 # Verify template exists
                 if not self.verify_s3_object_exists(bucket, key, version_id):
@@ -181,6 +191,9 @@ class TemplateDeployer:
                     ConsoleAndLog.info(f"Downloading template from s3://{bucket}/{key}" +
                                 (f"?versionId={version_id}" if version_id else ""))
                     
+                    # Switch to anonymous client if the bucket is public
+                    s3_client = self.s3_client if not self.is_bucket_public(bucket) else self.s3_client_anonymous
+
                     try:
                         get_args = {
                             'Bucket': bucket,
@@ -189,7 +202,7 @@ class TemplateDeployer:
                         if version_id:
                             get_args['VersionId'] = version_id
 
-                        response = self.s3_client.get_object(**get_args)
+                        response = s3_client.get_object(**get_args)
                         with open(temp_path, 'wb') as f:
                             f.write(response['Body'].read())
 
@@ -197,7 +210,7 @@ class TemplateDeployer:
                         if 'ExpiredToken' in str(e):
                             ConsoleAndLog.info("Token expired, refreshing credentials...")
                             self.refresh_credentials()
-                            response = self.s3_client.get_object(**get_args)
+                            response = s3_client.get_object(**get_args)
                             with open(temp_path, 'wb') as f:
                                 f.write(response['Body'].read())
                         else:
@@ -278,6 +291,22 @@ class TemplateDeployer:
         """Get the samconfig file path"""
         return self.get_samconfig_dir() / self.get_samconfig_file_name()
 
+    def is_bucket_public(self, bucket: str) -> bool:
+        """Buckets are presumed to be private unless otherwise specified
+        with a "anonymous" tag in the settings.json file.
+        Given a bucket name, check the settings to see if it is public.
+        
+        Args:
+            bucket (str): The S3 bucket name
+        Returns:
+            bool: True if the bucket is public, False otherwise
+        """
+        # Check if the bucket is public
+        for s3_file_list_location in self.settings.get('templates', []):
+            if s3_file_list_location['bucket'] == bucket:
+                return s3_file_list_location.get('anonymous', False)
+        return False
+    
 # =============================================================================
 # ----- Main function ---------------------------------------------------------
 # =============================================================================

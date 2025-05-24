@@ -2,21 +2,25 @@
 	"templates": [
 		{
 			"bucket": "63klabs",
-			"prefix": "atlantis/templates/v2"
+			"prefix": "atlantis/templates/v2",
+			"anonymous": true
 		},
 		{
 			"bucket": "63klabz",
-			"prefix": "atlantis/templates/v2"
+			"prefix": "atlantis/templates/v2",
+			"anonymous": true
 		}
 	],
 	"app_starters": [
 		{
 			"bucket": "63klabs",
-			"prefix": "atlantis/app-starters/v2"
+			"prefix": "atlantis/app-starters/v2",
+			"anonymous": true
 		},
 		{
 			"bucket": "63klabz",
-			"prefix": "atlantis/app-starters/v2"
+			"prefix": "atlantis/app-starters/v2",
+			"anonymous": true
 		}
 	],
 	"repositories": {

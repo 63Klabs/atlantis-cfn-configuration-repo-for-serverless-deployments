@@ -59,6 +59,9 @@ class RepositoryCreator:
         self.aws_session = AWSSessionManager(self.profile, self.region, no_browser)
         self.s3_client = self.aws_session.get_client('s3', self.region)
         self.codecommit_client = self.aws_session.get_client('codecommit', self.region)
+        # self.s3_client_anonymous = self.aws_session.get_client('s3', config=botocore.client.Config(signature_version=botocore.UNSIGNED))
+        self.s3_client_anonymous = boto3.client('s3', config=botocore.client.Config(signature_version=botocore.UNSIGNED))
+
 
         config_loader = DefaultsLoader(
             settings_dir=self.get_settings_dir(),
@@ -350,18 +353,27 @@ class RepositoryCreator:
         zip_path = os.path.join(temp_dir, 'source.zip')
 
         if self.source_type == 's3':
+
             s3_bucket, s3_key = self.parse_s3_url(self.source)
+
             click.echo(Colorize.output_with_value("Downloading zip from S3:", self.source))
             Log.info(f"Downloading zip from S3: {self.source}")
-            # Use anonymous client for public buckets
-            anon_s3_client = boto3.client('s3', config=botocore.client.Config(signature_version=botocore.UNSIGNED))
-            anon_s3_client.download_file(s3_bucket, s3_key, zip_path)
+
+            # Switch to anonymous client if the bucket is public
+            s3_client = self.s3_client if not self.is_bucket_public(s3_bucket) else self.s3_client_anonymous
+
+            # Use authenticated client for private buckets
+            s3_client.download_file(s3_bucket, s3_key, zip_path)
+
         elif self.source_type == 'github':
+
             click.echo(Colorize.output_with_value("Downloading zip from GitHub:", self.source))
             Log.info(f"Downloading zip from GitHub: {self.source}")
             # Download the zip file from GitHub
             GitHubUtils.download_zip_from_url(self.source, zip_path)
+
         else:
+            
             click.echo(Colorize.error(f"Invalid source type: {self.source_type}"))
             Log.error(f"Error: Invalid source type: {self.source_type}")
             sys.exit(1)
@@ -624,15 +636,22 @@ class RepositoryCreator:
             try:
                 bucket = s3_file_list_location['bucket']
                 prefix = s3_file_list_location['prefix'].strip('/')
+                anonymous = s3_file_list_location.get('anonymous', False)
+                response = None
+
                 Log.info(f"Discovering app starters from s3://{bucket}/{prefix}")
-                # Use anonymous client for public buckets
-                anon_s3_client = boto3.client('s3', config=botocore.client.Config(signature_version=botocore.UNSIGNED))
-                response = anon_s3_client.list_objects_v2(Bucket=bucket, Prefix=f"{prefix}")
+
+                # Switch to anonymous client if the bucket is public
+                s3_client = self.s3_client if not anonymous else self.s3_client_anonymous
+
+                response = s3_client.list_objects_v2(Bucket=bucket, Prefix=f"{prefix}")
+
                 for obj in response.get('Contents', []):
                     if obj['Key'].endswith('.zip'):
                         #Log.info(f"Found app starter: {obj}")
                         s3_uri = f"s3://{bucket}/{obj['Key']}"
                         file_list.append(s3_uri)
+
             except Exception as e:
                 Log.error(f"Error discovering application starters from S3: {e}")
                 click.echo(Colorize.error("Error discovering application starters from S3. Check logs for more info."))
@@ -666,6 +685,22 @@ class RepositoryCreator:
         # Get the cli directory in a cross-platform way
         script_dir = Path(__file__).resolve().parent
         return script_dir.parent / SETTINGS_DIR
+    
+    def is_bucket_public(self, bucket: str) -> bool:
+        """Buckets are presumed to be private unless otherwise specified
+        with a "anonymous" tag in the settings.json file.
+        Given a bucket name, check the settings to see if it is public.
+        
+        Args:
+            bucket (str): The S3 bucket name
+        Returns:
+            bool: True if the bucket is public, False otherwise
+        """
+        # Check if the bucket is public
+        for s3_file_list_location in self.settings.get('app_starters', []):
+            if s3_file_list_location['bucket'] == bucket:
+                return s3_file_list_location.get('anonymous', False)
+        return False
     
     def get_repository(self) -> Dict:
         # get repository information
@@ -820,6 +855,7 @@ class RepositoryCreator:
             raise TypeError("Tags must be either a dictionary or a list of key-value pairs")
         
         return self.tags
+    
 
 
     

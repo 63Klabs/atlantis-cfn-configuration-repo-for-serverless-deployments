@@ -25,6 +25,9 @@ from pathlib import Path
 from typing import Dict, Optional, List, Tuple
 from botocore.exceptions import ClientError
 
+import boto3
+import botocore
+
 from lib.aws_session import AWSSessionManager, TokenRetrievalError
 from lib.logger import ScriptLogger, Log, ConsoleAndLog
 from lib.tools import Colorize
@@ -97,6 +100,8 @@ class ConfigManager:
         self.aws_session = AWSSessionManager(profile, region, no_browser)
         self.s3_client = self.aws_session.get_client('s3', region)
         self.cfn_client = self.aws_session.get_client('cloudformation', region)
+        # self.s3_client_anonymous = self.aws_session.get_client('s3', config=botocore.client.Config(signature_version=botocore.UNSIGNED))
+        self.s3_client_anonymous = boto3.client('s3', config=botocore.client.Config(signature_version=botocore.UNSIGNED))
 
         # Initialize template-related attributes
         self.template_version = 'No version found'
@@ -905,6 +910,22 @@ class ConfigManager:
             Log.error(f"Error occurred at:\n{traceback.format_exc()}")
             return False
         
+    def is_bucket_public(self, bucket: str) -> bool:
+        """Buckets are presumed to be private unless otherwise specified
+        with a "anonymous" tag in the settings.json file.
+        Given a bucket name, check the settings to see if it is public.
+        
+        Args:
+            bucket (str): The S3 bucket name
+        Returns:
+            bool: True if the bucket is public, False otherwise
+        """
+        # Check if the bucket is public
+        for s3_file_list_location in self.settings.get('templates', []):
+            if s3_file_list_location['bucket'] == bucket:
+                return s3_file_list_location.get('anonymous', False)
+        return False
+        
     # -------------------------------------------------------------------------
     # - Prompts: Tags
     # -------------------------------------------------------------------------
@@ -1214,7 +1235,10 @@ class ConfigManager:
             if template_path.startswith('s3://'):
                 # Parse S3 URL
                 bucket_name = template_path.split('/')[2]
-                
+
+                # Switch to anonymous client if the bucket is public
+                s3_client = self.s3_client if not self.is_bucket_public(bucket_name) else self.s3_client_anonymous
+
                 # Split the key and potential version ID
                 remaining_path = '/'.join(template_path.split('/')[3:])
                 if '?' in remaining_path:
@@ -1222,7 +1246,7 @@ class ConfigManager:
                     if query_string.startswith('versionId='):
                         version_id = query_string.replace('versionId=', '')
                         # Get object with specific version
-                        response = self.s3_client.get_object(
+                        response = s3_client.get_object(
                             Bucket=bucket_name,
                             Key=key,
                             VersionId=version_id
@@ -1230,7 +1254,7 @@ class ConfigManager:
                 else:
                     key = remaining_path
                     # Get latest version of object
-                    response = self.s3_client.get_object(
+                    response = s3_client.get_object(
                         Bucket=bucket_name,
                         Key=key
                     )
@@ -1792,13 +1816,22 @@ class ConfigManager:
             try:
                 bucket = s3_template_location['bucket']
                 prefix = s3_template_location['prefix'].strip('/')
+                anonymous = s3_template_location.get('anonymous', False)
+                response = None
+
                 Log.info(f"Discovering templates from s3://{bucket}/{prefix}/{self.infra_type}")
-                response = self.s3_client.list_objects_v2(Bucket=bucket, Prefix=f"{prefix}/{self.infra_type}")
+
+                # Switch to anonymous client if the bucket is public
+                s3_client = self.s3_client if not anonymous else self.s3_client_anonymous
+
+                response = s3_client.list_objects_v2(Bucket=bucket, Prefix=f"{prefix}/{self.infra_type}")
+
                 for obj in response.get('Contents', []):
                     if obj['Key'].endswith('.yml') or obj['Key'].endswith('.yaml'):
                         Log.info(f"Found template: {obj}")
                         s3_uri = f"s3://{bucket}/{obj['Key']}"
                         templates.append(s3_uri)
+
             except Exception as e:
                 Log.error(f"Error discovering templates from S3: {str(e)}")
                 click.echo(Colorize.error("Error discovering templates from S3. Check logs for more info."))
@@ -1858,10 +1891,14 @@ class ConfigManager:
         """
         try:
             bucket, key, _ = self._parse_s3_uri(s3_uri)
-            
-            # Get the latest version ID
-            version_id = self.s3_client.head_object(Bucket=bucket, Key=key).get('VersionId', '')
-            
+            version_id = ''
+
+            # Switch to anonymous client if the bucket is public
+            s3_client = self.s3_client if not self.is_bucket_public(bucket) else self.s3_client_anonymous
+
+            # Use authenticated client for private buckets
+            version_id = s3_client.head_object(Bucket=bucket, Key=key).get('VersionId', '')
+
             if version_id:
                 return f"{s3_uri}?versionId={version_id}"
             
@@ -1882,13 +1919,20 @@ class ConfigManager:
         """
         try:
             bucket, key, current_version_id = self._parse_s3_uri(s3_uri)
-            
+
+            # Switch to anonymous client if the bucket is public
+            s3_client = self.s3_client if not self.is_bucket_public(bucket) else self.s3_client_anonymous
+
             Log.info(f"Checking for template update: s3://{bucket}/{key}")
 
             try:
+
+                latest_version_id = ''
+
                 # Get the latest version ID
-                latest_version_id = self.s3_client.head_object(Bucket=bucket, Key=key).get('VersionId', '')
-            except self.s3_client.exceptions.ClientError as e:
+                latest_version_id = s3_client.head_object(Bucket=bucket, Key=key).get('VersionId', '')
+
+            except s3_client.exceptions.ClientError as e:
                 if e.response['Error']['Code'] == '404':
                     Log.warning(f"Template not found at s3://{bucket}/{key}")
                     return s3_uri
