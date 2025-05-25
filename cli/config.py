@@ -1622,6 +1622,16 @@ class ConfigManager:
                 header_pystr += " <StageId>"
             if self.profile != 'default' and self.profile != None:
                 header_pystr += f" --profile {self.profile}"
+
+            delete_msg = (
+                '1. FIRST delete the application stack using the command below:\n'
+                '   sam delete --stack-name APPLICATION_STACK_NAME --profile [PROFILE]\n'
+                '2. THEN delete the pipeline stack using the command below:\n'
+                '   sam delete --stack-name PIPELINE_STACK_NAME --profile [PROFILE]\n'
+                ' -- FAILURE TO DELETE IN THIS ORDER WILL RESULT IN MISSING IAM PERMISSIONS! --\n\n'               
+            ) if self.infra_type == 'pipeline' else (
+                f'sam delete --stack-name STACK_NAME --profile [PROFILE]\n\n'
+            )
             # Create the header with version and comments
             header = (
                 'version = 0.1\n\n'
@@ -1630,6 +1640,7 @@ class ConfigManager:
                 f'# python3 {header_pystr}\n\n'
                 '# Using the script provides consistent parameter overrides and tags '
                 'and ensures your changes are not overwritten!\n\n'
+                f'# TO DELETE A STACK:\n{delete_msg}'
             )
 
             atlantis_deploy_section = {
