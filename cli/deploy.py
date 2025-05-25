@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-VERSION = "v0.1.0/2025-02-28"
+VERSION = "v0.1.1/2025-05-24"
 # Created by Chad Kluck with AI assistance from Amazon Q Developer
 # GitHub Copilot assisted in color formats of output and prompts
 
@@ -26,6 +26,7 @@ import botocore
 
 from lib.aws_session import AWSSessionManager
 from lib.logger import ScriptLogger, ConsoleAndLog, Log
+from lib.atlantis import DefaultsLoader
 
 if sys.version_info[0] < 3:
     sys.stderr.write("Error: Python 3 is required\n")
@@ -36,6 +37,7 @@ if sys.version_info[0] < 3:
 ScriptLogger.setup('deploy')
 
 SAMCONFIG_DIR = "samconfigs"
+SETTINGS_DIR = "defaults"
 
 class TemplateDeployer:
     def __init__(self, infra_type: str, prefix: str, project_id: str, stage_id: Optional[str] = "default", profile: Optional[str] = None, no_browser: Optional[bool] = False) -> None:
@@ -49,6 +51,15 @@ class TemplateDeployer:
         self.s3_client = self.aws_session.get_client('s3')
         # self.s3_client_anonymous = self.aws_session.get_client('s3', config=botocore.client.Config(signature_version=botocore.UNSIGNED))
         self.s3_client_anonymous = boto3.client('s3', config=botocore.client.Config(signature_version=botocore.UNSIGNED))
+
+        config_loader = DefaultsLoader(
+            settings_dir=self.get_settings_dir(),
+            prefix=self.prefix,
+            project_id=self.project_id,
+            infra_type=self.infra_type
+        )
+
+        self.settings = config_loader.load_settings()
 
     def get_template_from_config(self) -> str:
         """
@@ -290,6 +301,12 @@ class TemplateDeployer:
     def get_samconfig_file_path(self) -> Path:
         """Get the samconfig file path"""
         return self.get_samconfig_dir() / self.get_samconfig_file_name()
+    
+    def get_settings_dir(self) -> Path:
+        """Get the settings directory path"""
+        # Get the script's directory in a cross-platform way
+        script_dir = Path(__file__).resolve().parent
+        return script_dir.parent / SETTINGS_DIR
 
     def is_bucket_public(self, bucket: str) -> bool:
         """Buckets are presumed to be private unless otherwise specified

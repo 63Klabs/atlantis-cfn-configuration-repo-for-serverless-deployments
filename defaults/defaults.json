@@ -6,7 +6,8 @@
   "parameter_overrides": {
     "RolePath": "/app-role/",
     "ServiceRolePath": "/service-role/",
-    "S3BucketNameOrgPrefix": "xcme"
+    "S3BucketNameOrgPrefix": "xcme",
+    "S3ArtifactsBucket": "cf-asdf-deployments"
   },
   "tags": []
 }
