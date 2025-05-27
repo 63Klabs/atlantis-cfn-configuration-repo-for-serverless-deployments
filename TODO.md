@@ -13,7 +13,6 @@
 
 ## Deploy
 
-- Add same Exception checking for public/private buckets
 - Add Pull and Commit
 - Test
 - Documentation
@@ -25,7 +24,6 @@
 
 ## Create Repository
 
-- Add same Exception checking for public/private buckets
 - Finish GitHub implementation
 - Test
 - Documentation
@@ -42,8 +40,7 @@
 
 ## AWS Sessions
 
-- Test No browser support (WSL and UTM) - Maybe just display the link and code
-- UTM has browser support
+- None
 
 ## Test
 
@@ -58,3 +55,4 @@
 - Quick Start
 - Advanced
 - Tutorial
+- Deletions
