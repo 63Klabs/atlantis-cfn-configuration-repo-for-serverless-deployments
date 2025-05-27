@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-VERSION = "v0.1.1/2025-05-20"
+VERSION = "v0.1.2/2025-05-27"
 # Created by Chad Kluck with AI assistance from Amazon Q Developer
 # GitHub Copilot assisted in color formats of output and prompts
 
@@ -360,10 +360,21 @@ class RepositoryCreator:
             Log.info(f"Downloading zip from S3: {self.source}")
 
             # Switch to anonymous client if the bucket is public
-            s3_client = self.s3_client if not self.is_bucket_public(s3_bucket) else self.s3_client_anonymous
-
-            # Use authenticated client for private buckets
-            s3_client.download_file(s3_bucket, s3_key, zip_path)
+            s3_client = self.s3_client_anonymous if self.is_bucket_public(s3_bucket) else self.s3_client
+            try:
+                s3_client.download_file(s3_bucket, s3_key, zip_path)
+            except botocore.exceptions.ClientError as e:
+                if e.response['Error']['Code'] == 'AccessDenied':
+                    if self.is_bucket_public(s3_bucket):
+                        error_msg = f"Access denied when using anonymous access for bucket '{s3_bucket}'. The bucket may not be public or may require authentication."
+                    else:
+                        error_msg = f"Access denied when using authenticated access for bucket '{s3_bucket}'. Check your permissions or try using anonymous access."
+                    
+                    Log.error(error_msg)
+                    click.echo(Colorize.error(error_msg))
+                else:
+                    # Re-raise other client errors
+                    raise
 
         elif self.source_type == 'github':
 
@@ -642,9 +653,22 @@ class RepositoryCreator:
                 Log.info(f"Discovering app starters from s3://{bucket}/{prefix}")
 
                 # Switch to anonymous client if the bucket is public
-                s3_client = self.s3_client if not anonymous else self.s3_client_anonymous
-
-                response = s3_client.list_objects_v2(Bucket=bucket, Prefix=f"{prefix}")
+                s3_client = self.s3_client_anonymous if anonymous else self.s3_client
+                try:
+                    response = s3_client.list_objects_v2(Bucket=bucket, Prefix=f"{prefix}/{self.infra_type}")
+                except botocore.exceptions.ClientError as e:
+                    if e.response['Error']['Code'] == 'AccessDenied':
+                        if anonymous:
+                            error_msg = f"Access denied when using anonymous access for bucket '{bucket}'. The bucket may not be public or may require authentication."
+                        else:
+                            error_msg = f"Access denied when using authenticated access for bucket '{bucket}'. Check your permissions or try using anonymous access."
+                        
+                        Log.error(error_msg)
+                        click.echo(Colorize.error(error_msg))
+                        continue
+                    else:
+                        # Re-raise other client errors
+                        raise
 
                 for obj in response.get('Contents', []):
                     if obj['Key'].endswith('.zip'):

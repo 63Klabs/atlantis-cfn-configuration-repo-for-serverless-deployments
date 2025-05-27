@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-VERSION = "v0.1.1/2025-05-24"
+VERSION = "v0.1.2/2025-05-27"
 # Created by Chad Kluck with AI assistance from Amazon Q Developer
 # GitHub Copilot assisted in color formats of output and prompts
 
@@ -151,8 +151,7 @@ class TemplateDeployer:
         """
 
         # Switch to anonymous client if the bucket is public
-        s3_client = self.s3_client if not self.is_bucket_public(bucket) else self.s3_client_anonymous
-
+        s3_client = self.s3_client_anonymous if self.is_bucket_public(bucket) else self.s3_client
         try:
             params = {'Bucket': bucket, 'Key': key}
             if version_id:
@@ -160,15 +159,25 @@ class TemplateDeployer:
             
             s3_client.head_object(**params)
             return True
-        except ClientError as e:
-            error_code = e.response.get('Error', {}).get('Code')
-            if error_code == '404':
+
+        except botocore.exceptions.ClientError as e:
+            if e.response['Error']['Code'] == 'AccessDenied':
+                if self.is_bucket_public(bucket):
+                    error_msg = f"Access denied when using anonymous access for bucket '{bucket}'. The bucket may not be public or may require authentication."
+                else:
+                    error_msg = f"Access denied when using authenticated access for bucket '{bucket}'. Check your permissions or try using anonymous access."
+                
+                ConsoleAndLog.error(error_msg)
+            elif e.response['Error']['Code'] == '404':
                 ConsoleAndLog.error(f"Template file not found: s3://{bucket}/{key}" + 
                                 (f"?versionId={version_id}" if version_id else ""))
             else:
+                # Re-raise other client errors
                 ConsoleAndLog.error(f"Error accessing S3: {str(e)}")
-            return False
+                raise
 
+            return False
+        
     def deploy_with_temp_template(self, template_path: str) -> int:
         """
         Deploy template from either S3 or local file.
@@ -203,7 +212,7 @@ class TemplateDeployer:
                                 (f"?versionId={version_id}" if version_id else ""))
                     
                     # Switch to anonymous client if the bucket is public
-                    s3_client = self.s3_client if not self.is_bucket_public(bucket) else self.s3_client_anonymous
+                    s3_client = self.s3_client_anonymous if self.is_bucket_public(bucket) else self.s3_client
 
                     try:
                         get_args = {
@@ -217,16 +226,19 @@ class TemplateDeployer:
                         with open(temp_path, 'wb') as f:
                             f.write(response['Body'].read())
 
-                    except ClientError as e:
-                        if 'ExpiredToken' in str(e):
-                            ConsoleAndLog.info("Token expired, refreshing credentials...")
-                            self.refresh_credentials()
-                            response = s3_client.get_object(**get_args)
-                            with open(temp_path, 'wb') as f:
-                                f.write(response['Body'].read())
+                    except botocore.exceptions.ClientError as e:
+                        if e.response['Error']['Code'] == 'AccessDenied':
+                            if self.is_bucket_public(bucket):
+                                error_msg = f"Access denied when using anonymous access for bucket '{bucket}'. The bucket may not be public or may require authentication."
+                            else:
+                                error_msg = f"Access denied when using authenticated access for bucket '{bucket}'. Check your permissions or try using anonymous access."
+                            
+                            ConsoleAndLog.error(error_msg)
+
                         else:
                             ConsoleAndLog.error(f"Failed to download template: {str(e)}")
-                            return 1
+                        
+                        return 1
 
                     return self._run_sam_deploy(temp_path, config_path)
             else:
