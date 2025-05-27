@@ -13,6 +13,7 @@
 
 ## Deploy
 
+- Add same Exception checking for public/private buckets
 - Add Pull and Commit
 - Test
 - Documentation
@@ -24,6 +25,8 @@
 
 ## Create Repository
 
+- Add same Exception checking for public/private buckets
+- Finish GitHub implementation
 - Test
 - Documentation
 

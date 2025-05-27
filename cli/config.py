@@ -1237,30 +1237,45 @@ class ConfigManager:
                 bucket_name = template_path.split('/')[2]
 
                 # Switch to anonymous client if the bucket is public
-                s3_client = self.s3_client if not self.is_bucket_public(bucket_name) else self.s3_client_anonymous
-
-                # Split the key and potential version ID
-                remaining_path = '/'.join(template_path.split('/')[3:])
-                if '?' in remaining_path:
-                    key, query_string = remaining_path.split('?', 1)
-                    if query_string.startswith('versionId='):
-                        version_id = query_string.replace('versionId=', '')
-                        # Get object with specific version
+                s3_client = self.s3_client_anonymous if self.is_bucket_public(bucket_name) else self.s3_client
+                try:
+                    # Split the key and potential version ID
+                    remaining_path = '/'.join(template_path.split('/')[3:])
+                    if '?' in remaining_path:
+                        key, query_string = remaining_path.split('?', 1)
+                        if query_string.startswith('versionId='):
+                            version_id = query_string.replace('versionId=', '')
+                            # Get object with specific version
+                            response = s3_client.get_object(
+                                Bucket=bucket_name,
+                                Key=key,
+                                VersionId=version_id
+                            )
+                    else:
+                        key = remaining_path
+                        # Get latest version of object
                         response = s3_client.get_object(
                             Bucket=bucket_name,
-                            Key=key,
-                            VersionId=version_id
+                            Key=key
                         )
-                else:
-                    key = remaining_path
-                    # Get latest version of object
-                    response = s3_client.get_object(
-                        Bucket=bucket_name,
-                        Key=key
-                    )
-                
-                content = response['Body'].read()
-                return content, template_path
+                    
+                    content = response['Body'].read()
+                    return content, template_path
+                except botocore.exceptions.ClientError as e:
+                    if e.response['Error']['Code'] == 'AccessDenied':
+                        if self.is_bucket_public(bucket_name):
+                            error_msg = f"Access denied when using anonymous access for bucket '{bucket_name}'. The bucket may not be public or may require authentication."
+                        else:
+                            error_msg = f"Access denied when using authenticated access for bucket '{bucket_name}'. Check your permissions or try using anonymous access."
+                        
+                        Log.error(error_msg)
+                        click.echo(Colorize.error(error_msg))
+                    elif e.response['Error']['Code'] == '404':
+                        Log.warning(f"Template not found at s3://{bucket_name}/{key}")
+                        return '', str(template_path)
+                    else:
+                        # Re-raise other client errors
+                        raise
 
             else:
                 # Handle local template
@@ -1624,13 +1639,13 @@ class ConfigManager:
                 header_pystr += f" --profile {self.profile}"
 
             delete_msg = (
-                '1. FIRST delete the application stack using the command below:\n'
-                '   sam delete --stack-name APPLICATION_STACK_NAME --profile [PROFILE]\n'
-                '2. THEN delete the pipeline stack using the command below:\n'
-                '   sam delete --stack-name PIPELINE_STACK_NAME --profile [PROFILE]\n'
-                ' -- FAILURE TO DELETE IN THIS ORDER WILL RESULT IN MISSING IAM PERMISSIONS! --\n\n'               
+                '# 1. FIRST delete the application stack using the command below:\n'
+                '#    sam delete --stack-name APPLICATION_STACK_NAME --profile [PROFILE]\n'
+                '# 2. THEN delete the pipeline stack using the command below:\n'
+                '#    sam delete --stack-name PIPELINE_STACK_NAME --profile [PROFILE]\n'
+                '#  -- FAILURE TO DELETE IN THIS ORDER WILL RESULT IN MISSING IAM PERMISSIONS! --\n\n'               
             ) if self.infra_type == 'pipeline' else (
-                f'sam delete --stack-name STACK_NAME --profile [PROFILE]\n\n'
+                f'# sam delete --stack-name STACK_NAME --profile [PROFILE]\n\n'
             )
             # Create the header with version and comments
             header = (
@@ -1833,9 +1848,22 @@ class ConfigManager:
                 Log.info(f"Discovering templates from s3://{bucket}/{prefix}/{self.infra_type}")
 
                 # Switch to anonymous client if the bucket is public
-                s3_client = self.s3_client if not anonymous else self.s3_client_anonymous
-
-                response = s3_client.list_objects_v2(Bucket=bucket, Prefix=f"{prefix}/{self.infra_type}")
+                s3_client = self.s3_client_anonymous if anonymous else self.s3_client
+                try:
+                    response = s3_client.list_objects_v2(Bucket=bucket, Prefix=f"{prefix}/{self.infra_type}")
+                except botocore.exceptions.ClientError as e:
+                    if e.response['Error']['Code'] == 'AccessDenied':
+                        if anonymous:
+                            error_msg = f"Access denied when using anonymous access for bucket '{bucket}'. The bucket may not be public or may require authentication."
+                        else:
+                            error_msg = f"Access denied when using authenticated access for bucket '{bucket}'. Check your permissions or try using anonymous access."
+                        
+                        Log.error(error_msg)
+                        click.echo(Colorize.error(error_msg))
+                        continue
+                    else:
+                        # Re-raise other client errors
+                        raise
 
                 for obj in response.get('Contents', []):
                     if obj['Key'].endswith('.yml') or obj['Key'].endswith('.yaml'):
@@ -1905,10 +1933,21 @@ class ConfigManager:
             version_id = ''
 
             # Switch to anonymous client if the bucket is public
-            s3_client = self.s3_client if not self.is_bucket_public(bucket) else self.s3_client_anonymous
-
-            # Use authenticated client for private buckets
-            version_id = s3_client.head_object(Bucket=bucket, Key=key).get('VersionId', '')
+            s3_client = self.s3_client_anonymous if self.is_bucket_public(bucket) else self.s3_client
+            try:
+                version_id = s3_client.head_object(Bucket=bucket, Key=key).get('VersionId', '')
+            except botocore.exceptions.ClientError as e:
+                if e.response['Error']['Code'] == 'AccessDenied':
+                    if self.is_bucket_public(bucket):
+                        error_msg = f"Access denied when using anonymous access for bucket '{bucket}'. The bucket may not be public or may require authentication."
+                    else:
+                        error_msg = f"Access denied when using authenticated access for bucket '{bucket}'. Check your permissions or try using anonymous access."
+                    
+                    Log.error(error_msg)
+                    click.echo(Colorize.error(error_msg))
+                else:
+                    # Re-raise other client errors
+                    raise
 
             if version_id:
                 return f"{s3_uri}?versionId={version_id}"
@@ -1930,24 +1969,30 @@ class ConfigManager:
         """
         try:
             bucket, key, current_version_id = self._parse_s3_uri(s3_uri)
-
-            # Switch to anonymous client if the bucket is public
-            s3_client = self.s3_client if not self.is_bucket_public(bucket) else self.s3_client_anonymous
+            latest_version_id = ''
 
             Log.info(f"Checking for template update: s3://{bucket}/{key}")
 
+            # Switch to anonymous client if the bucket is public
+            s3_client = self.s3_client_anonymous if self.is_bucket_public(bucket) else self.s3_client
             try:
-
-                latest_version_id = ''
-
                 # Get the latest version ID
                 latest_version_id = s3_client.head_object(Bucket=bucket, Key=key).get('VersionId', '')
-
-            except s3_client.exceptions.ClientError as e:
-                if e.response['Error']['Code'] == '404':
+            except botocore.exceptions.ClientError as e:
+                if e.response['Error']['Code'] == 'AccessDenied':
+                    if self.is_bucket_public(bucket):
+                        error_msg = f"Access denied when using anonymous access for bucket '{bucket}'. The bucket may not be public or may require authentication."
+                    else:
+                        error_msg = f"Access denied when using authenticated access for bucket '{bucket}'. Check your permissions or try using anonymous access."
+                    
+                    Log.error(error_msg)
+                    click.echo(Colorize.error(error_msg))
+                elif e.response['Error']['Code'] == '404':
                     Log.warning(f"Template not found at s3://{bucket}/{key}")
                     return s3_uri
-                raise
+                else:
+                    # Re-raise other client errors
+                    raise
 
             Log.info(f"Latest version ID: {latest_version_id}")
 
