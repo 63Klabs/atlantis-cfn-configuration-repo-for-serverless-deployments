@@ -655,7 +655,7 @@ class RepositoryCreator:
                 # Switch to anonymous client if the bucket is public
                 s3_client = self.s3_client_anonymous if anonymous else self.s3_client
                 try:
-                    response = s3_client.list_objects_v2(Bucket=bucket, Prefix=f"{prefix}/{self.infra_type}")
+                    response = s3_client.list_objects_v2(Bucket=bucket, Prefix=f"{prefix}")
                 except botocore.exceptions.ClientError as e:
                     if e.response['Error']['Code'] == 'AccessDenied':
                         if anonymous:
