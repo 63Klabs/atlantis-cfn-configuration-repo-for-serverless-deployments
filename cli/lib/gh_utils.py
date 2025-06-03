@@ -91,21 +91,48 @@ class GitHubUtils:
         except requests.exceptions.RequestException as e:
             raise Exception(f"Failed to get latest release: {str(e)}")
         
+    # @staticmethod
+    # def download_zip_from_url(url: str, zip_path: Optional[str] = None) -> str:
+    #     """
+    #     Download a ZIP file from a GitHub repository URL
+    #     Args:
+    #         url (str): GitHub repository URL
+    #     Returns:
+    #         str: Path to the downloaded ZIP file
+    #     """
+
+    #     # Create a temporary file path with .zip extension
+    #     if zip_path is None:
+    #         zip_path = tempfile.mktemp(suffix='.zip')
+       
+    #     try:
+    #         response = requests.get(url, stream=True)
+    #         response.raise_for_status()  # Raise an exception for HTTP errors
+    #         with open(zip_path, 'wb') as f:
+    #             for chunk in response.iter_content(chunk_size=8192):
+    #                 f.write(chunk)
+    #         return zip_path
+    #     except requests.exceptions.RequestException as e:
+    #         raise Exception(f"Failed to download ZIP file: {str(e)}")
+
     @staticmethod
     def download_zip_from_url(url: str, zip_path: Optional[str] = None) -> str:
         """
         Download a ZIP file from a GitHub repository URL
         Args:
             url (str): GitHub repository URL
+            zip_path (Optional[str]): Path to save the ZIP file, if provided
         Returns:
             str: Path to the downloaded ZIP file
         """
-
-        # Create a temporary file path with .zip extension
-        if zip_path is None:
-            zip_path = tempfile.mktemp(suffix='.zip')
-       
+        temp_file_created = False
         try:
+            # Create a temporary file with .zip extension if zip_path is not provided
+            if zip_path is None:
+                with tempfile.NamedTemporaryFile(suffix='.zip', delete=False) as temp_file:
+                    zip_path = temp_file.name
+                    temp_file_created = True
+            
             response = requests.get(url, stream=True)
             response.raise_for_status()  # Raise an exception for HTTP errors
             with open(zip_path, 'wb') as f:
@@ -113,7 +140,11 @@ class GitHubUtils:
                     f.write(chunk)
             return zip_path
         except requests.exceptions.RequestException as e:
+            # Clean up the temporary file if we created one and an error occurred
+            if temp_file_created and zip_path and os.path.exists(zip_path):
+                os.unlink(zip_path)
             raise Exception(f"Failed to download ZIP file: {str(e)}")
+
 
     @staticmethod
     def create_repo(repo_name: str, private: bool = True, description: str = None) -> Dict:
@@ -208,35 +239,51 @@ class GitHubUtils:
     def create_branch_structure(repo_name: str, readme_content: str, author: str, email: str):
         """
         Create main, test, and dev branches in a GitHub repo using the gh CLI.
+        
+        Args:
+            repo_name (str): Repository name (e.g., "owner/repo")
+            readme_content (str): Content for the README.md file
+            author (str): Author name for commits
+            email (str): Author email for commits
         """
         temp_dir = tempfile.mkdtemp()
         try:
             # Clone the repo
-            subprocess.run(["gh", "repo", "clone", repo_name, temp_dir], check=True)
+            subprocess.run(
+                ["gh", "repo", "clone", repo_name, temp_dir],
+                check=True, capture_output=True
+            )
             os.chdir(temp_dir)
 
-            # Set git user config
-            subprocess.run(["git", "config", "user.name", author], check=True)
-            subprocess.run(["git", "config", "user.email", email], check=True)
+            # Configure git user for this repo
+            subprocess.run(
+                ["git", "config", "user.name", author],
+                cwd=temp_dir, check=True, capture_output=True
+            )
+            subprocess.run(
+                ["git", "config", "user.email", email],
+                cwd=temp_dir, check=True, capture_output=True
+            )
 
             # Ensure main branch exists and checkout
-            subprocess.run(["git", "checkout", "-B", "main"], check=True)
+            subprocess.run(["git", "checkout", "-B", "main"], cwd=temp_dir, check=True, capture_output=True)
 
-            # Write README.md
-            with open("README.md", "w") as f:
+            # Create README.md
+            readme_path = os.path.join(temp_dir, "README.md")
+            with open(readme_path, 'w') as f:
                 f.write(readme_content)
 
-            subprocess.run(["git", "add", "README.md"], check=True)
-            subprocess.run(["git", "commit", "-m", "Initial README.md commit"], check=True)
-            subprocess.run(["git", "push", "-u", "origin", "main"], check=True)
+            subprocess.run(["git", "add", "README.md"], cwd=temp_dir, check=True, capture_output=True)
+            subprocess.run(["git", "commit", "-m", "Initial README.md commit"], cwd=temp_dir, check=True, capture_output=True)
+            subprocess.run(["git", "push", "-u", "origin", "main"], cwd=temp_dir, check=True, capture_output=True)
 
             # Create and push test branch from main
-            subprocess.run(["git", "checkout", "-b", "test"], check=True)
-            subprocess.run(["git", "push", "-u", "origin", "test"], check=True)
+            subprocess.run(["git", "checkout", "-b", "test"], cwd=temp_dir, check=True, capture_output=True)
+            subprocess.run(["git", "push", "-u", "origin", "test"], cwd=temp_dir, check=True, capture_output=True)
 
             # Create and push dev branch from test
-            subprocess.run(["git", "checkout", "-b", "dev"], check=True)
-            subprocess.run(["git", "push", "-u", "origin", "dev"], check=True)
+            subprocess.run(["git", "checkout", "-b", "dev"], cwd=temp_dir, check=True, capture_output=True)
+            subprocess.run(["git", "push", "-u", "origin", "dev"], cwd=temp_dir, check=True, capture_output=True)
 
         finally:
             os.chdir("/")

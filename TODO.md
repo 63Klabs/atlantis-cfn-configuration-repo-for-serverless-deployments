@@ -25,6 +25,7 @@
 ## Create Repository
 
 - Finish GitHub implementation
+- Grab git user and email from environment
 - Test
 - Documentation
 
