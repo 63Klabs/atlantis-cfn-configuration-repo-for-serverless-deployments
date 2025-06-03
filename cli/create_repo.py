@@ -524,40 +524,46 @@ class RepositoryCreator:
             shutil.rmtree(temp_dir, ignore_errors=True)
             sys.exit(1)
 
+    def _seed_collect_files(self, temp_dir: str) -> List[Dict]:
+        """Collect all files in the temp directory and return a list of file dictionaries"""
+        all_files = []
+        for root, _, files in os.walk(temp_dir):
+            for file in files:
+                full_path = os.path.join(root, file)
+                relative_path = os.path.relpath(full_path, temp_dir)
+                
+                try:
+                    with open(full_path, 'rb') as f:
+                        content = f.read()
+                        
+                    try:
+                        file_content = content.decode('utf-8')
+                    except UnicodeDecodeError:
+                        file_content = base64.b64encode(content).decode('utf-8')
+                        
+                    all_files.append({
+                        'filePath': relative_path,
+                        'fileContent': file_content,
+                        'fileMode': 'NORMAL'
+                    })
+                except Exception as e:
+                    click.echo(Colorize.error(f"Error processing file {relative_path}"))
+                    Log.error(f"Error processing file {relative_path}: {str(e)}")
+                    self.codecommit_client.delete_repository(repositoryName=self.repo_name)
+                    sys.exit(1)
+
+        return all_files
+
     def _seed_repository_codecommit(self, temp_dir):
         try:
             # Collect all files to be processed
-            all_files = []
-            for root, _, files in os.walk(temp_dir):
-                for file in files:
-                    full_path = os.path.join(root, file)
-                    relative_path = os.path.relpath(full_path, temp_dir)
-                    
-                    try:
-                        with open(full_path, 'rb') as f:
-                            content = f.read()
-                            
-                        try:
-                            file_content = content.decode('utf-8')
-                        except UnicodeDecodeError:
-                            file_content = base64.b64encode(content).decode('utf-8')
-                            
-                        all_files.append({
-                            'filePath': relative_path,
-                            'fileContent': file_content,
-                            'fileMode': 'NORMAL'
-                        })
-                    except Exception as e:
-                        click.echo(Colorize.error(f"Error processing file {relative_path}"))
-                        Log.error(f"Error processing file {relative_path}: {str(e)}")
-                        self.codecommit_client.delete_repository(repositoryName=self.repo_name)
-                        sys.exit(1)
+            all_files = self._seed_collect_files(temp_dir)
 
             # Process files in batches of 100
             batch_size = 100
             total_files = len(all_files)
             processed_files = 0
-            seed_branch = "dev"  # or whatever branch you want to seed
+            seed_branch = "dev"
 
             click.echo(Colorize.output(f"Seeding repository with {total_files} files"))
             Log.info(f"Creating initial commit with {total_files} files")
@@ -619,7 +625,33 @@ class RepositoryCreator:
             shutil.rmtree(temp_dir, ignore_errors=True)
 
     def _seed_repository_github(self, temp_dir):
-        print("Not yet implemented")
+        try:
+            # Collect all files to be processed
+            all_files = self._seed_collect_files(temp_dir)
+
+            total_files = len(all_files)
+            seed_branch = "dev"
+
+            click.echo(Colorize.output(f"Seeding repository with {total_files} files"))
+            Log.info(f"Creating initial commit with {total_files} files")
+
+            # Create a temporary directory for git operations
+            git_dir = tempfile.mkdtemp()
+
+            GitHubUtils.create_init_commit(all_files, self.repo_name, seed_branch, self.get_init_commit_author(), self.get_init_commit_email(), git_dir)
+
+            Log.info(f"Repository {self.repo_name} seeded successfully!")
+            Log.info(f"Total files processed: {total_files}")
+            click.echo(Colorize.success(f"Repository {self.repo_name} seeded successfully!"))
+            click.echo(Colorize.output_with_value("Total files processed:", str(total_files)))
+            
+        except Exception as e:
+            click.echo(Colorize.error(f"Error in seeding process. Check logs for more information."))
+            Log.error(f"Error in seeding process: {str(e)}")
+            sys.exit(1)
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
 
 
     def _is_binary_string(self, bytes_data, sample_size=1024):

@@ -14,7 +14,7 @@ import shutil
 import subprocess
 import json
 
-from typing import Dict, Optional
+from typing import Dict, List, Optional
 
 # =============================================================================
 # ----- GITHUB UTILS ----------------------------------------------------------
@@ -236,7 +236,7 @@ class GitHubUtils:
             raise Exception(f"Failed to get repository info: {str(e)}")
     
     @staticmethod
-    def create_branch_structure(repo_name: str, readme_content: str, author: str, email: str):
+    def create_branch_structure(repo_name: str, readme_content: str, author: str, email: str) -> None:
         """
         Create main, test, and dev branches in a GitHub repo using the gh CLI.
         
@@ -266,7 +266,10 @@ class GitHubUtils:
             )
 
             # Ensure main branch exists and checkout
-            subprocess.run(["git", "checkout", "-B", "main"], cwd=temp_dir, check=True, capture_output=True)
+            subprocess.run(
+                ["git", "checkout", "-B", "main"]
+                , cwd=temp_dir, check=True, capture_output=True
+            )
 
             # Create README.md
             readme_path = os.path.join(temp_dir, "README.md")
@@ -288,3 +291,77 @@ class GitHubUtils:
         finally:
             os.chdir("/")
             shutil.rmtree(temp_dir, ignore_errors=True)
+
+    @staticmethod
+    def create_init_commit(all_files: List[Dict], repo_name: str, seed_branch: str, author: str, email: str, git_dir: str) -> None:
+        """
+        Create an initial commit with all files in a GitHub repository using the gh CLI.
+
+        Args:
+            all_files (list): List of dictionaries containing file information
+            repo_name (str): Repository name (e.g., "owner/repo")
+            seed_branch (str): Branch name for seeding
+            author (str): Author name for commits
+            email (str): Author email for commits
+            git_dir (str): Path to the cloned repository directory
+        """
+
+        try:
+
+            total_files = len(all_files)
+
+            # Clone the repository
+            subprocess.run(
+                ["gh", "repo", "clone", repo_name, git_dir],
+                check=True, capture_output=True
+            )
+            
+            # Configure git user for this repo
+            subprocess.run(
+                ["git", "config", "user.name", author],
+                cwd=git_dir, check=True, capture_output=True
+            )
+            subprocess.run(
+                ["git", "config", "user.email", email],
+                cwd=git_dir, check=True, capture_output=True
+            )
+            
+            # Checkout the dev branch
+            subprocess.run(
+                ["git", "checkout", seed_branch],
+                cwd=git_dir, check=True, capture_output=True
+            )
+            
+            # Copy all files from temp_dir to git_dir
+            for file_info in all_files:
+                file_path = file_info['filePath']
+                file_content = file_info['fileContent']
+                
+                # Create directory structure if needed
+                full_path = os.path.join(git_dir, file_path)
+                os.makedirs(os.path.dirname(full_path), exist_ok=True)
+                
+                # Write file content
+                with open(full_path, 'w' if isinstance(file_content, str) else 'wb') as f:
+                    f.write(file_content)
+            
+            # Add all files
+            subprocess.run(
+                ["git", "add", "."],
+                cwd=git_dir, check=True, capture_output=True
+            )
+            
+            # Commit changes
+            commit_message = f'Seeding repository with {total_files} files'
+            subprocess.run(
+                ["git", "commit", "-m", commit_message],
+                cwd=git_dir, check=True, capture_output=True
+            )
+            
+            # Push to remote
+            subprocess.run(
+                ["git", "push", "origin", seed_branch],
+                cwd=git_dir, check=True, capture_output=True
+            )
+        except subprocess.CalledProcessError as e:
+            raise Exception(f"Error in GitHub CLI command: {e.cmd}\nOutput: {e.stdout.decode() if e.stdout else ''}\nError: {e.stderr.decode() if e.stderr else ''}")
