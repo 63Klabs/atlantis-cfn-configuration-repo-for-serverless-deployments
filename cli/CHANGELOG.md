@@ -1,5 +1,11 @@
 # Changelog
 
-## 0.0.1 Beta Release (2025-04-xx)
+To update your local cli scripts from GitHub repository:
 
-All new cli and structure.
+```bash
+./cli/update.py
+```
+
+## 0.0.5 (2025-06-xx)
+
+Mostly stable.
