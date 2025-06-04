@@ -14,6 +14,7 @@ These cli and templates overcome those limitations and establish a structured ap
 2. AWS SAM CLI installed
 3. Git installed
 4. Configured AWS profile with valid credentials
+5. GitHub CLI installed if you are using GitHub as your repo provider
 
 These instructions assume you have an AWS account, AWS CLI, SAM, and profile configuration set up. They also assume a Linux-like environment and CLI. On Windows you can use Git Bash or Windows Subsystem for Linux (WSL). And finally, you should have a familiarity with AWS CLI, SAM, and git.
 
@@ -24,30 +25,29 @@ These instructions assume you have an AWS account, AWS CLI, SAM, and profile con
 **If you are a developer** your organization should already have the configuration repository established. Obtain necessary information about the repository location, prefix, cf bucket, and other requirements from your administrator. If you do not yet have an AWS development environment set up see [Set-Up-Local-Environment](./docs/00-Set-Up-Local-Environment.md).
 
 1. Clone this repository from your organization's version control system
-2. Make cli executable
+2. Make cli Python scripts executable
 
 ```bash
 chmod +x ./cli/*.py
-chmod +x ./cli/*.sh
 ```
 
 ## Basic Usage Examples
 
 ```bash
-# You may need to add --profile yourprofile if not using the default AWS CLI profile
+# You may need to add --profile <yourprofile> if not using the default AWS CLI profile
 # Python cli will automatically check for current credentials an initiate a login if necessary.
 
-# Create a CodeCommit repository and seed it with an application starter from a list of choices
+# Create a CodeCommit repository and seed it from a list of application starters
 ./cli/create_repo.py your-repo-name
 
-# Create a CodeCommit repository and seed it with an application starter from a zip in S3
-./cli/create_repo.py your-repo-name --s3-uri s3://bucket/path/to/file.zip
+# Create a CodeCommit repository and seed it with a starter from a zip in S3
+./cli/create_repo.py your-repo-name --source s3://bucket/path/to/file.zip
 
-# Create a GitHub repository and seed it with an application starter from a zip in S3 (requires GitHub CLI)
-./cli/create-gh-repo.sh your-repo-name s3://bucket/path/to/file.zip
+# Create a GitHub repository and choose from a list of application starters
+./cli/create_repo.py your-repo-name --provider github
 
 # Create a GitHub repository and seed it with an application starter from a GitHub repository (requires GitHub CLI)
-./cli/create-gh-repo.sh your-repo-name https://github.com/someacct/some-repository
+./cli/create_repo.py your-repo-name --source https://github.com/someacct/some-repository --provider github
 
 # Create/Manage a pipeline infrastructure stack for your application's test branch
 ./cli/config.py pipeline acme your-webapp test

@@ -1,4 +1,4 @@
-# TODO
+# TODO - Features
 
 ## Config
 
@@ -24,7 +24,6 @@
 
 ## Create Repository
 
-- Finish GitHub implementation
 - Test
 - Documentation
 
@@ -38,21 +37,10 @@
 
 - Make sure logs are being stored in the right spot when current working dir is not repo root
 
-## AWS Sessions
+### AWS Sessions
 
 - None
 
-## Test
+### GitHub Utils
 
-- Test IAM deploy
-- Test Storage Deploy
-- Test Pipeline deploy
-- Test Network Deploy
-
-## Documentation
-
-- Install
-- Quick Start
-- Advanced
-- Tutorial
-- Deletions
+- None

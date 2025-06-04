@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-VERSION = "v0.1.3/2025-06-04"
+VERSION = "v0.1.4/2025-06-04"
 # Created by Chad Kluck with AI assistance from Amazon Q Developer
 # GitHub Copilot assisted with GitHub operations and color formats of output and prompts
 
@@ -952,11 +952,15 @@ Examples:
     # Create repository and choose from provided application starters
     create_repo.py your-webapp
 
-    # Create repository and load code from zip
-    create_repo.py <repo-name> --s3-uri <s3://bucket/path/to/file.zip>
+    # Create repository using GitHub as the provider (override default specified in settings.json)
+    # Note use of <owner>/<repo-name> format for GitHub
+    create_repo.py <owner>/your-webapp --provider github
 
-    # Create repository and load code from zip using profile
-    create_repo.py <repo-name> --source <s3://bucket/path/to/file.zip> --profile <profile>
+    # Create repository using GitHub as the provider (override default specified in settings.json)
+    create_repo.py your-webapp --provider codecommit
+
+    # Create repository and load code from zip on S3
+    create_repo.py <repo-name> --source <s3://bucket/path/to/file.zip>
 
     # Create repository and load code from GitHub repo
     create_repo.py <repo-name> --source https://github.com/<user>/<repo>
