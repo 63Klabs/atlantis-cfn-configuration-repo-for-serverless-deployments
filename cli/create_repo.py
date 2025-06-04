@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 
-VERSION = "v0.1.2/2025-05-27"
+VERSION = "v0.1.3/2025-06-04"
 # Created by Chad Kluck with AI assistance from Amazon Q Developer
-# GitHub Copilot assisted in color formats of output and prompts
+# GitHub Copilot assisted with GitHub operations and color formats of output and prompts
 
 # Usage Information:
 # create_repo.py -h
@@ -81,6 +81,26 @@ class RepositoryCreator:
             click.echo(Colorize.error(f"Invalid provider: {self.provider}. Valid providers are: {', '.join(VALID_PROVIDERS)}"))
             Log.error(f"Error: Invalid provider: {self.provider}. Valid providers are: {', '.join(VALID_PROVIDERS)}")
             sys.exit(1)
+
+        if self.provider == 'github':
+            # Make sure GitHub CLI is installed
+            if not GitHubUtils.is_installed():
+                msg = "GitHub CLI is not installed. Please install it and try again."
+                click.echo(Colorize.error(msg))
+                Log.error(msg)
+                sys.exit(1)
+            # Make sure GitHub CLI is authenticated
+            if not GitHubUtils.is_authenticated():
+                msg = "GitHub CLI is not authenticated. Please authenticate using 'gh auth login' and try again."
+                click.echo(Colorize.error(msg))
+                Log.error(msg)
+                sys.exit(1)
+            # Make sure repository name is valid for GitHub owner/repo format
+            if not re.match(r'^[a-zA-Z0-9](?:-?[a-zA-Z0-9]){0,38}/[a-zA-Z0-9._-]{1,100}$', self.repo_name):
+                msg = "Invalid repository name for GitHub. Must be in owner/repo format: owner (1-39 chars), repo (1-100 chars), allowed: a-z, A-Z, 0-9, -, _, ."
+                click.echo(Colorize.error(msg))
+                Log.error(msg)
+                sys.exit(1)
 
     # -------------------------------------------------------------------------
     # - Utility

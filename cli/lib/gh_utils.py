@@ -23,6 +23,38 @@ from typing import Dict, List, Optional
 class GitHubUtils:
 
     @staticmethod
+    def is_installed() -> bool:
+        """
+        Check if GitHub CLI (gh) is installed and available in the PATH.
+        
+        Returns:
+            bool: True if GitHub CLI is installed, False otherwise
+        """
+        return shutil.which('gh') is not None
+
+    @staticmethod
+    def is_authenticated() -> bool:
+        """
+        Check if GitHub CLI (gh) is authenticated.
+        
+        Returns:
+            bool: True if GitHub CLI is authenticated, False otherwise
+        """
+        try:
+            # Run 'gh auth status' to check authentication status
+            result = subprocess.run(
+                ['gh', 'auth', 'status'], 
+                stdout=subprocess.PIPE, 
+                stderr=subprocess.PIPE, 
+                check=False
+            )
+            # Return True if the command was successful (exit code 0)
+            return result.returncode == 0
+        except Exception:
+            # If any exception occurs, assume not authenticated
+            return False
+
+    @staticmethod
     def parse_repo_info_from_url(url: str) -> Dict[str, str]:
         """
         Parse GitHub repository information from a URL.
