@@ -20,5 +20,5 @@ Mostly stable. Still in Beta.
 
 Mostly stable. Still in Beta.
 
-    Fixed issue where update.py was not pulling the latest changes from the organization's SAM config repository.
-    Fixed issue where CodeCommit and Repository tags are being erroneously added to the tag prompts for the user even though they are automatically managed.
+- Fixed issue in update.py where it was not pulling the latest changes from the organization's SAM config repository.
+- Fixed issue in config.py where CodeCommit and Repository tags are being erroneously added to the tag prompts for the user even though they are automatically managed.
