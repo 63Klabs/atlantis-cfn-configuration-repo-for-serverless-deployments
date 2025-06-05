@@ -12,9 +12,13 @@ To update your local cli scripts from GitHub repository:
 - Refer to [TODO](../TODO.md) for upcoming BETA fixes and features.
 - Report any issues not covered in TODO via the [Issues page in the GitHub repository](https://github.com/63Klabs/atlantis-cfn-configuration-repo-for-serverless-deployments/issues)
 
+## v0.0.6 (2025-06-xx)
+
+Mostly stable. Still in Beta.
+
 ## v0.0.5 (2025-06-07)
 
 Mostly stable. Still in Beta.
 
-- Fixed issue where update.py was not pulling latest changes from organization's SAM config repository.
-- Fixed issue where CodeCommit and Repository tags being erroneously added to the tag prompts for the user even though they are automatically managed.
+    Fixed issue where update.py was not pulling the latest changes from the organization's SAM config repository.
+    Fixed issue where CodeCommit and Repository tags are being erroneously added to the tag prompts for the user even though they are automatically managed.
