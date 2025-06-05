@@ -81,7 +81,7 @@ class TagUtils:
         Returns:
             bool: True if the tag key is not a reserved Atlantis tag
         """
-        return (key.startswith('Atlantis') or key.startswith('atlantis:') or key in ['Provisioner', 'DeployedUsing', 'Name', 'Stage', 'Environment', 'AlarmNotificationEmail'])
+        return (key.startswith('Atlantis') or key.startswith('atlantis:') or key in ['Provisioner', 'DeployedUsing', 'Name', 'Stage', 'Environment', 'AlarmNotificationEmail', 'Repository', 'RepositoryBranch', 'CodeCommitRepository', 'CodeCommitBranch'])
 
     @staticmethod
     def prompt_for_tags(tags: Dict) -> Dict:

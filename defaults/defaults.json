@@ -8,7 +8,8 @@
     "ServiceRolePath": "/service-role/",
     "S3BucketNameOrgPrefix": "xcme",
     "S3ArtifactsBucket": "cf-asdf-deployments",
-    "ParameterStoreHierarchy": "/"
+    "ParameterStoreHierarchy": "/",
+    "PermissionsBoundaryArn": "arn:aws:iam::123456789012:policy/MyPermissionsBoundary"
   },
   "tags": []
 }

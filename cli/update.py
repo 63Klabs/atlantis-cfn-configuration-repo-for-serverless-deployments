@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-VERSION = "v0.1.0/2025-03-30"
+VERSION = "v0.1.3/2025-06-05"
 # Created by Chad Kluck with AI assistance from Amazon Q Developer
 
 import os
@@ -532,7 +532,7 @@ class GitOperationsManager:
                 if choice not in ['YES', 'NO']:
                     click.echo(Colorize.error("Please enter 'YES' or 'NO'"))
 
-            if choice.strip().lower() == 'YES':
+            if choice.strip().upper() == 'YES':
                 ConsoleAndLog.info("Pulling latest changes...")
                 subprocess.run(
                     ["git", "pull"],

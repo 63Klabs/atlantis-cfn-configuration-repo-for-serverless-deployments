@@ -1114,7 +1114,7 @@ class ConfigManager:
             Input: 'ParameterKey1=value1 ParameterKey2="value 2"'
             Output: {'ParameterKey1': 'value1', 'ParameterKey2': 'value 2'}
         """
- 
+
         parameters: Dict[str, str] = {}
         
         if not parameter_string:
