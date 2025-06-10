@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-VERSION = "v0.1.3/2025-06-05"
+VERSION = "v0.1.4/2025-06-09"
 # Created by Chad Kluck with AI assistance from Amazon Q Developer
 
 import os
@@ -855,6 +855,10 @@ def main():
     success = False
     zip_loc = None
     git_manager = GitOperationsManager(args.headless)
+    update_manager = UpdateManager(
+        args.profile, args.dryrun,
+        args.no_browser
+    )
 
     try:
         Log.info(f"{sys.argv}")
@@ -881,10 +885,6 @@ def main():
 
         # Perform Update
         try:
-            update_manager = UpdateManager(
-                args.profile, args.dryrun,
-                args.no_browser
-            )
 
             zip_loc = update_manager.download_zip()
 

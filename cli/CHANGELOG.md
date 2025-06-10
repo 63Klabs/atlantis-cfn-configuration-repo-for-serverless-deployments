@@ -12,9 +12,15 @@ To update your local cli scripts from GitHub repository:
 - Refer to [TODO](../TODO.md) for upcoming BETA fixes and features.
 - Report any issues not covered in TODO via the [Issues page in the GitHub repository](https://github.com/63Klabs/atlantis-cfn-configuration-repo-for-serverless-deployments/issues)
 
-## v0.0.6 (2025-06-xx)
+## v0.0.7 (2025-06-xx)
+
+Upcoming
+
+## v0.0.6 (2025-06-09)
 
 Mostly stable. Still in Beta.
+
+- Fixed issue in update.py where if the AWS session token required a refresh, it would skip the requested pull
 
 ## v0.0.5 (2025-06-07)
 
