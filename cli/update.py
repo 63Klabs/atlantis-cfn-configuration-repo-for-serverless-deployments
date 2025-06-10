@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-VERSION = "v0.1.4/2025-06-09"
+VERSION = "v0.1.5/2025-06-10"
 # Created by Chad Kluck with AI assistance from Amazon Q Developer
 
 import os
@@ -342,19 +342,39 @@ class UpdateManager:
 
             # If the zip file is from github, then the extracted base path will be <repo>-<tag>
             zipped_dir = ""
-            if self.src_type == "github":
-                result = self.get_github_repo_info(self.source)
-                repo = result['repo']
-                tag = result['tag']
+            # if self.src_type == "github":
+            #     result = self.get_github_repo_info(self.source)
+            #     repo = result['repo']
+            #     tag = result['tag']
 
-                if tag == "":
-                    tag = "main"
-                zipped_dir = f"{repo}-{tag}/"
+            #     if tag == "":
+            #         tag = "main"
 
-            ConsoleAndLog.info(f"Extracted directory: {zipped_dir}")
-            ConsoleAndLog.info(f"Target directories: {self.target_dirs}")
+            #     print(f"Repo: {repo} Tag: {tag}")
+            #     zipped_dir = f"{repo}-{tag}/"
+
+            # print(f"Zipped dir: {zipped_dir}")
+
+            # ConsoleAndLog.info(f"Extracted directory: {zipped_dir}")
+            # ConsoleAndLog.info(f"Target directories: {self.target_dirs}")
 
             with zipfile.ZipFile(zip_location, 'r') as zip_ref:
+
+                # Dynamically detect the top-level directory in the zip
+                top_level_dirs = set(
+                    file_info.filename.split('/')[0]
+                    for file_info in zip_ref.filelist
+                    if '/' in file_info.filename
+                )
+                if self.src_type == "github" and top_level_dirs:
+                    # There should be only one top-level directory in a GitHub zip
+                    zipped_dir = list(top_level_dirs)[0] + "/"
+
+                print(f"Zipped dir: {zipped_dir}")
+
+                ConsoleAndLog.info(f"Extracted directory: {zipped_dir}")
+                ConsoleAndLog.info(f"Target directories: {self.target_dirs}")
+
                 # Extract only the directories we want
                 for file_info in zip_ref.filelist:
                     for target_dir in self.target_dirs:
