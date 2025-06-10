@@ -29,7 +29,7 @@ if sys.version_info[0] < 3:
 ScriptLogger.setup('update')
 
 # Directories to update
-DEFAULT_GITHUB_REPO = "chadkluck/atlantis-cfn-configuration-repo-for-serverless-deployments"
+DEFAULT_GITHUB_REPO = "63klabs/atlantis-cfn-configuration-repo-for-serverless-deployments"
 DEFAULT_S3_BUCKET = "63klabs"
 DEFAULT_S3_PATH = "/atlantis/utilities/v2/"
 
