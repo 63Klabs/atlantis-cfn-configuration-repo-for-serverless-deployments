@@ -8,7 +8,7 @@ VERSION = "v0.1.0/2025-03-30"
 # import.py -h
 
 # Full Documentation:
-# https://github.com/chadkluck/atlantis-cfn-configuration-repo-for-serverless-deployments/
+# https://github.com/63klabs/atlantis-cfn-configuration-repo-for-serverless-deployments/
 
 import tomlkit
 import argparse

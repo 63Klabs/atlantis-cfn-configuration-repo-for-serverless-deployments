@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-VERSION = "v0.1.3/2025-06-05"
+VERSION = "v0.1.4/2025-06-16"
 # Created by Chad Kluck with AI assistance from Amazon Q Developer
 # GitHub Copilot assisted in color formats of output and prompts
 
@@ -8,7 +8,7 @@ VERSION = "v0.1.3/2025-06-05"
 # config.py -h
 
 # Full Documentation:
-# https://github.com/chadkluck/atlantis-cfn-configuration-repo-for-serverless-deployments/
+# https://github.com/63klabs/atlantis-cfn-configuration-repo-for-serverless-deployments/
 
 import toml
 import json

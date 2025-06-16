@@ -10,7 +10,7 @@ The AWS Command Line Interface (AWS CLI) is a unified tool to manage your AWS se
 
 Installation steps vary by operating system:
 
-- For Linux/macOS: Install via package managers (apt, yum, brew) or the bundled installer
+- For Linux/macOS: Install via package managers (apt) or the bundled installer
 - For Windows: Use the MSI installer
 - For Docker: Official Docker images are available
 
@@ -38,7 +38,7 @@ AWS SAM (Serverless Application Model) CLI is a tool for building and testing se
 
 Installation steps:
 
-- For Linux/macOS: Use package managers (brew, pip)
+- For Linux/macOS: Use package managers (pip)
 - For Windows: Use the MSI installer
 
 Verify installations with:
@@ -68,13 +68,13 @@ If you are using GitHub for your repositories, in order to use the GitHub cli pr
 
 Make sure you have at least Python 3.12 installed. The cli use the `python3` command to execute. So you will need to set up an alias for `python3` if you currently use `py` or `python`.
 
-This repository contains a variety of cli which use Python libraries.
+This repository contains a variety of cli scripts which use Python libraries.
 
 All the libraries necessary are listed in `./cli/requirements.txt`.
 
 Depending on how your system is set up, you can use one of two methods to install the required libraries via `pip`.
 
-It is recommended you use a Virtual Python Environment so you don't have conflicts with other projects on your machine. Instructions are below.
+It is recommended you use a Virtual Python Environment so you don't have conflicts with other projects on your machine. Instructions are in the Virtual [Python Environment section](#virtual-python-environment).
 
 After activating your python virtual environment, or to install without a virtual environment:
 
@@ -84,39 +84,56 @@ pip install -r requirements.txt
 
 ### Virtual Python Environment
 
-First, make sure you have python3-venv installed:
+The requirements file includes AWS SDK (boto3), AWS SAM CLI, and other dependencies needed for the project. The virtual environment will keep these dependencies isolated from your system Python installation.
+
+Create and activate a virtual environment in your repository directory:
 
 ```bash
-sudo apt install python3-venv
-```
+# Create the virtual environment
+python3 -m venv .ve
 
-Create a virtual environment in your "atlantis-cfn-configuration-repo-for-serverless-deployments" directory:
+# Activate the virtual environment
+# On Linux/macOS:
+source .ve/bin/activate
 
-```bash
-python3 -m venv .venv
-```
-
-Activate the virtual environment:
-
-```bash
-source .venv/bin/activate
+# On Windows:
+# .ve\Scripts\activate
 ```
 
 Now you can safely install the requirements:
 
 ```bash
-pip install -r requirements.txt
+# Make sure your virtual environment is activated
+# (.ve) user@host ~/path/to/repo:
+pip install -r cli/requirements.txt
 ```
 
-When you're done working, you can deactivate the virtual environment:
+Using the virtual environment:
+
+Once activated, you'll see (ve) at the beginning of your command prompt. This indicates that you're working within the virtual environment. Any Python packages you install will be isolated to this environment.
+
+To run Python scripts using this environment:
+
+```bash
+# Example: Running a script from the cli directory
+python3 cli/deploy.py
+```
+
+When you're done working with the virtual environment, you can deactivate it:
 
 ```bash
 deactivate
 ```
 
+To reactivate it later, just run the activation command again:
+
+```bash
+source ve/bin/activate
+```
+
 Some important notes:
 
-- The virtual environment (.venv) should be created in your project directory
+- The virtual environment (.ve) should be created in your local copy of the repository
 - Each time you open a new terminal and want to work on the project, you'll need to activate the virtual environment again
 - The virtual environment keeps your project dependencies isolated from your system Python
 - Make sure to add .venv to your .gitignore file if you haven't already
