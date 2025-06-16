@@ -128,7 +128,7 @@ deactivate
 To reactivate it later, just run the activation command again:
 
 ```bash
-source ve/bin/activate
+source .ve/bin/activate
 ```
 
 Some important notes:
@@ -136,6 +136,6 @@ Some important notes:
 - The virtual environment (.ve) should be created in your local copy of the repository
 - Each time you open a new terminal and want to work on the project, you'll need to activate the virtual environment again
 - The virtual environment keeps your project dependencies isolated from your system Python
-- Make sure to add .venv to your .gitignore file if you haven't already
+- Make sure to add .ve to your .gitignore file if you haven't already
 
 This is the recommended way to manage Python packages as it prevents conflicts with system packages and allows you to have different versions of packages for different projects.
