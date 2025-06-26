@@ -10,6 +10,7 @@ aws-sam-cli>=1.95.0
 
 # Configuration and formatting
 toml>=0.10.2
+tomli>=2.2.1
 tomlkit>=0.12.0
 click>=8.1.0
 
