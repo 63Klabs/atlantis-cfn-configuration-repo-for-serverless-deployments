@@ -6,32 +6,28 @@ If you are using an AWS Account provided for you by your administrator then skip
 
 If you are an AWS Account Administrator, or using your personal AWS Account, then please proceed.
 
-> Note: CodeCommit is no longer available on new AWS accounts unless it is created from an AWS Organization Account that already had CodeCommit. The pipeline infrastructure template and `create_repo.py` script will only work with CodeCommit repositories. GitHub and GitLab will be supported at a later date.
-
 ## 1. Set Up Configuration Repository
 
 The repository can reside in the repository provider of your choice (CodeCommit, GitHub, GitLab, etc).
 
-Initialize a new repository and download and extract the Atlantis CloudFormation Configuration Repository For Serverless Deployments into it.
+Initialize a new repository and give it a name to promote it as the central repository for your organization's (or team or org unit's) SAM Configuration files, such as: `devops_sam-config`. Then, download and extract the Atlantis CloudFormation Configuration Repository For Serverless Deployments into your new repository.
 
 ```bash
-# 
-curl -L -o repo.zip "https://github.com/63klabs/atlantis-cfn-configuration-repo-for-serverless-deployments/archive/refs/heads/main.zip" && unzip -o -v repo.zip && mv */docs . && mv */cli . && mv */README.md . 2>/dev/null && rm -rf repo.zip && rm -rf */
-
+# Downloads and extracts files for the repository
+curl -L -o repo.zip "https://github.com/63klabs/atlantis-cfn-configuration-repo-for-serverless-deployments/archive/refs/heads/main.zip" && unzip -o repo.zip && DIR=$(ls -d */ | head -1) && mv "${DIR}docs" . && mv "${DIR}cli" . && mv "${DIR}README.md" . 2>/dev/null && rm -rf repo.zip && rm -rf "$DIR"
 ```
 
-This repository will host the cli and deployment configurations for storage, network, pipeline, and IAM roles. Developers will use the cli to manage their deployment configurations and commit and push their changes into the repository.
+> Note: The above command pulls the latest commit from the 63Klabs repository. You can point it to a `zip` in the releases as well. However, in the end you will set up the location to retrieve updates in the settings (release, main, S3), so once you run the `update.py` script you will get the version/release you desire.
 
-Make the cli executable:
-
-```bash
-chmod +x ./cli/*.py
-chmod +x ./cli/*.sh
-```
+This repository will host the cli and deployment configurations for storage, network, pipeline, and IAM roles. Developers will use the cli to manage their pipeline and storage configurations and pull, commit, and push changes to maintain a central source of truth for configurations.
 
 > It is important to **pull** any changes to the local machine, **configure** and **deploy** an infrastructure stack using the cli, and then **commit** and **push** the configuration changes back to the remote repository for proper version control.
 
-## 2. Configure CloudFormation Roles for Developers
+## 2. Local Machine Set-Up
+
+In order to run the scripts you will need to perform the Python Virtual Environment set-up as instructed in [Set-Up Local Environment](./00-Set-Up-Local-Environment.md).
+
+## 3. Configure CloudFormation Roles for Developers
 
 The Principle of Least Privilege is maintained through resource naming and tagging.
 

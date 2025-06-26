@@ -1,6 +1,6 @@
 # Local Environment Requirements
 
-The commands and cli used in these tutorials assume a Linux-like environment and some familarity with Command Line Interface (CLI) via the terminal. On Windows, [Git for Windows](https://gitforwindows.org/) or [Windows Subsystem for Linux (WSL)](https://learn.microsoft.com/en-us/windows/wsl/about) can be used.
+The commands and cli used in these tutorials assume a Linux-like environment and some familiarity with Command Line Interface (CLI) via the terminal. On Windows, [Git for Windows](https://gitforwindows.org/) or [Windows Subsystem for Linux (WSL)](https://learn.microsoft.com/en-us/windows/wsl/about) can be used.
 
 > Note: If you already have AWS CLI and SAM installed, skip to the Python section as you will need to use `pip` to install some Python libraries used by the cli.
 
