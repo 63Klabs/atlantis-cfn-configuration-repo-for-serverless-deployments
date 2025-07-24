@@ -79,7 +79,7 @@ It is recommended you use a Virtual Python Environment so you don't have conflic
 After activating your python virtual environment, or to install without a virtual environment:
 
 ```bash
-pip install -r requirements.txt
+pip install -r ./cli/requirements.txt
 ```
 
 ### Virtual Python Environment
@@ -105,7 +105,7 @@ Now you can safely install the requirements:
 ```bash
 # Make sure your virtual environment is activated
 # (.ve) user@host ~/path/to/repo:
-pip install -r cli/requirements.txt
+pip install -r ./cli/requirements.txt
 ```
 
 Using the virtual environment:
@@ -116,7 +116,7 @@ To run Python scripts using this environment:
 
 ```bash
 # Example: Running a script from the cli directory
-python3 cli/deploy.py
+python3 ./cli/deploy.py
 ```
 
 When you're done working with the virtual environment, you can deactivate it:

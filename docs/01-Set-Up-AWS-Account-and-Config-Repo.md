@@ -77,3 +77,164 @@ This is not to be confused with Prefix or S3 object prefix. This is purely for n
 If supplied this will pre-pend this value to all S3 buckets created by infrastructure stacks (as long as it is included in the template). 
 
 This can be used to provide permissions (requires templates to only create S3 buckets under this prefix) and shorten the bucket name. If this is not required and not supplied then bucket names will include the account and region. This makes for a unique but long name. S3 names have a limit of 63 characters. If your organization requires a prefix, it is up to you to make sure they are unique.
+
+### Set up defaults
+
+Update `defaults/defaults.json` and `defaults/settings.json`
+
+#### defaults.json
+
+If SAM has been used on your account before, AWS SAM will have created an S3 bucket with the name `cf-*`. You may use that as both the `atlantis.s3_bucket` and `parameter_overrides.S3ArtifactsBucket` values in `defaults.json`.
+
+If you do not require a `PermissionsBoundary` then remove the arn value from `parameter_overrides.PermissionsBoundary`.
+
+Be sure to change `atlantis.region` and `parameter_overrides.S3BucketNameOrgPrefix` for your organization.
+
+Finally, though the rest of the values are recommended, update to suit your needs.
+
+You may also create `*-defaults.json` for each Prefix. After creating the Pipeline service role you will include the servie role's ARN in the appropriate defaults file.
+
+#### settings.json
+
+Out of the box, settings.json can remain the way it is with the default values. 
+
+##### templates
+
+```json
+{
+	"templates": [
+		{
+			"bucket": "63klabs",
+			"prefix": "atlantis/templates/v2",
+			"anonymous": true
+		}
+	]
+}
+```
+
+Out of the box you can use the public templates provided by 63klabs. This is recommended for those just getting started or using these templates for training and educational purposes.
+
+This is an S3 bucket that acts as a central source containing all the templates and template modules to be used for pipelines, storage, roles, and networks.
+
+If you or or organization wants to manage your own S3 bucket of templates, you can use the deployment scripts and templates found on [Atlantis Template Repository for Serverless Deployments using AWS SAM and CloudFormation](https://github.com/63Klabs/atlantis-cfn-template-repo-for-serverless-deployments) which is the source repository for the 63klabs bucket.
+
+Because the 63klabs bucket is public, `anonymous` is set to `true`. When using your own private bucket set it to `false` and ensure your developers have permission to access it when running the cli commands for configuration and deployments.
+
+Since `template` is an array, you can list more than one bucket.
+
+##### app_starters
+
+```json
+{
+	"app_starters": [
+		{
+			"bucket": "63klabs",
+			"prefix": "atlantis/app-starters/v2",
+			"anonymous": true
+		}
+	]
+}
+```
+
+Like the templates bucket, this is a bucket for downloading starter code into a repository. Also, like the template bucket settings, more than one bucket may be used as a source.
+
+Developers can run the `create_repo.py` command to automatically create a repository and seed it with starter code to quickly get started. 
+
+The `app-starters` provided by the 63klabs bucket are zipped directly from releases of their perpective GitHub repository. For a sampling of apps available, visit the [63Klabs GitHub](https://github.com/63klabs).
+
+Developers can also point the `--source` to any public repository or zip file when invoking the `create_repo.py` script.
+
+##### repositories
+
+```json
+{
+	"repositories": {
+		"provider": "codecommit"
+	}
+}
+```
+
+There is only one setting for `repositories` at this time: `provider`.
+
+This is the default provider for the `create_repo.py` script if `--provider` is not provided as a script argument.
+
+The values are either `codecommit` or `github`.
+
+If provider is `codecommit` when running the `create_repo` script then a CodeCommit repository is created. If it is `github` then a GitHub repository is created.
+
+##### updates
+
+```json
+{
+	"updates": {
+		"source": "https://github.com/63klabs/atlantis-cfn-configuration-repo-for-serverless-deployments",
+		"ver": "release:latest",
+		"target_dirs": ["docs", "cli"]
+	}
+}
+```
+
+When running the `update.py` script, this is where the updates will come from. The `source` needs to be a public GitHub repository or an S3 bucket the user profile has access to.
+
+The `ver` value can be locked to a specific release, the latest release, or even the latest commit (only if you are brave).
+
+For GitHub as a source, `ver` can be:
+
+- `commit:latest`
+- `release:latest`
+- `release:<tag>`
+
+For S3 as a source, `ver` can be:
+
+- `latest`
+- `<version_id>` of the S3 object
+
+You can specify either `docs`, `cli` or both to update. It is recommended you perform regular updates to receive the latest fixes and features.
+
+##### regions
+
+```json
+{
+	"regions": [
+		"us-east-1", "us-east-2", "us-west-1", "us-west-2"
+	]
+}
+```
+
+Out of the box `regions` includes all available regions for AWS (as of early 2025). 
+
+You can add or remove any region required by your organization.
+
+##### tag_keys
+
+These are default tags (not including default values) that are required by your organization for EVERY deployment.
+
+You can set up default values in `defaults.json` and each Prefix's `*-defaults.json` file.
+
+## 4. Create Pipeline Service Role
+
+Developers will need an ARN of the service role to use for deploying application stacks using the pipeline.
+
+Be sure to replace `acme` with your Prefix and `ADMIN_PROFILE` with a profile that has permissions to create service roles.
+
+```bash
+./cli/configure.py service-role acme pipeline --profile ADMIN_PROFILE
+```
+
+After configuring the role, deploy using the `deploy.py` script.
+
+```bash
+./cli/deploy.py service-role acme pipeline --profile ADMIN_PROFILE
+```
+
+Get the ARN of the service role from the output and add to the `*-defaults.json` file for the prefix.
+
+For example, for the prefix `acme`, update `defaults/acme-defaults.json` and set `atlantis.PipelineServiceRoleArn`.
+
+Be sure to commit your changes to the SAM config repository for others to use.
+
+## Set-Up Complete
+
+Do a run through of using the `create_repo.py`, `config.py`, and `deploy.py` scripts to ensure everything is working.
+
+For information on using these scripts see the [In-Depth Guide](./in-depth/10-In-Depth-Guide.md)) or the [Atlantis Tutorials repository](http://github.com/63klabs/atlantis-tutorials).
