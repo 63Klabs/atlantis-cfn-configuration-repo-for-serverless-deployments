@@ -99,3 +99,10 @@ For usage info:
 ```bash
 ./cli/report_pipelines_managed_arns_param.py -h
 ```
+
+1. Scans all CloudFormation stacks in the account/region
+2. Filters for stacks with names ending in -pipeline
+3. Checks each pipeline stack for the two specific parameters:
+4. CloudFormationSvcRoleIncludeManagedPolicyArns
+5. CodeBuildSvcRoleIncludeManagedPolicyArns
+6. Reports only stacks where at least one of these parameters is not empty
