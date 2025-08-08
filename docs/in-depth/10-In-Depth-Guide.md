@@ -77,3 +77,25 @@ For usage info:
 ```
 
 > NOTE: While the update script has pull/push built in, the other scripts do not yet have this implemented. It is on the list of future enhancements!
+
+## report_pipelines_managed_arns_param.py
+
+Report the ARNs of the pipeline stacks deployed in CloudFormation, which can be useful for debugging or auditing purposes.
+
+This particular script will report back which `*-pipeline` stacks are currently using additional Managed ARNs beside what is already included in the pipeline template.
+
+Pipeline stacks create specific, scoped down CloudFormation and CodeDeploy service roles. However, you may need to grant these roles additional permissions to access specific resources. A managed policy can be added to the pipeline to grant these permissions.
+
+> However: Adding additional managed policies to these service roles should be carefully considered.
+
+While this is useful in preventing many custom pipelines from being created (and therefore difficult to control and manage) it can pose security risks if the policies being added are not carefully scoped, overly permissive, or used as "duct tape" fixes just to overcome permissions errors. The existing Service Roles are there for a reason.
+
+When might a managed service role be useful? When a micro-service needs to be invoked by another micro-service. For example, when a Lambda Authorizer needs to be invoked by another application stack's API Gateway. The Lambda Authorizer stack can publish a managed policy that allows adding and removing invocation permissions to itself by other applications. (It can even further restrict that the gateway must have certain tags or naming conventions in place as well to scope it down).
+
+To perform a periodic audit of what pipeline stacks are currently using extra Managed policies run the script.
+
+For usage info:
+
+```bash
+./cli/report_pipelines_managed_arns_param.py -h
+```
