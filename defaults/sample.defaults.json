@@ -1,15 +1,9 @@
 {
 	"atlantis": {
-		"s3_bucket": "cf-acmeco-deployments",
-		"region": "us-east-2",
-		"confirm_changeset": true
+		"PipelineServiceRoleArn": "",
+    	"StorageServiceRoleArn": ""
 	},
-	"parameter_overrides": {
-		"S3BucketNameOrgPrefix": "acmeco",
-		"RolePath": "/app-role/",
-		"PermissionsBoundaryArn": "arn:aws:iam::123456789012:policy/MyPermissionsBoundary",
-		"S3ArtifactsBucket": "cf-acmeco-deployments"
-	},
+	"parameter_overrides": {},
 	"tags": [
 		{
 			"Key": "Department",

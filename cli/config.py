@@ -119,6 +119,13 @@ class ConfigManager:
         self.settings = config_loader.load_settings()
         self.defaults = config_loader.load_defaults()
 
+        # if role_arn is not in self.defaults, then check for StorageServiceRole
+        if 'role_arn' not in self.defaults['atlantis']:
+            if self.infra_type == 'storage' and 'StorageServiceRoleArn' in self.defaults['atlantis']:
+                self.defaults['atlantis']['role_arn'] = self.defaults['atlantis']['StorageServiceRoleArn']
+            elif self.infra_type == 'pipeline' and 'PipelineServiceRoleArn' in self.defaults['atlantis']:
+                self.defaults['atlantis']['role_arn'] = self.defaults['atlantis']['PipelineServiceRoleArn']
+
     def _validate_args(self) -> None:
         """Validate arguments"""
 
@@ -451,7 +458,7 @@ class ConfigManager:
             )
 
             # Get role ARN if this is a pipeline deployment
-            if infra_type == 'pipeline':
+            if infra_type in ['pipeline', 'storage']:
                 atlantis_deploy_params['role_arn'] = get_validated_input(
                     "IAM role ARN for deployments",
                     atlantis_deploy_parameter_defaults.get('role_arn', os.getenv('SAM_DEPLOY_ROLE', '')),
@@ -843,6 +850,10 @@ class ConfigManager:
             {'name': 'parameter_overrides', 'params': ['RolePath', 'ServiceRolePath', 'PermissionsBoundaryArn', 'S3BucketNameOrgPrefix', 'ParameterStoreHierarchy'] }
         ]
 
+        if scope != 'ALL':
+            # add 'role_arn' to the list of parameters to check
+            possible_defaults[0]['params'].append('role_arn')
+
         for section in possible_defaults:
 
             section_name = section['name']
@@ -853,7 +864,15 @@ class ConfigManager:
 
                 if section_name in skip and param in skip[section_name]:
                     continue
-                param_is_not_set = True if "" == default_file_data.get(section_name, {}).get(param, "") else False
+
+                default_param = param
+                if param == 'role_arn':
+                    if self.infra_type == 'storage':
+                        default_param = 'StorageServiceRoleArn'
+                    elif self.infra_type == 'pipeline':
+                        default_param = 'PipelineServiceRoleArn'
+
+                param_is_not_set = True if "" == default_file_data.get(section_name, {}).get(default_param, "") else False
 
                 if param in curr_deploy_params_for_section and param_is_not_set:
                     if curr_deploy_params_for_section[param]:
@@ -868,7 +887,7 @@ class ConfigManager:
                             if section_name not in skip:
                                 skip[section_name] = []
                             skip[section_name].append(param)
-                            default_file_data[section_name][param] = curr_deploy_params_for_section[param]
+                            default_file_data[section_name][default_param] = curr_deploy_params_for_section[param]
 
         return (default_file_data, skip)
         
@@ -1605,8 +1624,8 @@ class ConfigManager:
             'deployments': deployments
         }
         
-        # Add role_arn if this is a pipeline deployment
-        if infra_type == 'pipeline':
+        # Add role_arn if this is a pipeline or storage deployment
+        if infra_type in ['pipeline', 'storage']:
             config['atlantis']['deploy']['parameters']['role_arn'] = atlantis_deploy_params['role_arn']
         
         return config
