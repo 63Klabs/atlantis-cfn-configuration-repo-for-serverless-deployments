@@ -5,8 +5,8 @@
     "confirm_changeset": true
   },
   "parameter_overrides": {
-    "RolePath": "/app-role/",
-    "ServiceRolePath": "/service-role/",
+    "RolePath": "/sam-app/",
+    "ServiceRolePath": "/sam-svc/",
     "S3BucketNameOrgPrefix": "xcme",
     "S3ArtifactsBucket": "cf-asdf-deployments",
     "ParameterStoreHierarchy": "/sam-apps/",
