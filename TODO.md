@@ -11,23 +11,19 @@
 ## Deploy
 
 - [ ] Add Pull and Commit
-- [ ] Test
-- [ ] Documentation
 - [ ] Save service role after service role deploy and make sure it is loaded in
+- [ ] Documentation
 
 ## Import
 
-- [ ] Test
 - [ ] Documentation
 
 ## Create Repository
 
-- [ ] Test
 - [ ] Documentation
 
 ## Update
 
-- [ ] Make prompts prettier
 - [ ] Skip _custom. files
 - [ ] Documentation
 
