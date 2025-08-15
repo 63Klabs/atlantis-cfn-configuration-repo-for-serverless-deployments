@@ -315,10 +315,10 @@ class FileNameListUtils:
 
     @staticmethod
     def select_from_file_list(file_list: List[str], 
-                              allow_none: Optional[bool] = False, 
+                                allow_none: Optional[bool] = False, 
                               *, 
-                              heading_text="Available files",
-                              prompt_text="Enter file number") -> str:
+                                heading_text="Available files",
+                                prompt_text="Enter file number") -> str:
         """List available files and prompt the user to choose one.
 
         Args:
@@ -450,6 +450,8 @@ class DefaultsLoader:
         for key, value in update_dict.items():
             if isinstance(value, dict) and key in base_dict and isinstance(base_dict[key], dict):
                 self._deep_update(base_dict[key], value)
+            elif isinstance(value, list) and key in base_dict and isinstance(base_dict[key], list):
+                base_dict[key] = base_dict[key] + value
             else:
                 base_dict[key] = value
 
