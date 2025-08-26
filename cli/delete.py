@@ -11,16 +11,14 @@ VERSION = "v0.0.2/2025-08-25"
 
 import toml
 import sys
-import os
 import argparse
-import subprocess
 import click
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict, Optional, List
+from typing import Optional
 
-from lib.aws_session import AWSSessionManager, TokenRetrievalError
-from lib.logger import ScriptLogger, Log, ConsoleAndLog
+from lib.aws_session import AWSSessionManager
+from lib.logger import ScriptLogger, Log
 from lib.tools import Colorize
 from lib.atlantis import DefaultsLoader
 from lib.gitops import Git

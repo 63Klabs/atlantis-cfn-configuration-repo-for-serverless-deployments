@@ -32,6 +32,8 @@ from lib.aws_session import AWSSessionManager, TokenRetrievalError
 from lib.logger import ScriptLogger, Log, ConsoleAndLog
 from lib.tools import Colorize
 from lib.atlantis import FileNameListUtils, DefaultsLoader, TagUtils, Utils
+from lib.gitops import Git
+from lib.codecommit_utils import CodeCommitUtils
 
 if sys.version_info[0] < 3:
     sys.stderr.write("Error: Python 3 is required\n")
@@ -91,15 +93,16 @@ class ConfigManager:
         self.stage_id = 'default' if (stage_id is None) else stage_id
         self.profile = profile
         self.region = region
+        self.no_browser = no_browser
         self.check_stack = check_stack
 
         # Check the arguments before moving on
         self._validate_args()
 
         # Set up AWS session and clients
-        self.aws_session = AWSSessionManager(profile, region, no_browser)
-        self.s3_client = self.aws_session.get_client('s3', region)
-        self.cfn_client = self.aws_session.get_client('cloudformation', region)
+        self.aws_session = AWSSessionManager(self.profile, self.region, self.no_browser)
+        self.s3_client = self.aws_session.get_client('s3', self.region)
+        self.cfn_client = self.aws_session.get_client('cloudformation', self.region)
         # self.s3_client_anonymous = self.aws_session.get_client('s3', config=botocore.client.Config(signature_version=botocore.UNSIGNED))
         self.s3_client_anonymous = boto3.client('s3', config=botocore.client.Config(signature_version=botocore.UNSIGNED))
 
@@ -1471,20 +1474,20 @@ class ConfigManager:
 
         Returns:
             Optional[Dict]: Dictionary containing parsed configuration data with structure:
-                          {
-                              'atlantis': {configuration settings},
-                              'deployments': {
-                                  'stage_name': {
-                                      'deploy': {
-                                          'parameters': {
-                                              'parameter_overrides': {...},
-                                              'tags': {...}
-                                          }
-                                      }
-                                  }
-                              }
-                          }
-                          Returns None if file doesn't exist or on error
+                        {
+                            'atlantis': {configuration settings},
+                            'deployments': {
+                                'stage_name': {
+                                    'deploy': {
+                                        'parameters': {
+                                            'parameter_overrides': {...},
+                                            'tags': {...}
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        Returns None if file doesn't exist or on error
 
         Raises:
             Logs errors but doesn't raise exceptions
@@ -1837,7 +1840,7 @@ class ConfigManager:
                         click.echo(Colorize.error("Stage name cannot be empty"))
         self.stage_id = stage_id
         return stage_id
- 
+
     # -------------------------------------------------------------------------
     # - Template Selection
     # -------------------------------------------------------------------------
@@ -2041,8 +2044,8 @@ class ConfigManager:
 
         Returns:
             str: Generated stack name following the pattern:
-                 {prefix}-{project_id}-{stage_id}-{infra_type}
-                 Note: stage_id is optional in the pattern
+                    {prefix}-{project_id}-{stage_id}-{infra_type}
+                    Note: stage_id is optional in the pattern
         """
 
         # We capitalize the prefix of service-roles as they are special and can be used to provide permissions
@@ -2179,7 +2182,7 @@ def main():
         click.echo(Colorize.output_with_value("Infra Type:", args.infra_type))
         click.echo(Colorize.divider("="))
         print()
-            
+
     
         try:
             config_manager = ConfigManager(
@@ -2195,6 +2198,9 @@ def main():
         except Exception as e:
             ConsoleAndLog.error(f"Error initializing configuration manager: {str(e)}")
             sys.exit(1)
+
+        # 1. Git pull prompt
+        Git.prompt_git_pull()
 
         # Read existing configuration
         local_config = config_manager.read_samconfig()
@@ -2246,6 +2252,30 @@ def main():
 
         # Prompt for parameters
         parameter_values = config_manager.prompt_for_parameters(parameter_groups, parameters, parameter_defaults)
+
+        # If Repository in parameter_values, use AWS CLI to access repository and get resource tags
+        if 'Repository' in parameter_values:
+            try:
+                repo = parameter_values['Repository']
+                codecommit = CodeCommitUtils(config_manager.profile, config_manager.region, config_manager.no_browser)
+                repo_tags = codecommit.get_repo_tags(repo)
+                # print out repo_tags
+                if repo_tags:
+                    click.echo()
+                    click.echo(Colorize.output_bold(f"Applying tags from CodeCommit repository '{repo}':"))
+                    for tag in repo_tags:
+                        click.echo(Colorize.output_with_value(f"  {tag['Key']}", tag['Value']))
+                    click.echo()
+                    tag_defaults = config_manager.merge_tags(tag_defaults, repo_tags)
+                else:
+                    click.echo()
+                    click.echo(Colorize.warning(f"No tags found on CodeCommit repository '{repo}'"))
+                    click.echo()
+                    # Just in case, we can still merge with empty list
+                    tag_defaults = config_manager.merge_tags(tag_defaults, [])
+                # tag_defaults = config_manager.merge_tags(tag_defaults, repo_tags)
+            except Exception as e:
+                ConsoleAndLog.error(f"Error getting repository tags: {str(e)}")
         
         # prompt for tags
         try:
@@ -2266,6 +2296,13 @@ def main():
 
         # Save the config
         config_manager.save_config(config)
+
+        # Git commit and push
+        commit_message = f"Configured {args.infra_type} {config_manager.prefix}-{config_manager.project_id}"
+        if config_manager.stage_id:
+            commit_message += f"-{config_manager.stage_id}"
+        Git.git_commit_and_push(commit_message)
+
 
         click.echo(Colorize.divider("="))
         print()

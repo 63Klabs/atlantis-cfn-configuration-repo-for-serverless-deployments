@@ -4,6 +4,7 @@ from .tools import Strings, Colorize
 from .atlantis import FileNameListUtils, DefaultsLoader, TagUtils
 from .gh_utils import GitHubUtils
 from .gitops import Git
+from .codecommit_utils import CodeCommitUtils
 
 __all__ = [
     'AWSSessionManager',
@@ -16,5 +17,6 @@ __all__ = [
 	'DefaultsLoader',
 	'TagUtils',
 	'GitHubUtils',
-	'Git'
+	'Git',
+	'CodeCommitUtils'
 ]
