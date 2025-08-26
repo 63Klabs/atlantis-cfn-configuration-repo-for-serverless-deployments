@@ -23,6 +23,7 @@ from lib.aws_session import AWSSessionManager, TokenRetrievalError
 from lib.logger import ScriptLogger, Log, ConsoleAndLog
 from lib.tools import Colorize
 from lib.atlantis import DefaultsLoader
+from lib.gitops import Git
 
 if sys.version_info[0] < 3:
     sys.stderr.write("Error: Python 3 is required\n")
@@ -41,8 +42,8 @@ class StackDestroyer:
     """
     
     def __init__(self, infra_type: str, prefix: str, project_id: str, stage_id: str, 
-                 profile: Optional[str] = None, region: Optional[str] = None, 
-                 no_browser: Optional[bool] = False):
+                    profile: Optional[str] = None, region: Optional[str] = None, 
+                    no_browser: Optional[bool] = False):
         self.infra_type = infra_type
         self.prefix = prefix
         self.project_id = project_id
@@ -97,18 +98,18 @@ class StackDestroyer:
         """Get the application stack name"""
         return f"{self.prefix}-{self.project_id}-{self.stage_id}-application"
 
-    def prompt_git_pull(self) -> None:
-        """Prompt user if git pull should be performed"""
-        if click.confirm(Colorize.question("Perform git pull before proceeding?")):
-            try:
-                result = subprocess.run(['git', 'pull'], capture_output=True, text=True, check=True)
-                click.echo(Colorize.success("Git pull completed successfully"))
-                Log.info("Git pull completed successfully")
-            except subprocess.CalledProcessError as e:
-                click.echo(Colorize.error(f"Git pull failed: {e.stderr}"))
-                Log.error(f"Git pull failed: {e.stderr}")
-                if not click.confirm("Continue despite git pull failure?"):
-                    sys.exit(1)
+    # def prompt_git_pull(self) -> None:
+    #     """Prompt user if git pull should be performed"""
+    #     if click.confirm(Colorize.question("Perform git pull before proceeding?")):
+    #         try:
+    #             result = subprocess.run(['git', 'pull'], capture_output=True, text=True, check=True)
+    #             click.echo(Colorize.success("Git pull completed successfully"))
+    #             Log.info("Git pull completed successfully")
+    #         except subprocess.CalledProcessError as e:
+    #             click.echo(Colorize.error(f"Git pull failed: {e.stderr}"))
+    #             Log.error(f"Git pull failed: {e.stderr}")
+    #             if not click.confirm("Continue despite git pull failure?"):
+    #                 sys.exit(1)
 
     def validate_stack_arn(self, stack_name: str, expected_name: str) -> bool:
         """Validate that the provided ARN matches the expected stack name"""
@@ -336,32 +337,32 @@ class StackDestroyer:
                 click.echo(Colorize.error(f"Error updating samconfig: {str(e)}"))
                 Log.error(f"Error updating samconfig: {str(e)}")
 
-    def git_commit_and_push(self) -> None:
-        """Perform git commit and push"""
-        try:
-            # Add changes
-            subprocess.run(['git', 'add', '.'], check=True)
+    # def git_commit_and_push(self) -> None:
+    #     """Perform git commit and push"""
+    #     try:
+    #         # Add changes
+    #         subprocess.run(['git', 'add', '.'], check=True)
             
-            # Commit
-            commit_message = f"Destroyed {self.infra_type} {self.prefix}-{self.project_id}-{self.stage_id}"
-            subprocess.run(['git', 'commit', '-m', commit_message], check=True)
+    #         # Commit
+    #         commit_message = f"Destroyed {self.infra_type} {self.prefix}-{self.project_id}-{self.stage_id}"
+    #         subprocess.run(['git', 'commit', '-m', commit_message], check=True)
             
-            # Push
-            subprocess.run(['git', 'push'], check=True)
+    #         # Push
+    #         subprocess.run(['git', 'push'], check=True)
             
-            click.echo(Colorize.success("Git commit and push completed"))
-            Log.info("Git commit and push completed")
+    #         click.echo(Colorize.success("Git commit and push completed"))
+    #         Log.info("Git commit and push completed")
             
-        except subprocess.CalledProcessError as e:
-            click.echo(Colorize.error(f"Git operation failed: {str(e)}"))
-            Log.error(f"Git operation failed: {str(e)}")
+    #     except subprocess.CalledProcessError as e:
+    #         click.echo(Colorize.error(f"Git operation failed: {str(e)}"))
+    #         Log.error(f"Git operation failed: {str(e)}")
 
     def destroy_pipeline(self) -> None:
         """Destroy pipeline infrastructure"""
         click.echo(Colorize.output_bold(f"Starting destruction of pipeline: {self.prefix}-{self.project_id}-{self.stage_id}"))
         
         # 1. Git pull prompt
-        self.prompt_git_pull()
+        Git.prompt_git_pull()
         
         # 2. Validate pipeline stack ARN
         pipeline_stack_name = self.get_pipeline_stack_name()
@@ -421,7 +422,7 @@ class StackDestroyer:
         self.update_samconfig()
         
         # 7. Git commit and push
-        self.git_commit_and_push()
+        Git.git_commit_and_push(f"Destroyed {self.infra_type} {self.prefix}-{self.project_id}-{self.stage_id}")
         
         click.echo(Colorize.success("Pipeline destruction completed successfully!"))
 
@@ -440,21 +441,21 @@ def main():
         description='Destroy AWS infrastructure stacks',
         epilog="""
 Examples:
-  delete.py pipeline acme mywebapp test --profile ACME_DEV
-  delete.py storage acme static-assets --profile ACME_DEV --region us-west-2
+    delete.py pipeline acme mywebapp test --profile ACME_DEV
+    delete.py storage acme static-assets --profile ACME_DEV --region us-west-2
         """,
         formatter_class=argparse.RawDescriptionHelpFormatter
     )
     
     parser.add_argument('infra_type', choices=VALID_INFRA_TYPES,
-                       help='Type of infrastructure to destroy')
+                        help='Type of infrastructure to destroy')
     parser.add_argument('prefix', help='Prefix for stack names')
     parser.add_argument('project_id', help='Project identifier')
     parser.add_argument('stage_id', help='Stage identifier')
     parser.add_argument('--profile', help='AWS profile to use')
     parser.add_argument('--region', help='AWS region')
     parser.add_argument('--no-browser', action='store_true',
-                       help='Disable browser-based authentication')
+                        help='Disable browser-based authentication')
     
     args = parser.parse_args()
     
