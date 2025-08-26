@@ -106,3 +106,31 @@ For usage info:
 4. CloudFormationSvcRoleIncludeManagedPolicyArns
 5. CodeBuildSvcRoleIncludeManagedPolicyArns
 6. Reports only stacks where at least one of these parameters is not empty
+
+## delete.py
+
+Deleting applications and their pipelines require a specific order to be followed. The application stack must be deleted first, followed by the pipeline, SSM parameters that were created during the build process, and finally clean-up of the SAM configuration file.
+
+Lucky, the `delete.py` script takes care of all of this.
+
+To begin the deletion process, manually add a tag to the pipeline stack with the key `DeleteOnOrAfter` and value of a date in `YYYY-MM-DD` format. (Add `Z` to end for UTC. Example `2026-07-09Z`). This can be done using the AWS CLI or AWS Web Console.
+
+The delete.py script has the following features to aid in clean-up:
+
+- Pipeline destruction workflow:
+	1. Prompts for git pull
+	2. Validates pipeline and application stack ARNs
+	3. Checks DeleteOnOrAfter tag with date validation (supports both local and UTC dates)
+	4. Final confirmation by entering prefix, project_id, and stage_id
+	5. Deletes application stack first, then pipeline stack
+	6. Deletes associated SSM parameters
+	7. Updates/deletes samconfig entries
+	8. Performs git commit and push
+- Safety features:
+- Multiple validation steps before deletion
+- Proper error handling and logging
+- Stack deletion waiter to ensure completion
+- Batch processing for SSM parameter deletion
+- Future extensibility: Framework in place for storage, network, and iam types (currently shows not implemented message)
+
+The script follows the same patterns as your other CLI scripts for AWS session management, logging, and user interaction.

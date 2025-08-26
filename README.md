@@ -63,6 +63,9 @@ You're all set!
 
 # Import an existing stack with template
 ./cli/import.py acme-blue-test-pipeline --template
+
+# Delete a pipeline stack and it's application stack
+./cli/delete.py pipeline acme your-webapp test
 ```
 
 ## Tutorials
@@ -210,4 +213,18 @@ For additional update settings, run the following command:
 
 ```bash
 ./cli/update.py -h
+```
+
+## Delete
+
+Permissions can be modified to restrict who can delete pipeline stacks and their associated application deployments.
+
+For example, a developer may be able to add a tag to a pipeline stack that marks it for deletion, but is not allowed to delete.
+
+For further protection, stack termination protection may be turned on.
+
+Finally, the delete script has several steps where it prompts for confirmation, including requesting the user provide ARNs for the pipeline and application stack, and retype the Prefix, ProjectId, and StageId.
+
+```bash
+./cli/delete.py -h
 ```
