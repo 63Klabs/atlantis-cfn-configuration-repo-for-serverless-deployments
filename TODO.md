@@ -45,9 +45,10 @@
 To avoid ongoing charges to your AWS account, delete the resources created in this tutorial.
 
 For pipelines:
-1. Delete the application stack first
-2. Delete the pipeline stack next
-3. Delete any SSM parameters associated with the application
+1. Confirm by requesting ARN of stack
+2. Delete the application stack first
+3. Delete the pipeline stack next
+4. Delete any SSM parameters associated with the application
 
 For storage, network and iam: Not implemented as cleanup can be done by deleting the stack. (Ensure S3 buckets are empty first)
 
