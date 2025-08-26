@@ -115,7 +115,8 @@ Lucky, the `delete.py` script takes care of all of this.
 
 There are 2 manual steps that need to take place prior to running the delete script. Some organizations may restrict who can perform these steps to ensure proper checks and balances.
 
-1. Manually add a tag to the pipeline stack with the key `DeleteOnOrAfter` and value of a date in `YYYY-MM-DD` format. (Add `Z` to end for UTC. Example `2026-07-09Z`). This can be done using the AWS CLI or AWS Web Console.
+1. Manually add a tag to the pipeline stack with the key `DeleteOnOrAfter` and value of a date in `YYYY-MM-DD` format. (Add `Z` to end for UTC. Example `2026-07-09Z`). This can be done using the AWS CLI or AWS Web Console. (Note: Adding the tag outside of the config.py script may get over written if another deployment occurs before the stack is deleted (date set further into the future). For long term dates set the date tag using the config.py and then deploy.py scripts.)
+	- `aws resourcegroupstaggingapi tag-resources --resource-arn-list "arn:aws:cloudformation:region:account:stack/stack-name/stack-id" --tags DeleteOnOrAfter=YYYY-MM-DD --profile your-profile`
 2. Disable termination protection: `aws cloudformation update-termination-protection --stack-name STACK_NAME --no-enable-termination-protection`
 
 Once these steps are completed, you can run the delete script.

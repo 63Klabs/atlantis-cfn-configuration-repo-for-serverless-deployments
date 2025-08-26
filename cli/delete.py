@@ -254,21 +254,22 @@ class StackDestroyer:
                 with open(samconfig_path, 'r') as f:
                     config = toml.load(f)
                 
-                # Remove the deployment
-                deployments = config.get('deployments', {})
-                if self.stage_id in deployments:
-                    del deployments[self.stage_id]
-                    click.echo(Colorize.success(f"Removed {self.stage_id} deployment from samconfig"))
-                    Log.info(f"Removed {self.stage_id} deployment from samconfig")
+                # Remove the environment section (e.g., test.deploy.parameters)
+                if self.stage_id in config:
+                    del config[self.stage_id]
+                    click.echo(Colorize.success(f"Removed {self.stage_id} environment from samconfig"))
+                    Log.info(f"Removed {self.stage_id} environment from samconfig")
                 
-                # If no deployments left, delete the file
-                if not deployments:
+                # Count remaining environments (exclude 'atlantis' and 'version')
+                remaining_envs = [key for key in config.keys() if key not in ['atlantis', 'version']]
+                
+                # If no environments left, delete the file
+                if not remaining_envs:
                     samconfig_path.unlink()
-                    click.echo(Colorize.success("Deleted samconfig file (no deployments remaining)"))
-                    Log.info("Deleted samconfig file (no deployments remaining)")
+                    click.echo(Colorize.success("Deleted samconfig file (no environments remaining)"))
+                    Log.info("Deleted samconfig file (no environments remaining)")
                 else:
                     # Save updated config
-                    config['deployments'] = deployments
                     with open(samconfig_path, 'w') as f:
                         toml.dump(config, f)
                     click.echo(Colorize.success("Updated samconfig file"))
