@@ -12,6 +12,7 @@
 
 - [ ] Add Pull and Commit
 - [ ] Save service role after service role deploy and make sure it is loaded in
+- [ ] Turn on stack termination protection
 - [ ] Documentation
 
 ## Import
@@ -31,6 +32,7 @@
 
 - [ ] Test
 - [ ] Prompt if SSM Parameters should be deleted
+- [ ] After checking delete, ensure stack termination protection is disabled
 
 ## Lib
 

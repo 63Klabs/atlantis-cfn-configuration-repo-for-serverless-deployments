@@ -113,7 +113,18 @@ Deleting applications and their pipelines require a specific order to be followe
 
 Lucky, the `delete.py` script takes care of all of this.
 
-To begin the deletion process, manually add a tag to the pipeline stack with the key `DeleteOnOrAfter` and value of a date in `YYYY-MM-DD` format. (Add `Z` to end for UTC. Example `2026-07-09Z`). This can be done using the AWS CLI or AWS Web Console.
+There are 2 manual steps that need to take place prior to running the delete script. Some organizations may restrict who can perform these steps to ensure proper checks and balances.
+
+1. Manually add a tag to the pipeline stack with the key `DeleteOnOrAfter` and value of a date in `YYYY-MM-DD` format. (Add `Z` to end for UTC. Example `2026-07-09Z`). This can be done using the AWS CLI or AWS Web Console.
+2. Disable termination protection: `aws cloudformation update-termination-protection --stack-name STACK_NAME --no-enable-termination-protection`
+
+Once these steps are completed, you can run the delete script.
+
+For usage info: 
+
+```bash
+./cli/delete.py -h
+```
 
 The delete.py script has the following features to aid in clean-up:
 
@@ -132,5 +143,3 @@ The delete.py script has the following features to aid in clean-up:
 - Stack deletion waiter to ensure completion
 - Batch processing for SSM parameter deletion
 - Future extensibility: Framework in place for storage, network, and iam types (currently shows not implemented message)
-
-The script follows the same patterns as your other CLI scripts for AWS session management, logging, and user interaction.
