@@ -39,18 +39,22 @@
 
 - None
 
-
 ### Destroy
 
 To avoid ongoing charges to your AWS account, delete the resources created in this tutorial.
 
 For pipelines:
-1. Confirm by requesting ARN of stack
-2. Delete the application stack first
-3. Delete the pipeline stack next
-4. Delete any SSM parameters associated with the application
+1. Prompt user if a git pull should be performed (similar to how update.py does it)
+2. Confirm deletion by requesting ARN of stack
+3. Next confirm the prefix, project id, and stage Id
+4. Delete the application stack first
+5. Delete the pipeline stack next
+6. Delete any SSM parameters associated with the application
+7. Prompt user if samconfig entry for deployment should be deleted
+8. If last deployment deleted in samconfg, then delete samconfig
+9. Perform a git commit and push
 
-For storage, network and iam: Not implemented as cleanup can be done by deleting the stack. (Ensure S3 buckets are empty first)
+For storage, network and iam: Not implemented as cleanup can be done by deleting the stack. (User should ensure S3 buckets are empty first)
 
 ```bash
 # Perform this command in the SAM Config Repo
