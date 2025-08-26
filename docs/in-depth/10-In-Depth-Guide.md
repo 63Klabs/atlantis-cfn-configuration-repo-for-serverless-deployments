@@ -117,7 +117,8 @@ There are 2 manual steps that need to take place prior to running the delete scr
 
 1. Manually add a tag to the pipeline stack with the key `DeleteOnOrAfter` and value of a date in `YYYY-MM-DD` format. (Add `Z` to end for UTC. Example `2026-07-09Z`). This can be done using the AWS CLI or AWS Web Console. (Note: Adding the tag outside of the config.py script may get over written if another deployment occurs before the stack is deleted (date set further into the future). For long term dates set the date tag using the config.py and then deploy.py scripts.)
 	- `aws resourcegroupstaggingapi tag-resources --resource-arn-list "arn:aws:cloudformation:region:account:stack/stack-name/stack-id" --tags DeleteOnOrAfter=YYYY-MM-DD --profile your-profile`
-2. Disable termination protection: `aws cloudformation update-termination-protection --stack-name STACK_NAME --no-enable-termination-protection`
+2. Disable termination protection on both the application and pipeline stack:
+	- `aws cloudformation update-termination-protection --stack-name STACK_NAME --no-enable-termination-protection`
 
 Once these steps are completed, you can run the delete script.
 
@@ -132,15 +133,15 @@ The delete.py script has the following features to aid in clean-up:
 - Pipeline destruction workflow:
 	1. Prompts for git pull
 	2. Validates pipeline and application stack ARNs
-	3. Checks DeleteOnOrAfter tag with date validation (supports both local and UTC dates)
+	3. Checks DeleteOnOrAfter tag with date validation (supports both local and UTC dates) and ensures termination protection is disabled.
 	4. Final confirmation by entering prefix, project_id, and stage_id
 	5. Deletes application stack first, then pipeline stack
 	6. Deletes associated SSM parameters
 	7. Updates/deletes samconfig entries
 	8. Performs git commit and push
 - Safety features:
-- Multiple validation steps before deletion
-- Proper error handling and logging
-- Stack deletion waiter to ensure completion
+	- Multiple validation steps before deletion
+	- Proper error handling and logging
+	- Stack deletion waiter to ensure completion
 - Batch processing for SSM parameter deletion
 - Future extensibility: Framework in place for storage, network, and iam types (currently shows not implemented message)

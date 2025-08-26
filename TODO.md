@@ -30,10 +30,7 @@
 
 ### Delete
 
-- [ ] After checking delete, ensure stack termination protection is disabled
-- [ ] Prompt if SSM Parameters should be deleted
-- [ ] Get SSM Hierarchy from stack parameters
-- [ ] Delete toml only if atlantis is the last remaining environment (and delete directory if empty)
+- [ ] Ask if S3 buckets should be emptied
 - [ ] Test
 
 ## Lib

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-VERSION = "v0.0.1/2025-08-24"
+VERSION = "v0.0.2/2025-08-25"
 # Created by Chad Kluck with AI assistance from Amazon Q Developer
 
 # Usage Information:
@@ -170,6 +170,25 @@ class StackDestroyer:
             click.echo(Colorize.error(f"Error checking DeleteOnOrAfter tag: {str(e)}"))
             return False
 
+    def check_stack_termination_protection(self, stack_name: str) -> bool:
+        """Check if stack termination protection is disabled"""
+        try:
+            response = self.cfn_client.describe_stacks(StackName=stack_name)
+            stack = response['Stacks'][0]
+            
+            termination_protection = stack.get('EnableTerminationProtection', False)
+            
+            if not termination_protection:
+                click.echo(Colorize.success(f"Stack termination protection validation passed: disabled"))
+                return True
+            else:
+                click.echo(Colorize.error(f"Stack {stack_name} has termination protection enabled"))
+                return False
+                
+        except Exception as e:
+            click.echo(Colorize.error(f"Error checking stack termination protection: {str(e)}"))
+            return False
+
     def final_confirmation(self) -> bool:
         """Final confirmation by entering prefix, project_id, and stage_id"""
         click.echo(Colorize.warning("For final confirmation, please enter the Prefix, ProjectId, and StageId of the pipeline and application to delete."))
@@ -210,7 +229,25 @@ class StackDestroyer:
     def delete_ssm_parameters(self) -> None:
         """Delete SSM parameters associated with the application"""
         try:
-            parameter_prefix = f"/{self.prefix}/{self.project_id}/{self.stage_id}/"
+            # Check for ParameterStoreHierarchy in application stack
+            application_stack_name = self.get_application_stack_name()
+            parameter_store_hierarchy = ""
+            
+            try:
+                response = self.cfn_client.describe_stacks(StackName=application_stack_name)
+                stack = response['Stacks'][0]
+                parameters = {param['ParameterKey']: param['ParameterValue'] for param in stack.get('Parameters', [])}
+                parameter_store_hierarchy = parameters.get('ParameterStoreHierarchy', '')
+            except Exception as e:
+                Log.warning(f"Could not get ParameterStoreHierarchy from stack {application_stack_name}: {str(e)}")
+            
+            application_suffix = f"/{self.prefix}-{self.project_id}-{self.stage_id}/"
+
+            # if parameter_store_hierarchy and ends with application_suffix
+            if parameter_store_hierarchy and parameter_store_hierarchy.endswith(application_suffix):
+                parameter_prefix = parameter_store_hierarchy
+            else:
+                parameter_prefix = application_suffix
             
             # List parameters with the prefix
             paginator = self.ssm_client.get_paginator('describe_parameters')
@@ -224,6 +261,16 @@ class StackDestroyer:
             if parameters_to_delete:
                 click.echo(Colorize.output(f"Found {len(parameters_to_delete)} SSM parameters to delete"))
                 Log.info(f"Found {len(parameters_to_delete)} SSM parameters to delete: {parameters_to_delete}")
+                
+                # List the parameters
+                for param in parameters_to_delete:
+                    click.echo(Colorize.output(f" - {param}"))
+
+                # confirm deletion of parameters
+                if not click.confirm(Colorize.question("Proceed with deletion of these SSM parameters?")):
+                    click.echo(Colorize.error("SSM parameter deletion cancelled by user"))
+                    Log.info("SSM parameter deletion cancelled by user")
+                    return
                 
                 # Delete parameters in batches of 10 (AWS limit)
                 for i in range(0, len(parameters_to_delete), 10):
@@ -268,6 +315,16 @@ class StackDestroyer:
                     samconfig_path.unlink()
                     click.echo(Colorize.success("Deleted samconfig file (no environments remaining)"))
                     Log.info("Deleted samconfig file (no environments remaining)")
+                    
+                    # Delete parent directory if empty
+                    parent_dir = samconfig_path.parent
+                    try:
+                        parent_dir.rmdir()  # Only removes if empty
+                        click.echo(Colorize.success(f"Deleted empty directory: {parent_dir}"))
+                        Log.info(f"Deleted empty directory: {parent_dir}")
+                    except OSError:
+                        # Directory not empty or other error, ignore
+                        pass
                 else:
                     # Save updated config
                     with open(samconfig_path, 'w') as f:
@@ -321,18 +378,30 @@ class StackDestroyer:
             sys.exit(1)
         
         # 4. Check DeleteOnOrAfter tag
-        click.echo(Colorize.output_bold("Step 3: Validate DeleteOnOrAfter Tag"))
+        click.echo(Colorize.output_bold("Step 3a: Validate DeleteOnOrAfter Tag"))
         if not self.check_delete_tag(pipeline_stack_name):
             click.echo(Colorize.error("DeleteOnOrAfter tag validation failed"))
             sys.exit(1)
+
+        # 5. Check Stack Termination Protection tag for Pipeline
+        click.echo(Colorize.output_bold("Step 3b: Validate Stack Termination Protection is Disabled for Pipeline"))
+        if not self.check_stack_termination_protection(pipeline_stack_name):
+            click.echo(Colorize.error("Stack Termination Protection validation failed"))
+            sys.exit(1)
+
+        # 6. Check Stack Termination Protection tag for Application
+        click.echo(Colorize.output_bold("Step 3c: Validate Stack Termination Protection is Disabled for Application"))
+        if not self.check_stack_termination_protection(application_stack_name):
+            click.echo(Colorize.error("Stack Termination Protection validation failed"))
+            sys.exit(1)
         
-        # 5. Final confirmation
+        # 7. Final confirmation
         click.echo(Colorize.output_bold("Step 4: Final Confirmation"))
         if not self.final_confirmation():
             click.echo(Colorize.error("Final confirmation failed"))
             sys.exit(1)
         
-        # 6. Begin deletion
+        # 8. Begin deletion
         click.echo(Colorize.output_bold("Step 5: Beginning Deletion Process"))
         
         # Delete application stack first
