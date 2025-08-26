@@ -38,3 +38,20 @@
 ### GitHub Utils
 
 - None
+
+
+### Destroy
+
+To avoid ongoing charges to your AWS account, delete the resources created in this tutorial.
+
+For pipelines:
+1. Delete the application stack first
+2. Delete the pipeline stack next
+3. Delete any SSM parameters associated with the application
+
+For storage, network and iam: Not implemented as cleanup can be done by deleting the stack. (Ensure S3 buckets are empty first)
+
+```bash
+# Perform this command in the SAM Config Repo
+./cli/destroy.py pipeline acme py8ball-adv test --profile ACME_DEV
+```
