@@ -24,11 +24,10 @@ class CodeCommitUtils:
 		self.profile = profile
 		self.region = region
 		self.no_browser = no_browser
-		self.aws_session = AWSSessionManager(profile, region, no_browser)
+		self.aws_session = AWSSessionManager(self.profile, self.region, self.no_browser)
+		self.region = self.aws_session.get_region()
 		self.client = self.aws_session.get_client('codecommit', self.region)
 
-
-	@classmethod
 	def get_repo_tags(self, repo_name):
 		"""
 		Get tags for a CodeCommit repository.
@@ -36,10 +35,16 @@ class CodeCommitUtils:
 		:return: Dictionary of tags.
 		"""
 		try:
+			# First verify the repository exists and get its ARN
+			repo_info = self.client.get_repository(repositoryName=repo_name)
+			resource_arn = repo_info['repositoryMetadata']['Arn']
+			
 			response = self.client.list_tags_for_resource(
-				resourceArn=f'arn:aws:codecommit:{self.region}:{self.aws_session.get_account_id()}:repository/{repo_name}'
+				resourceArn=resource_arn
 			)
-			tags = {tag['key']: tag['value'] for tag in response.get('tags', [])}
+
+			# Tags are already in dictionary format
+			tags = response.get('tags', {})
 			return tags
 		except TokenRetrievalError as e:
 			Log.error(f"Token retrieval error: {str(e)}")

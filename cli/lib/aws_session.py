@@ -133,92 +133,6 @@ class AWSSessionManager:
             ConsoleAndLog.warning(f"Error checking SSO profile configuration: {str(e)}")
             return False
 
-    # def _refresh_sso_login(self) -> None:
-    #     """Execute AWS SSO login command for specific profile"""
-    #     try:
-    #         ConsoleAndLog.info(f"Initiating SSO login for profile {self.profile}")
-            
-    #         # First try to login
-    #         result = subprocess.run(
-    #             ["aws", "sso", "login", "--profile", self.profile],
-    #             check=True,
-    #             capture_output=True,
-    #             text=True
-    #         )
-            
-    #         if result.stdout:
-    #             ConsoleAndLog.info(f"SSO login output: {result.stdout}")
-    #         if result.stderr:
-    #             ConsoleAndLog.warning(f"SSO login warnings: {result.stderr}")
-                
-    #         # Wait a moment for credentials to be properly saved
-    #         time.sleep(2)
-        # except subprocess.CalledProcessError as e:
-        #     error_msg = (
-        #         f"SSO login failed for profile {self.profile}. "
-        #         "Please ensure your profile is properly configured and try again."
-        #     )
-        #     if e.stdout:
-        #         error_msg += f"\nOutput: {e.stdout}"
-        #     if e.stderr:
-        #         error_msg += f"\nError: {e.stderr}"
-        #     ConsoleAndLog.error(error_msg)
-        #     raise TokenRetrievalError(error_msg)
-
-    # def _refresh_sso_login(self) -> None:
-    #     """Execute AWS SSO login command for specific profile with browser fallback"""
-    #     try:
-
-    #         # if not self._can_open_browser():
-    #         #     ConsoleAndLog.warning("No display detected. Running in no-browser mode.")
-    #         #     self.no_browser = True
-        
-    #         ConsoleAndLog.info(f"Initiating SSO login for profile {self.profile}")
-            
-    #         cmd = ["aws", "sso", "login", "--profile", self.profile]
-    #         if self.no_browser:
-    #             cmd.append("--no-browser")
-    #             ConsoleAndLog.info("Running in no-browser mode. You will need to manually copy and paste the URL.")
-            
-    #         result = subprocess.run(
-    #             cmd,
-    #             check=True,
-    #             capture_output=True,
-    #             text=True
-    #         )
-            
-    #         # Check if the output contains a URL (indicating browser didn't open)
-    #         if "https://" in result.stdout:
-    #             ConsoleAndLog.info("Browser didn't open automatically. Please manually visit:")
-    #             # Extract and display the URL
-    #             for line in result.stdout.split('\n'):
-    #                 if "https://" in line:
-    #                     ConsoleAndLog.info(f"SSO URL: {line.strip()}")
-    #                     ConsoleAndLog.info("After authentication, return here to continue...")
-            
-    #         if result.stdout:
-    #             ConsoleAndLog.info(f"SSO login output: {result.stdout}")
-    #         if result.stderr:
-    #             ConsoleAndLog.warning(f"SSO login warnings: {result.stderr}")
-                
-    #         # Wait a moment for credentials to be properly saved
-    #         time.sleep(2)
-                
-    #     except subprocess.CalledProcessError as e:
-    #         error_msg = (
-    #             f"SSO login failed for profile {self.profile}.\n"
-    #             "Common issues:\n"
-    #             "1. No internet connection\n"
-    #             "2. Invalid SSO configuration\n"
-    #             "3. Browser launch failed\n"
-    #             "Try using --no-browser if you're in a terminal without display access."
-    #         )
-    #         if e.stdout:
-    #             error_msg += f"\nOutput: {e.stdout}"
-    #         if e.stderr:
-    #             error_msg += f"\nError: {e.stderr}"
-    #         ConsoleAndLog.error(error_msg)
-    #         raise TokenRetrievalError(error_msg)
     def _refresh_sso_login(self) -> None:
         """Execute AWS SSO login command for specific profile with browser fallback"""
         try:
@@ -276,3 +190,18 @@ class AWSSessionManager:
             return bool(os.environ.get('DISPLAY'))
         # On Windows, assume browser can be opened
         return os.name == 'nt'
+
+    def get_region(self) -> str:
+        """Get the current region"""
+        if self.region:
+            return self.region
+        elif self.session:
+            return self.session.region_name
+        else:
+            return None
+    
+    def get_account_id(self) -> str:
+        """Get the current account ID"""
+        if not self.session:
+            raise ValueError("No valid session available")
+        return self.session.client('sts').get_caller_identity().get('Account')

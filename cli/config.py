@@ -2259,23 +2259,19 @@ def main():
                 repo = parameter_values['Repository']
                 codecommit = CodeCommitUtils(config_manager.profile, config_manager.region, config_manager.no_browser)
                 repo_tags = codecommit.get_repo_tags(repo)
-                # print out repo_tags
+
                 if repo_tags:
                     click.echo()
-                    click.echo(Colorize.output_bold(f"Applying tags from CodeCommit repository '{repo}':"))
-                    for tag in repo_tags:
-                        click.echo(Colorize.output_with_value(f"  {tag['Key']}", tag['Value']))
+                    click.echo(Colorize.output_bold(f"Applying tags from CodeCommit repository '{repo}'"))
                     click.echo()
-                    tag_defaults = config_manager.merge_tags(tag_defaults, repo_tags)
+                    tag_defaults = config_manager.merge_tags(TagUtils.tags_as_list(repo_tags), tag_defaults)
                 else:
                     click.echo()
                     click.echo(Colorize.warning(f"No tags found on CodeCommit repository '{repo}'"))
                     click.echo()
-                    # Just in case, we can still merge with empty list
-                    tag_defaults = config_manager.merge_tags(tag_defaults, [])
-                # tag_defaults = config_manager.merge_tags(tag_defaults, repo_tags)
             except Exception as e:
                 ConsoleAndLog.error(f"Error getting repository tags: {str(e)}")
+                Log.error(f"Error getting repository tags: {traceback.format_exc()}")
         
         # prompt for tags
         try:
