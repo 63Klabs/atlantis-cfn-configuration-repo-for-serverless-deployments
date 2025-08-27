@@ -223,7 +223,6 @@ class StackDestroyer:
                         return False
                     else:
                         click.echo(Colorize.output(f"Stack deletion in progress... Status: {stack_status}"))
-                        Log.info(f"Stack deletion in progress... Status: {stack_status}")
                         
                 except self.cfn_client.exceptions.ClientError as e:
                     if 'does not exist' in str(e):
@@ -311,7 +310,9 @@ class StackDestroyer:
         """Discover and delete resources by atlantis:ApplicationDeploymentId tag"""
 
         tag_key = "atlantis:ApplicationDeploymentId"
-        tag_value = f"{self.prefix}-{self.project_id}-{self.stage_id}"
+        tag_value = f"{self.prefix}-{self.project_id}"
+        if self.stage_id:
+            tag_value += f"-{self.stage_id}"
 
         # find resources in AWS with tag
         try:
@@ -412,6 +413,10 @@ class StackDestroyer:
                             except Exception as e:
                                 click.echo(Colorize.error(f"Error deleting resource {res}: {str(e)}"))
                                 Log.error(f"Error deleting resource {res}: {str(e)}")
+
+            else:
+                click.echo(Colorize.output("No additional resources found to delete"))
+                Log.info("No additional resources found to delete")
 
         except Exception as e:
             click.echo(Colorize.error(f"Error deleting resources: {str(e)}"))
