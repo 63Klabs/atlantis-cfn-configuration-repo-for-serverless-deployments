@@ -31,7 +31,7 @@ if sys.version_info[0] < 3:
     sys.exit(1)
 
 # Initialize logger for this script
-ScriptLogger.setup('destroy')
+ScriptLogger.setup('delete')
 
 SAMCONFIG_DIR = "samconfigs"
 SETTINGS_DIR = "defaults"
@@ -323,8 +323,8 @@ class StackDestroyer:
             resource_types = [
                 's3',
                 'dynamodb:table',
-                'cloudwatch:logs',
-                'ssm'
+                'logs:log-group',
+                'ssm:parameter'
             ]
 
             resources_to_delete = []
@@ -359,7 +359,9 @@ class StackDestroyer:
                         # Generate a random 5 character code
 
                         code = ''.join(random.choices(string.ascii_uppercase + string.digits, k=5))
-                        entered_code = Colorize.prompt(f"Type the code '{code}' to confirm deletion", "", str)
+                        # display code to user with spaces so they don't copy/paste
+                        display_code = ' '.join(code)
+                        entered_code = Colorize.prompt(f"Type the code '{display_code}' (without spaces) to confirm deletion", "", str)
                         if entered_code == code:
                             try:
                                 if res.startswith("arn:aws:s3:::"):
@@ -528,14 +530,6 @@ class StackDestroyer:
         print()
         click.echo(Colorize.output_bold("Step 5: Beginning Deletion Process"))
 
-        # Delete SSM parameters
-        print()
-        self.delete_ssm_parameters()
-
-        # Delete retained resources
-        print()
-        self.delete_resources_by_tag()
-        
         # Delete application stack first
         print()
         if not self.delete_stack(application_stack_name):
@@ -548,6 +542,13 @@ class StackDestroyer:
             click.echo(Colorize.error("Failed to delete pipeline stack"))
             sys.exit(1)
         
+        # Delete SSM parameters
+        print()
+        self.delete_ssm_parameters()
+
+        # Delete retained resources
+        print()
+        self.delete_resources_by_tag()
         
         # Update samconfig
         print()
