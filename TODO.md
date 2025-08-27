@@ -3,6 +3,7 @@
 ## Config
 
 - [ ] If deploy bucket is in param use s3 deploy and vice versa
+- [ ] Repository should be saved as global setting for all env
 - [ ] Documentation
 
 ## Deploy
