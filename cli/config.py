@@ -2265,7 +2265,7 @@ def main():
                     click.echo()
                     click.echo(Colorize.output_bold(f"Applying tags from CodeCommit repository '{repo}'"))
                     click.echo()
-                    tag_defaults = config_manager.merge_tags(TagUtils.tags_as_list(repo_tags), tag_defaults)
+                    tag_defaults = config_manager.merge_tags(tag_defaults, TagUtils.tags_as_list(repo_tags)) # CodeCommit always overwrites default
                 else:
                     click.echo()
                     click.echo(Colorize.warning(f"No tags found on CodeCommit repository '{repo}'"))

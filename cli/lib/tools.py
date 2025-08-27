@@ -308,14 +308,14 @@ class Colorize:
             click.style(f"{response_value}", fg=COLOR_OUTPUT_VALUE)
 
     @classmethod
-    def output_bold(self, response_text: str) -> str:
+    def output_bold(self, response_text: str, *, fg=COLOR_OUTPUT) -> str:
         """Format output text in bold with consistent styling"""
-        return click.style(f"{response_text} ", fg=COLOR_OUTPUT, bold=True)
+        return click.style(f"{response_text} ", fg=fg, bold=True)
 
     @classmethod
-    def output(self, response_text: str) -> str:
+    def output(self, response_text: str, *, fg=COLOR_OUTPUT) -> str:
         """Format output text with consistent styling"""
-        return click.style(f"{response_text} ", fg=COLOR_OUTPUT)
+        return click.style(f"{response_text} ", fg=fg)
 
     @classmethod
     def success(self, response_text: str) -> str:

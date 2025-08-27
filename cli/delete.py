@@ -283,7 +283,7 @@ class StackDestroyer:
                     click.echo(Colorize.output(f" - {param}"))
 
                 # confirm deletion of parameters
-                if not click.confirm(Colorize.question("Proceed with deletion of these SSM parameters?")):
+                if not click.confirm(Colorize.question("Proceed with deletion of these SSM parameters?"), default=True):
                     click.echo(Colorize.error("SSM parameter deletion cancelled by user"))
                     Log.info("SSM parameter deletion cancelled by user")
                     return
@@ -407,6 +407,11 @@ class StackDestroyer:
         # 8. Begin deletion
         print()
         click.echo(Colorize.output_bold("Step 5: Beginning Deletion Process"))
+
+        # Delete SSM parameters
+        print()
+        self.delete_ssm_parameters()
+        print()
         
         # Delete application stack first
         if not self.delete_stack(application_stack_name):
@@ -418,8 +423,6 @@ class StackDestroyer:
             click.echo(Colorize.error("Failed to delete pipeline stack"))
             sys.exit(1)
         
-        # Delete SSM parameters
-        self.delete_ssm_parameters()
         
         # Update samconfig
         self.update_samconfig()
@@ -443,17 +446,23 @@ class StackDestroyer:
             click.echo(Colorize.info("(Ensure S3 buckets are empty first)"))
             sys.exit(1)
 
-def main():
-    parser = argparse.ArgumentParser(
-        description='Destroy AWS infrastructure stacks',
-        epilog="""
+# =============================================================================
+# ----- Main function ---------------------------------------------------------
+# =============================================================================
+
+EPILOG = """
 Examples:
     delete.py pipeline acme mywebapp test --profile ACME_DEV
     delete.py storage acme static-assets --profile ACME_DEV --region us-west-2
-        """,
-        formatter_class=argparse.RawDescriptionHelpFormatter
+"""
+
+def parse_args() -> argparse.Namespace:
+
+    parser = argparse.ArgumentParser(
+        description='Destroy AWS SAM stacks created by Atlantis',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=(EPILOG)
     )
-    
     parser.add_argument('infra_type', choices=VALID_INFRA_TYPES,
                         help='Type of infrastructure to destroy')
     parser.add_argument('prefix', help='Prefix for stack names')
@@ -465,7 +474,24 @@ Examples:
                         help='Disable browser-based authentication')
     
     args = parser.parse_args()
+
+    return args
+
+def main():
     
+    args = parse_args()
+    Log.info(f"{sys.argv}")
+    Log.info(f"Version: {VERSION}")
+    
+    print()
+    click.echo(Colorize.divider("X", fg=Colorize.ERROR))
+    click.echo(Colorize.output_bold(f"Destroyer ({VERSION})", fg=Colorize.ERROR))
+    click.echo(Colorize.divider("X", fg=Colorize.ERROR))
+    print()
+
+    Colorize.box_error([{"header": "!!! CAUTION !!!", "text": "You are about to delete a CloudFormation stack. This action is irreversible and will remove all resources associated with the stack."}])
+    print()
+
     try:
         destroyer = StackDestroyer(
             infra_type=args.infra_type,
