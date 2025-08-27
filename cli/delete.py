@@ -357,9 +357,11 @@ class StackDestroyer:
         click.echo(Colorize.output_bold(f"Starting destruction of pipeline: {self.prefix}-{self.project_id}-{self.stage_id}"))
         
         # 1. Git pull prompt
+        print()
         Git.prompt_git_pull()
         
         # 2. Validate pipeline stack ARN
+        print()
         pipeline_stack_name = self.get_pipeline_stack_name()
         click.echo(Colorize.output_bold("Step 1: Validate Pipeline Stack"))
         if not self.validate_stack_arn("pipeline", pipeline_stack_name):
@@ -367,6 +369,7 @@ class StackDestroyer:
             sys.exit(1)
         
         # 3. Validate application stack ARN
+        print()
         application_stack_name = self.get_application_stack_name()
         click.echo(Colorize.output_bold("Step 2: Validate Application Stack"))
         if not self.validate_stack_arn("application", application_stack_name):
@@ -374,30 +377,35 @@ class StackDestroyer:
             sys.exit(1)
         
         # 4. Check DeleteOnOrAfter tag
+        print()
         click.echo(Colorize.output_bold("Step 3a: Validate DeleteOnOrAfter Tag"))
         if not self.check_delete_tag(pipeline_stack_name):
             click.echo(Colorize.error("DeleteOnOrAfter tag validation failed"))
             sys.exit(1)
 
         # 5. Check Stack Termination Protection tag for Pipeline
+        print()
         click.echo(Colorize.output_bold("Step 3b: Validate Stack Termination Protection is Disabled for Pipeline"))
         if not self.check_stack_termination_protection(pipeline_stack_name):
             click.echo(Colorize.error("Stack Termination Protection validation failed"))
             sys.exit(1)
 
         # 6. Check Stack Termination Protection tag for Application
+        print()
         click.echo(Colorize.output_bold("Step 3c: Validate Stack Termination Protection is Disabled for Application"))
         if not self.check_stack_termination_protection(application_stack_name):
             click.echo(Colorize.error("Stack Termination Protection validation failed"))
             sys.exit(1)
         
         # 7. Final confirmation
+        print()
         click.echo(Colorize.output_bold("Step 4: Final Confirmation"))
         if not self.final_confirmation():
             click.echo(Colorize.error("Final confirmation failed"))
             sys.exit(1)
         
         # 8. Begin deletion
+        print()
         click.echo(Colorize.output_bold("Step 5: Beginning Deletion Process"))
         
         # Delete application stack first

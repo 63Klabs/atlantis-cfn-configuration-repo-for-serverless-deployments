@@ -2254,10 +2254,11 @@ def main():
         parameter_values = config_manager.prompt_for_parameters(parameter_groups, parameters, parameter_defaults)
 
         # If Repository in parameter_values, use AWS CLI to access repository and get resource tags
-        if 'Repository' in parameter_values:
+        # if parameter_values['Repository'] does not have a slash, assume it is CodeCommit and not GitHub
+        if 'Repository' in parameter_values and '/' not in parameter_values['Repository']:
             try:
                 repo = parameter_values['Repository']
-                codecommit = CodeCommitUtils(config_manager.aws_session)
+                codecommit = CodeCommitUtils(aws_session=config_manager.aws_session)
                 repo_tags = codecommit.get_repo_tags(repo)
 
                 if repo_tags:
