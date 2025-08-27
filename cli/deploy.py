@@ -256,6 +256,35 @@ class TemplateDeployer:
             ConsoleAndLog.error(f"Deployment failed: {str(e)}")
             raise
 
+    def enable_stack_termination_protection(self):
+        """
+        Enable termination protection for the stack.
+        """
+        ConsoleAndLog.info("Enabling termination protection for the stack...")
+        try:
+            # Get the stack name from samconfig.toml
+            with open(self.get_samconfig_file_path(), 'rb') as f:
+                config = tomli.load(f)
+
+            stage = self.stage_id if self.stage_id else 'default'
+            stack_name = config.get(stage, {}).get('deploy', {}).get('parameters', {}).get('stack_name')
+
+            if not stack_name:
+                ConsoleAndLog.error("Stack name not found in samconfig.toml")
+                return
+
+            # Enable termination protection
+            self.aws_session.get_client('cloudformation').update_termination_protection(
+                EnableTerminationProtection=True,
+                StackName=stack_name
+            )
+            ConsoleAndLog.info("Termination protection enabled.")
+
+        except Exception as e:
+            ConsoleAndLog.error(f"Failed to enable termination protection: {str(e)}")
+            raise
+
+
     def _run_sam_deploy(self, template_path: Path, config_path: Path) -> int:
         """
         Execute the SAM deploy command.
@@ -314,7 +343,7 @@ class TemplateDeployer:
     def get_samconfig_file_path(self) -> Path:
         """Get the samconfig file path"""
         return self.get_samconfig_dir() / self.get_samconfig_file_name()
-    
+        
     def get_settings_dir(self) -> Path:
         """Get the settings directory path"""
         # Get the script's directory in a cross-platform way
@@ -424,6 +453,9 @@ def main() -> int:
         exit_code = deployer.deploy_with_temp_template(template_url)
 
         if exit_code == 0:
+            # enable stack termination protection
+            deployer.enable_stack_termination_protection()
+
             ConsoleAndLog.info("Deployment script completed without errors.")
             # Git commit and push
             commit_message = f"Deployed {args.infra_type} {args.prefix}-{args.project_id}"

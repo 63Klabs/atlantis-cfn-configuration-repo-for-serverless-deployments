@@ -2304,8 +2304,8 @@ def main():
         print()
 
         # Prompt user if they want to run the deploy.py script
+        deploy_command = config_manager.get_script_deploy_command(config_manager.stage_id)
         if click.confirm(Colorize.question("Do you want to run the deploy script now?")):
-            deploy_command = config_manager.get_script_deploy_command(config_manager.stage_id)
             click.echo(Colorize.output_bold(f"Running: {deploy_command}"))
             print()
             os.system(deploy_command)

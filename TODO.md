@@ -2,14 +2,12 @@
 
 ## Config
 
-- [ ] Add ability to run deploy script
 - [ ] If deploy bucket is in param use s3 deploy and vice versa
 - [ ] Documentation
 
 ## Deploy
 
 - [ ] Save service role after service role deploy and make sure it is loaded in
-- [ ] Turn on stack termination protection
 - [ ] Documentation
 
 ## Import
