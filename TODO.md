@@ -26,7 +26,6 @@
 ### Delete
 
 - [ ] Ask if S3 buckets should be emptied
-- [ ] Progress update during deletion
 - [ ] Test
 
 ## Lib

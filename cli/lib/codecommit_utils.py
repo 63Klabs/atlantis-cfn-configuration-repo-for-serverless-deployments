@@ -8,23 +8,24 @@ VERSION = "v0.0.2/2025-08-26"
 CodeCommit functions for automating CodeCommit management.
 """
 
-import subprocess
-import sys
-import click
-from typing import Dict, Optional, List, Tuple
+from typing import Optional
 
 from lib.aws_session import AWSSessionManager, TokenRetrievalError
 
 from .logger import Log
-from .tools import Colorize
 
 class CodeCommitUtils:
 
-	def __init__(self, profile: Optional[str] = None, region: Optional[str] = None, no_browser: Optional[bool] = False):
+	def __init__(self, profile: Optional[str] = None, region: Optional[str] = None, no_browser: Optional[bool] = False, aws_session: Optional[AWSSessionManager] = None):
 		self.profile = profile
 		self.region = region
 		self.no_browser = no_browser
-		self.aws_session = AWSSessionManager(self.profile, self.region, self.no_browser)
+		
+		if aws_session:
+			self.aws_session = aws_session
+		else:
+			self.aws_session = AWSSessionManager(self.profile, self.region, self.no_browser)
+			
 		self.region = self.aws_session.get_region()
 		self.client = self.aws_session.get_client('codecommit', self.region)
 

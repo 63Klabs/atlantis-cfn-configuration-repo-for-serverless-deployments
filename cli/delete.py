@@ -96,19 +96,6 @@ class StackDestroyer:
         """Get the application stack name"""
         return f"{self.prefix}-{self.project_id}-{self.stage_id}-application"
 
-    # def prompt_git_pull(self) -> None:
-    #     """Prompt user if git pull should be performed"""
-    #     if click.confirm(Colorize.question("Perform git pull before proceeding?")):
-    #         try:
-    #             result = subprocess.run(['git', 'pull'], capture_output=True, text=True, check=True)
-    #             click.echo(Colorize.success("Git pull completed successfully"))
-    #             Log.info("Git pull completed successfully")
-    #         except subprocess.CalledProcessError as e:
-    #             click.echo(Colorize.error(f"Git pull failed: {e.stderr}"))
-    #             Log.error(f"Git pull failed: {e.stderr}")
-    #             if not click.confirm("Continue despite git pull failure?"):
-    #                 sys.exit(1)
-
     def validate_stack_arn(self, stack_name: str, expected_name: str) -> bool:
         """Validate that the provided ARN matches the expected stack name"""
         arn = Colorize.prompt(f"Enter the ARN of the {stack_name} stack", "", str)
@@ -206,19 +193,49 @@ class StackDestroyer:
 
     def delete_stack(self, stack_name: str) -> bool:
         """Delete a CloudFormation stack"""
+        import time
+        
         try:
             click.echo(Colorize.output(f"Deleting stack: {stack_name}"))
             Log.info(f"Deleting stack: {stack_name}")
             
             self.cfn_client.delete_stack(StackName=stack_name)
             
-            # Wait for deletion to complete
-            waiter = self.cfn_client.get_waiter('stack_delete_complete')
-            waiter.wait(StackName=stack_name)
+            # Custom polling loop with progress updates
+            max_attempts = 180  # 30 minutes max
+            attempt = 0
             
-            click.echo(Colorize.success(f"Stack {stack_name} deleted successfully"))
-            Log.info(f"Stack {stack_name} deleted successfully")
-            return True
+            while attempt < max_attempts:
+                try:
+                    response = self.cfn_client.describe_stacks(StackName=stack_name)
+                    stack_status = response['Stacks'][0]['StackStatus']
+                    
+                    if stack_status == 'DELETE_COMPLETE':
+                        click.echo(Colorize.success(f"Stack {stack_name} deleted successfully"))
+                        Log.info(f"Stack {stack_name} deleted successfully")
+                        return True
+                    elif stack_status in ['DELETE_FAILED', 'ROLLBACK_COMPLETE']:
+                        click.echo(Colorize.error(f"Stack deletion failed with status: {stack_status}"))
+                        Log.error(f"Stack deletion failed with status: {stack_status}")
+                        return False
+                    else:
+                        click.echo(Colorize.output(f"Stack deletion in progress... Status: {stack_status}"))
+                        Log.info(f"Stack deletion in progress... Status: {stack_status}")
+                        
+                except self.cfn_client.exceptions.ClientError as e:
+                    if 'does not exist' in str(e):
+                        click.echo(Colorize.success(f"Stack {stack_name} deleted successfully"))
+                        Log.info(f"Stack {stack_name} deleted successfully")
+                        return True
+                    else:
+                        raise
+                
+                time.sleep(10)
+                attempt += 1
+            
+            click.echo(Colorize.error(f"Stack deletion timed out after 30 minutes"))
+            Log.error(f"Stack deletion timed out after 30 minutes")
+            return False
             
         except Exception as e:
             click.echo(Colorize.error(f"Error deleting stack {stack_name}: {str(e)}"))
@@ -335,26 +352,6 @@ class StackDestroyer:
                 click.echo(Colorize.error(f"Error updating samconfig: {str(e)}"))
                 Log.error(f"Error updating samconfig: {str(e)}")
 
-    # def git_commit_and_push(self) -> None:
-    #     """Perform git commit and push"""
-    #     try:
-    #         # Add changes
-    #         subprocess.run(['git', 'add', '.'], check=True)
-            
-    #         # Commit
-    #         commit_message = f"Destroyed {self.infra_type} {self.prefix}-{self.project_id}-{self.stage_id}"
-    #         subprocess.run(['git', 'commit', '-m', commit_message], check=True)
-            
-    #         # Push
-    #         subprocess.run(['git', 'push'], check=True)
-            
-    #         click.echo(Colorize.success("Git commit and push completed"))
-    #         Log.info("Git commit and push completed")
-            
-    #     except subprocess.CalledProcessError as e:
-    #         click.echo(Colorize.error(f"Git operation failed: {str(e)}"))
-    #         Log.error(f"Git operation failed: {str(e)}")
-
     def destroy_pipeline(self) -> None:
         """Destroy pipeline infrastructure"""
         click.echo(Colorize.output_bold(f"Starting destruction of pipeline: {self.prefix}-{self.project_id}-{self.stage_id}"))
@@ -424,7 +421,7 @@ class StackDestroyer:
         if self.stage_id:
             commit_message += f"-{self.stage_id}"
         print()
-        Git.prompt_git_commit_and_push(commit_message)
+        Git.git_commit_and_push(commit_message)
         
         click.echo(Colorize.success("Pipeline destruction completed successfully!"))
 

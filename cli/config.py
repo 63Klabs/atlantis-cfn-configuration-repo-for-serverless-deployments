@@ -2257,7 +2257,7 @@ def main():
         if 'Repository' in parameter_values:
             try:
                 repo = parameter_values['Repository']
-                codecommit = CodeCommitUtils(config_manager.profile, config_manager.region, config_manager.no_browser)
+                codecommit = CodeCommitUtils(config_manager.aws_session)
                 repo_tags = codecommit.get_repo_tags(repo)
 
                 if repo_tags:

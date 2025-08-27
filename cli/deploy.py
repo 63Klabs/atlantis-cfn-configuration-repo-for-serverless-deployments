@@ -462,7 +462,7 @@ def main() -> int:
             if args.stage_id:
                 commit_message += f"-{args.stage_id}"
             print()
-            Git.prompt_git_commit_and_push(commit_message)
+            Git.git_commit_and_push(commit_message)
         else:
             ConsoleAndLog.error(f"Deployment script failed with exit code {exit_code}")
         return exit_code
