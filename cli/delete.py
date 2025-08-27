@@ -17,6 +17,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
+import random
+import string
+
 from lib.aws_session import AWSSessionManager
 from lib.logger import ScriptLogger, Log
 from lib.tools import Colorize
@@ -303,6 +306,118 @@ class StackDestroyer:
             click.echo(Colorize.error(f"Error deleting SSM parameters: {str(e)}"))
             Log.error(f"Error deleting SSM parameters: {str(e)}")
 
+
+    def delete_resources_by_tag(self) -> None:
+        """Discover and delete resources by atlantis:ApplicationDeploymentId tag"""
+
+        tag_key = "atlantis:ApplicationDeploymentId"
+        tag_value = f"{self.prefix}-{self.project_id}-{self.stage_id}"
+
+        # find resources in AWS with tag
+        try:
+            click.echo(Colorize.output(f"Searching for resources with tag {tag_key}={tag_value}"))
+            Log.info(f"Searching for resources with tag {tag_key}={tag_value}")
+
+            # Common resources with retention policies
+            resource_types = [
+                's3',
+                'dynamodb:table',
+                'cloudwatch:logs',
+                'ssm'
+            ]
+
+            resources_to_delete = []
+
+            for resource_type in resource_types:
+                paginator = self.aws_session.get_client('resourcegroupstaggingapi', self.region).get_paginator('get_resources')
+                for page in paginator.paginate(ResourceTypeFilters=[resource_type], TagFilters=[{'Key': tag_key, 'Values': [tag_value]}]):
+                    for resource in page['ResourceTagMappingList']:
+                        resources_to_delete.append(resource['ResourceARN'])
+
+            if resources_to_delete:
+                click.echo(Colorize.output(f"Found {len(resources_to_delete)} additional resource(s) to delete"))
+                print()
+                Colorize.box_warning([{"header": "Check Retention Policies", "text": "This may include resources not managed by this pipeline or resources with extended retention policies. Proceed with caution and only delete according to your organization's data retention policy."}])
+                print()
+                Log.info(f"Found {len(resources_to_delete)} resources to delete: {resources_to_delete}")
+
+                # List the resources
+                for res in resources_to_delete:
+                    click.echo(Colorize.output(f" - {res}"))
+
+                # confirm deletion of resources
+                if not click.confirm(Colorize.question("Proceed with deletion of these resources?")):
+                    click.echo(Colorize.error("Resource deletion cancelled by user"))
+                    Log.info("Resource deletion cancelled by user")
+                    return
+
+                # Delete resources one by one with confirmation, list the resource and have user confirm y/N and if yes further confirm with a random 5 character code
+                for res in resources_to_delete:
+                    click.echo(Colorize.output(f"Preparing to delete resource: {res}"))
+                    if click.confirm(Colorize.question(f"Are you sure you want to delete resource: {res}?"), default=False):
+                        # Generate a random 5 character code
+
+                        code = ''.join(random.choices(string.ascii_uppercase + string.digits, k=5))
+                        entered_code = Colorize.prompt(f"Type the code '{code}' to confirm deletion", "", str)
+                        if entered_code == code:
+                            try:
+                                if res.startswith("arn:aws:s3:::"):
+                                    s3_client = self.aws_session.get_client('s3', self.region)
+                                    bucket_name = res.split(":::")[1]
+                                    
+                                    # Use batch delete for better performance
+                                    paginator = s3_client.get_paginator('list_object_versions')
+                                    for page in paginator.paginate(Bucket=bucket_name):
+                                        objects_to_delete = []
+                                        
+                                        # Collect versions and delete markers
+                                        for version in page.get('Versions', []):
+                                            objects_to_delete.append({'Key': version['Key'], 'VersionId': version['VersionId']})
+                                        for marker in page.get('DeleteMarkers', []):
+                                            objects_to_delete.append({'Key': marker['Key'], 'VersionId': marker['VersionId']})
+                                        
+                                        # Delete in batches of 1000 (AWS limit)
+                                        if objects_to_delete:
+                                            s3_client.delete_objects(
+                                                Bucket=bucket_name,
+                                                Delete={'Objects': objects_to_delete}
+                                            )
+                                    
+                                    # Delete the bucket
+                                    s3_client.delete_bucket(Bucket=bucket_name)
+                                    click.echo(Colorize.success(f"Deleted S3 bucket: {bucket_name}"))
+                                    Log.info(f"Deleted S3 bucket: {bucket_name}")
+                                elif ":dynamodb:table/" in res:
+                                    dynamodb_client = self.aws_session.get_client('dynamodb', self.region)
+                                    table_name = res.split("/")[-1]
+                                    dynamodb_client.delete_table(TableName=table_name)
+                                    click.echo(Colorize.success(f"Deleted DynamoDB table: {table_name}"))
+                                    Log.info(f"Deleted DynamoDB table: {table_name}")
+                                elif ":logs:" in res:
+                                    logs_client = self.aws_session.get_client('logs', self.region)
+                                    log_group_name = res.split(":log-group:")[-1]
+                                    logs_client.delete_log_group(logGroupName=log_group_name)
+                                    click.echo(Colorize.success(f"Deleted CloudWatch log group: {log_group_name}"))
+                                    Log.info(f"Deleted CloudWatch log group: {log_group_name}")
+                                elif ":ssm:" in res:
+                                    ssm_client = self.aws_session.get_client('ssm', self.region)
+                                    parameter_name = res.split(":parameter/")[-1]
+                                    ssm_client.delete_parameter(Name=parameter_name)
+                                    click.echo(Colorize.success(f"Deleted SSM parameter: {parameter_name}"))
+                                    Log.info(f"Deleted SSM parameter: {parameter_name}")
+                                else:
+                                    click.echo(Colorize.warning(f"Unsupported resource type for deletion: {res}"))
+                                    Log.warning(f"Unsupported resource type for deletion: {res}")
+
+                            except Exception as e:
+                                click.echo(Colorize.error(f"Error deleting resource {res}: {str(e)}"))
+                                Log.error(f"Error deleting resource {res}: {str(e)}")
+
+        except Exception as e:
+            click.echo(Colorize.error(f"Error deleting resources: {str(e)}"))
+            Log.error(f"Error deleting resources: {str(e)}")     
+
+
     def update_samconfig(self) -> None:
         """Update or delete samconfig file"""
         samconfig_path = self.get_samconfig_file_path()
@@ -411,14 +526,19 @@ class StackDestroyer:
         # Delete SSM parameters
         print()
         self.delete_ssm_parameters()
+
+        # Delete retained resources
         print()
+        self.delete_resources_by_tag()
         
         # Delete application stack first
+        print()
         if not self.delete_stack(application_stack_name):
             click.echo(Colorize.error("Failed to delete application stack"))
             sys.exit(1)
         
         # Delete pipeline stack
+        print()
         if not self.delete_stack(pipeline_stack_name):
             click.echo(Colorize.error("Failed to delete pipeline stack"))
             sys.exit(1)
