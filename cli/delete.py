@@ -68,6 +68,8 @@ class StackDestroyer:
         
         self.settings = config_loader.load_settings()
 
+        self.skipped_resources = []
+
     def _validate_args(self) -> None:
         """Validate arguments"""
         if self.infra_type not in VALID_INFRA_TYPES:
@@ -299,6 +301,7 @@ class StackDestroyer:
                 if not click.confirm(Colorize.question("Proceed with deletion of these SSM parameters?"), default=True):
                     click.echo(Colorize.error("SSM parameter deletion cancelled by user"))
                     Log.info("SSM parameter deletion cancelled by user")
+                    self.skipped_resources += parameters_to_delete
                     return
                 
                 # Delete parameters in batches of 10 (AWS limit)
@@ -362,17 +365,20 @@ class StackDestroyer:
                     click.echo(Colorize.output(f" - {res}"))
 
                 # confirm deletion of resources
+                print()
                 if not click.confirm(Colorize.question("Proceed with deletion of these resources?")):
                     click.echo(Colorize.error("Resource deletion cancelled by user"))
                     Log.info("Resource deletion cancelled by user")
+                    self.skipped_resources += resources_to_delete
                     return
 
                 # Delete resources one by one with confirmation, list the resource and have user confirm y/N and if yes further confirm with a random 5 character code
                 for res in resources_to_delete:
+                    print()
                     click.echo(Colorize.output(f"Preparing to delete resource: {res}"))
                     if click.confirm(Colorize.question(f"Are you sure you want to delete resource: {res}?"), default=False):
-                        # Generate a random 5 character code
 
+                        # Generate a random 5 character code
                         code = ''.join(random.choices(string.ascii_uppercase + string.digits, k=5))
                         # display code to user with spaces so they don't copy/paste
                         display_code = ' '.join(code)
@@ -434,6 +440,16 @@ class StackDestroyer:
                             except Exception as e:
                                 click.echo(Colorize.error(f"Error deleting resource {res}: {str(e)}"))
                                 Log.error(f"Error deleting resource {res}: {str(e)}")
+
+                        else:
+                            click.echo(Colorize.error("Confirmation code mismatch. Skipping deletion."))
+                            Log.info(f"Confirmation code mismatch for resource: {res}. Skipping deletion.")
+                            self.skipped_resources.append(res)
+
+                    else:
+                        click.echo(Colorize.warning(f"Skipping deletion of resource: {res}"))
+                        Log.info(f"Skipping deletion of resource: {res}")
+                        self.skipped_resources.append(res)
 
             else:
                 click.echo(Colorize.output("No additional resources found to delete"))
@@ -501,6 +517,11 @@ class StackDestroyer:
                 click.echo(Colorize.error(f"Error updating samconfig: {str(e)}"))
                 Log.error(f"Error updating samconfig: {str(e)}")
 
+        else:
+            click.echo(Colorize.warning("Samconfig file not deleted"))
+            Log.info("Samconfig file not deleted")
+            self.skipped_resources.append(f"{self.stage_id} in {samconfig_path}")
+
     def destroy_pipeline(self) -> None:
         """Destroy pipeline infrastructure"""
         click.echo(Colorize.output_bold(f"Starting destruction of pipeline: {self.prefix}-{self.project_id}-{self.stage_id}"))
@@ -557,22 +578,22 @@ class StackDestroyer:
         print()
         click.echo(Colorize.output_bold("Step 5: Beginning Deletion Process"))
 
+        # Delete SSM parameters
+        print()
+        self.delete_ssm_parameters()
+
         # Delete application stack first
         print()
         if not self.delete_stack(application_stack_name):
             click.echo(Colorize.error("Failed to delete application stack"))
             sys.exit(1)
-        
+
         # Delete pipeline stack
         print()
         if not self.delete_stack(pipeline_stack_name):
             click.echo(Colorize.error("Failed to delete pipeline stack"))
             sys.exit(1)
         
-        # Delete SSM parameters
-        print()
-        self.delete_ssm_parameters()
-
         # Delete retained resources
         print()
         self.delete_resources_by_tag()
@@ -590,6 +611,14 @@ class StackDestroyer:
         
         print()
         click.echo(Colorize.success("Pipeline destruction completed successfully!"))
+
+        print()
+        if self.skipped_resources:
+            Log.info(f"The following resources were skipped by user: {self.skipped_resources}")
+            click.echo(Colorize.warning("You chose to skip deleting the following resources:"))
+            for res in self.skipped_resources:
+                click.echo(Colorize.warning(f" - {res}"))
+            click.echo(Colorize.warning("Please review and delete them manually if needed. This information was also saved to the local delete log file."))
 
     def destroy(self) -> None:
         """Main destroy method"""
@@ -659,6 +688,8 @@ def main():
         )
         
         destroyer.destroy()
+
+        print()
         
     except KeyboardInterrupt:
         click.echo(Colorize.error("\nOperation cancelled by user"))
