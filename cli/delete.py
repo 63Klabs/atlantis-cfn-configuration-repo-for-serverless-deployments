@@ -105,10 +105,12 @@ class StackDestroyer:
         """Validate that the provided ARN matches the expected stack name"""
 
         try:
-            arn = Colorize.prompt(f"Enter the ARN of the {stack_name} stack", "", str)
-            if not arn:
-                click.echo(Colorize.error("ARN cannot be empty"))
-                return False
+            arn = ""
+            while arn == "":
+                arn = Colorize.prompt(f"Enter the ARN of the {stack_name} stack", "", str)
+                arn = arn.strip()
+                if arn == "":
+                    click.echo(Colorize.error("ARN cannot be empty"))
             
             # Extract stack name from ARN
             try:
@@ -119,13 +121,19 @@ class StackDestroyer:
                     if actual_stack_name == expected_name:
                         return True
                     else:
-                        click.echo(Colorize.error(f"Stack name mismatch. Expected: {expected_name}, Got: {actual_stack_name}"))
+                        message = f"Stack name mismatch. Expected: {expected_name}, Got: {actual_stack_name}"
+                        click.echo(Colorize.error(message))
+                        Log.error(message)
                         return False
                 else:
-                    click.echo(Colorize.error("Invalid ARN format"))
+                    message = "Invalid ARN format"
+                    click.echo(Colorize.error(message))
+                    Log.error(f"{message}:  {arn}")
                     return False
             except Exception as e:
-                click.echo(Colorize.error(f"Error parsing ARN: {str(e)}"))
+                message = f"Error parsing ARN: {str(e)}"
+                click.echo(Colorize.error(message))
+                Log.error(f"{message} {arn}")
                 return False
         
         except KeyboardInterrupt:
@@ -155,17 +163,25 @@ class StackDestroyer:
                     current_date = datetime.now().date()
                 
                 if current_date >= delete_date:
-                    click.echo(Colorize.success(f"DeleteOnOrAfter tag validation passed: {delete_date_str}"))
+                    message = f"DeleteOnOrAfter tag validation passed: {delete_date_str}"
+                    click.echo(Colorize.success(message))
+                    Log.info(message)
                     return True
                 else:
-                    click.echo(Colorize.error(f"Current date ({current_date}) is before DeleteOnOrAfter date ({delete_date})"))
+                    message = f"Current date ({current_date}) is before DeleteOnOrAfter date ({delete_date})"
+                    click.echo(Colorize.error(message))
+                    Log.error(message)
                     return False
             except ValueError as e:
-                click.echo(Colorize.error(f"Invalid date format in DeleteOnOrAfter tag: {delete_date_str}"))
+                message = f"Invalid date format in DeleteOnOrAfter tag: {delete_date_str}"
+                click.echo(Colorize.error(message))
+                Log.error(message)
                 return False
                 
         except Exception as e:
-            click.echo(Colorize.error(f"Error checking DeleteOnOrAfter tag: {str(e)}"))
+            message = f"Error checking DeleteOnOrAfter tag: {str(e)}"
+            click.echo(Colorize.error(message))
+            Log.error(message)
             return False
 
     def check_stack_termination_protection(self, stack_name: str) -> bool:
@@ -177,14 +193,20 @@ class StackDestroyer:
             termination_protection = stack.get('EnableTerminationProtection', False)
             
             if not termination_protection:
-                click.echo(Colorize.success(f"Stack termination protection validation passed: disabled"))
+                message = f"Stack termination protection validation passed: Stack {stack_name} has termination protection disabled"
+                click.echo(Colorize.success(message))
+                Log.info(message)
                 return True
             else:
-                click.echo(Colorize.error(f"Stack {stack_name} has termination protection enabled"))
+                message = f"Stack termination protection validation failed: Stack {stack_name} has termination protection enabled"
+                click.echo(Colorize.error(message))
+                Log.error(message)
                 return False
                 
         except Exception as e:
-            click.echo(Colorize.error(f"Error checking stack termination protection: {str(e)}"))
+            message = f"Error checking stack termination protection for {stack_name}: {str(e)}"
+            click.echo(Colorize.error(message))
+            Log.error(message)
             return False
 
     def final_confirmation(self) -> bool:
@@ -201,6 +223,7 @@ class StackDestroyer:
             return True
         else:
             click.echo(Colorize.error("Confirmation failed. Values do not match."))
+            Log.error("Confirmation failed. Values from user do not match.")
             return False
 
     def delete_stack(self, stack_name: str) -> bool:
@@ -298,6 +321,7 @@ class StackDestroyer:
                     click.echo(Colorize.output(f" - {param}"))
 
                 # confirm deletion of parameters
+                print()
                 if not click.confirm(Colorize.question("Proceed with deletion of these SSM parameters?"), default=True):
                     click.echo(Colorize.error("SSM parameter deletion cancelled by user"))
                     Log.info("SSM parameter deletion cancelled by user")
@@ -533,7 +557,7 @@ class StackDestroyer:
         # 2. Validate pipeline stack ARN
         print()
         pipeline_stack_name = self.get_pipeline_stack_name()
-        click.echo(Colorize.output_bold("Step 1: Validate Pipeline Stack"))
+        click.echo(Colorize.output_bold("Step 1: Validate Pipeline Stack ARN"))
         if not self.validate_stack_arn("pipeline", pipeline_stack_name):
             click.echo(Colorize.error("Pipeline stack validation failed"))
             sys.exit(1)
@@ -541,7 +565,7 @@ class StackDestroyer:
         # 3. Validate application stack ARN
         print()
         application_stack_name = self.get_application_stack_name()
-        click.echo(Colorize.output_bold("Step 2: Validate Application Stack"))
+        click.echo(Colorize.output_bold("Step 2: Validate Application Stack ARN"))
         if not self.validate_stack_arn("application", application_stack_name):
             click.echo(Colorize.error("Application stack validation failed"))
             sys.exit(1)
@@ -557,14 +581,14 @@ class StackDestroyer:
         print()
         click.echo(Colorize.output_bold("Step 3b: Validate Stack Termination Protection is Disabled for Pipeline"))
         if not self.check_stack_termination_protection(pipeline_stack_name):
-            click.echo(Colorize.error("Stack Termination Protection validation failed"))
+            click.echo(Colorize.error("Stack Termination Protection must be disabled first."))
             sys.exit(1)
 
         # 6. Check Stack Termination Protection tag for Application
         print()
         click.echo(Colorize.output_bold("Step 3c: Validate Stack Termination Protection is Disabled for Application"))
         if not self.check_stack_termination_protection(application_stack_name):
-            click.echo(Colorize.error("Stack Termination Protection validation failed"))
+            click.echo(Colorize.error("Stack Termination Protection must be disabled first."))
             sys.exit(1)
         
         # 7. Final confirmation

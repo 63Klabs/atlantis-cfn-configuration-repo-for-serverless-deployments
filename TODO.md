@@ -27,6 +27,7 @@
 ### Delete
 
 - [ ] Apply DeleteOnOrAfter tag to retained resources in PROD (use setting to set days)
+- [ ] Allow Clean-up without stack (stack deleted, resources retained or failed/interrupted deletes)
 - [ ] Test
 
 ## Lib
