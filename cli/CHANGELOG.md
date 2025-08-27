@@ -12,7 +12,7 @@ To update your local cli scripts from GitHub repository:
 - Refer to [TODO](../TODO.md) for upcoming BETA fixes and features.
 - Report any issues not covered in TODO via the [Issues page in the GitHub repository](https://github.com/63Klabs/atlantis-cfn-configuration-repo-for-serverless-deployments/issues)
 
-## v0.0.11 (2025-08-26)
+## v0.0.11 (2025-08-27)
 
 - Added delete.py script to delete pipelines and associated application stack
 - Added git pull and pushes to config.py and deploy.py
