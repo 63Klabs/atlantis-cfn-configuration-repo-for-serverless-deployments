@@ -2,7 +2,6 @@
 
 ## Config
 
-- [ ] Check Repository and pull in tags
 - [ ] Add ability to run deploy script
 - [ ] If deploy bucket is in param use s3 deploy and vice versa
 - [ ] Documentation

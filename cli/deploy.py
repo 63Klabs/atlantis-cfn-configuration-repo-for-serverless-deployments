@@ -426,10 +426,11 @@ def main() -> int:
         if exit_code == 0:
             ConsoleAndLog.info("Deployment script completed without errors.")
             # Git commit and push
-            commit_message = f"Configured {args.infra_type} {args.prefix}-{args.project_id}"
+            commit_message = f"Deployed {args.infra_type} {args.prefix}-{args.project_id}"
             if args.stage_id:
                 commit_message += f"-{args.stage_id}"
-            Git.git_commit_and_push(commit_message)
+            print()
+            Git.prompt_git_commit_and_push(commit_message)
         else:
             ConsoleAndLog.error(f"Deployment script failed with exit code {exit_code}")
         return exit_code

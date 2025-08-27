@@ -420,7 +420,11 @@ class StackDestroyer:
         self.update_samconfig()
         
         # 7. Git commit and push
-        Git.git_commit_and_push(f"Destroyed {self.infra_type} {self.prefix}-{self.project_id}-{self.stage_id}")
+        commit_message = f"Destroyed {self.infra_type} {self.prefix}-{self.project_id}"
+        if self.stage_id:
+            commit_message += f"-{self.stage_id}"
+        print()
+        Git.prompt_git_commit_and_push(commit_message)
         
         click.echo(Colorize.success("Pipeline destruction completed successfully!"))
 

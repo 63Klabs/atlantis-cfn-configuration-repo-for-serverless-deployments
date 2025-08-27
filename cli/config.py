@@ -2303,6 +2303,17 @@ def main():
         click.echo(Colorize.divider("="))
         print()
 
+        # Prompt user if they want to run the deploy.py script
+        if click.confirm(Colorize.question("Do you want to run the deploy script now?")):
+            deploy_command = config_manager.get_script_deploy_command(config_manager.stage_id)
+            click.echo(Colorize.output_bold(f"Running: {deploy_command}"))
+            print()
+            os.system(deploy_command)
+        else:
+            click.echo(Colorize.info("You can deploy later using the command:"))
+            click.echo(Colorize.output(deploy_command))
+            print()
+
     except Exception as e:
         ConsoleAndLog.error(f"Unexpected error: {str(e)}")
         ConsoleAndLog.error(f"Error occurred at:\n{traceback.format_exc()}")
