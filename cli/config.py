@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-VERSION = "v0.1.4/2025-06-16"
+VERSION = "v0.1.5/2025-08-26"
 # Created by Chad Kluck with AI assistance from Amazon Q Developer
 # GitHub Copilot assisted in color formats of output and prompts
 
@@ -2297,8 +2297,8 @@ def main():
         commit_message = f"Configured {args.infra_type} {config_manager.prefix}-{config_manager.project_id}"
         if config_manager.stage_id:
             commit_message += f"-{config_manager.stage_id}"
-        Git.git_commit_and_push(commit_message)
-
+        print()
+        Git.prompt_git_commit_and_push(commit_message)
 
         click.echo(Colorize.divider("="))
         print()

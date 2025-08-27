@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-VERSION = "v0.0.1/2025-08-24"
+VERSION = "v0.0.2/2025-08-26"
 # Developed by Chad Kluck with AI assistance from Amazon Q Developer
 # GitHub Copilot assisted in color formats of output and prompts
 
@@ -20,7 +20,7 @@ class Git:
     @staticmethod
     def prompt_git_pull() -> None:
         """Prompt user if git pull should be performed"""
-        if click.confirm(Colorize.question("Perform git pull before proceeding?")):
+        if click.confirm(Colorize.question("Perform git pull before proceeding?"), default=True):
             try:
                 result = subprocess.run(['git', 'pull'], capture_output=True, text=True, check=True)
                 click.echo(Colorize.success("Git pull completed successfully"))
@@ -38,6 +38,13 @@ class Git:
             # Add changes
             subprocess.run(['git', 'add', '.'], check=True)
             
+            # Check if there are changes to commit
+            result = subprocess.run(['git', 'diff', '--cached', '--quiet'], capture_output=True)
+            if result.returncode == 0:
+                click.echo(Colorize.info("No changes to commit"))
+                Log.info("No changes to commit")
+                return
+            
             # Commit
             subprocess.run(['git', 'commit', '-m', commit_message], check=True)
             
@@ -50,3 +57,10 @@ class Git:
         except subprocess.CalledProcessError as e:
             click.echo(Colorize.error(f"Git operation failed: {str(e)}"))
             Log.error(f"Git operation failed: {str(e)}")
+
+    @staticmethod
+    def prompt_git_commit_and_push(commit_message) -> None:
+        """Prompt user for commit message and perform git commit and push"""
+        if click.confirm(Colorize.question("Perform git commit and push?"), default=True):
+            commit_message = click.prompt(Colorize.question("Enter commit message"), commit_message, type=str)
+            Git.git_commit_and_push(commit_message)

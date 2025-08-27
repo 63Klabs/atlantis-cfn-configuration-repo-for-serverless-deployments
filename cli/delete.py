@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-VERSION = "v0.0.2/2025-08-25"
+VERSION = "v0.0.3/2025-08-26"
 # Created by Chad Kluck with AI assistance from Amazon Q Developer
 
 # Usage Information:
