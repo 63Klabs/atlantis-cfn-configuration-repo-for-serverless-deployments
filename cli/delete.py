@@ -545,6 +545,7 @@ class StackDestroyer:
         
         
         # Update samconfig
+        print()
         self.update_samconfig()
         
         # 7. Git commit and push
@@ -554,6 +555,7 @@ class StackDestroyer:
         print()
         Git.git_commit_and_push(commit_message)
         
+        print()
         click.echo(Colorize.success("Pipeline destruction completed successfully!"))
 
     def destroy(self) -> None:

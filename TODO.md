@@ -25,6 +25,8 @@
 
 ### Delete
 
+- [ ] List resources retained
+- [ ] Apply DeleteOnOrAfter tag to retained resources in PROD (use setting to set days)
 - [ ] Test
 
 ## Lib
