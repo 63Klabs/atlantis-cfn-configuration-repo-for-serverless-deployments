@@ -101,28 +101,35 @@ class StackDestroyer:
 
     def validate_stack_arn(self, stack_name: str, expected_name: str) -> bool:
         """Validate that the provided ARN matches the expected stack name"""
-        arn = Colorize.prompt(f"Enter the ARN of the {stack_name} stack", "", str)
-        if not arn:
-            click.echo(Colorize.error("ARN cannot be empty"))
-            return False
-        
-        # Extract stack name from ARN
+
         try:
-            # ARN format: arn:aws:cloudformation:region:account:stack/stack-name/stack-id
-            arn_parts = arn.split('/')
-            if len(arn_parts) >= 2:
-                actual_stack_name = arn_parts[1]
-                if actual_stack_name == expected_name:
-                    return True
-                else:
-                    click.echo(Colorize.error(f"Stack name mismatch. Expected: {expected_name}, Got: {actual_stack_name}"))
-                    return False
-            else:
-                click.echo(Colorize.error("Invalid ARN format"))
+            arn = Colorize.prompt(f"Enter the ARN of the {stack_name} stack", "", str)
+            if not arn:
+                click.echo(Colorize.error("ARN cannot be empty"))
                 return False
-        except Exception as e:
-            click.echo(Colorize.error(f"Error parsing ARN: {str(e)}"))
-            return False
+            
+            # Extract stack name from ARN
+            try:
+                # ARN format: arn:aws:cloudformation:region:account:stack/stack-name/stack-id
+                arn_parts = arn.split('/')
+                if len(arn_parts) >= 2:
+                    actual_stack_name = arn_parts[1]
+                    if actual_stack_name == expected_name:
+                        return True
+                    else:
+                        click.echo(Colorize.error(f"Stack name mismatch. Expected: {expected_name}, Got: {actual_stack_name}"))
+                        return False
+                else:
+                    click.echo(Colorize.error("Invalid ARN format"))
+                    return False
+            except Exception as e:
+                click.echo(Colorize.error(f"Error parsing ARN: {str(e)}"))
+                return False
+        
+        except KeyboardInterrupt:
+            click.echo(Colorize.error("\nOperation cancelled by user"))
+            Log.info("Operation cancelled by user")
+            sys.exit(1)
 
     def check_delete_tag(self, stack_name: str) -> bool:
         """Check if stack has DeleteOnOrAfter tag with valid date"""
@@ -238,7 +245,11 @@ class StackDestroyer:
             click.echo(Colorize.error(f"Stack deletion timed out after 30 minutes"))
             Log.error(f"Stack deletion timed out after 30 minutes")
             return False
-            
+        
+        except KeyboardInterrupt:
+            click.echo(Colorize.error("\nOperation cancelled by user"))
+            Log.info("Operation cancelled by user")
+            sys.exit(1)
         except Exception as e:
             click.echo(Colorize.error(f"Error deleting stack {stack_name}: {str(e)}"))
             Log.error(f"Error deleting stack {stack_name}: {str(e)}")
@@ -300,7 +311,11 @@ class StackDestroyer:
             else:
                 click.echo(Colorize.output("No SSM parameters found to delete"))
                 Log.info("No SSM parameters found to delete")
-                
+
+        except KeyboardInterrupt:
+            click.echo(Colorize.error("\nOperation cancelled by user"))
+            Log.info("Operation cancelled by user")
+            sys.exit(1)                
         except Exception as e:
             click.echo(Colorize.error(f"Error deleting SSM parameters: {str(e)}"))
             Log.error(f"Error deleting SSM parameters: {str(e)}")
@@ -412,6 +427,10 @@ class StackDestroyer:
                                     click.echo(Colorize.warning(f"Unsupported resource type for deletion: {res}"))
                                     Log.warning(f"Unsupported resource type for deletion: {res}")
 
+                            except KeyboardInterrupt:
+                                click.echo(Colorize.error("\nOperation cancelled by user"))
+                                Log.info("Operation cancelled by user")
+                                sys.exit(1)
                             except Exception as e:
                                 click.echo(Colorize.error(f"Error deleting resource {res}: {str(e)}"))
                                 Log.error(f"Error deleting resource {res}: {str(e)}")
@@ -420,6 +439,10 @@ class StackDestroyer:
                 click.echo(Colorize.output("No additional resources found to delete"))
                 Log.info("No additional resources found to delete")
 
+        except KeyboardInterrupt:
+            click.echo(Colorize.error("\nOperation cancelled by user"))
+            Log.info("Operation cancelled by user")
+            sys.exit(1)
         except Exception as e:
             click.echo(Colorize.error(f"Error deleting resources: {str(e)}"))
             Log.error(f"Error deleting resources: {str(e)}")     
@@ -469,7 +492,11 @@ class StackDestroyer:
                         toml.dump(config, f)
                     click.echo(Colorize.success("Updated samconfig file"))
                     Log.info("Updated samconfig file")
-                    
+            
+            except KeyboardInterrupt:
+                click.echo(Colorize.error("\nOperation cancelled by user"))
+                Log.info("Operation cancelled by user")
+                sys.exit(1)
             except Exception as e:
                 click.echo(Colorize.error(f"Error updating samconfig: {str(e)}"))
                 Log.error(f"Error updating samconfig: {str(e)}")
