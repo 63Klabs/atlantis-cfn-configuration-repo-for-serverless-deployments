@@ -498,13 +498,13 @@ class ConfigManager:
         if allowed_values and value not in allowed_values:
             return {"reason": f"Value must be one of: {', '.join(allowed_values)}", "valid": False}
         
-        # Check AllowedPattern if defined
-        allowed_pattern = param_def.get('AllowedPattern')
-        if allowed_pattern and not re.match(allowed_pattern, value):
-            return {"reason": f"Value must match pattern: {allowed_pattern}", "valid": False}
-        
         # Type-specific validations
         if param_type in ['String', 'AWS::SSM::Parameter::Value<String>']:
+            # Check AllowedPattern if defined
+            allowed_pattern = param_def.get('AllowedPattern')
+            if allowed_pattern and not re.match(allowed_pattern, value):
+                return {"reason": f"Value must match pattern: {allowed_pattern}", "valid": False}
+            
             min_length = int(param_def.get('MinLength', 0))
             # Handle MaxLength differently - if not specified, use None instead of infinity
             max_length = param_def.get('MaxLength')
@@ -535,6 +535,13 @@ class ConfigManager:
             items = [item.strip() for item in value.split(',')]
             if not all(items):
                 return {"reason": "CommaDelimitedList cannot contain empty items", "valid": False}
+            
+            # Check AllowedPattern against each item if defined
+            allowed_pattern = param_def.get('AllowedPattern')
+            if allowed_pattern:
+                for i, item in enumerate(items, 1):
+                    if not re.match(allowed_pattern, item):
+                        return {"reason": f"Element {i} ('{item}') must match pattern: {allowed_pattern}", "valid": False}
                 
         elif param_type == 'List<Number>':
             try:
