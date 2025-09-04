@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-VERSION = "v0.1.5/2025-08-26"
+VERSION = "v0.1.6/2025-09-03"
 # Created by Chad Kluck with AI assistance from Amazon Q Developer
 # GitHub Copilot assisted in color formats of output and prompts
 
@@ -1726,7 +1726,7 @@ class ConfigManager:
                         '# Deploy command:\n'
                         f'{section_deploy_command}\n\n'
                         '# Do not update this file!\n'
-                        '# To update parameter_overrides or tags for this deployment, use the generate script:\n'
+                        '# To update parameter_overrides or tags for this deployment, use the config script:\n'
                         f'# python3 {section_pystr}\n'
                     )
 
