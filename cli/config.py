@@ -1726,7 +1726,7 @@ class ConfigManager:
                         '# Deploy command:\n'
                         f'{section_deploy_command}\n\n'
                         '# Do not update this file!\n'
-                        '# To update parameter_overrides or tags for this deployment, use the generate script:\n'
+                        '# To update parameter_overrides or tags for this deployment, use the config script:\n'
                         f'# python3 {section_pystr}\n'
                     )
 
